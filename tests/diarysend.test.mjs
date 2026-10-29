@@ -65,7 +65,7 @@ check('plan: anchor from this chat, compressed day is one unit, long day split',
 
 // 大綱：寫好後每回都送
 await page.evaluate(async () => { const d = await import('/src/diary.js'); d.queueOutline(); });
-await page.waitForFunction(async () => Boolean((await import('/src/diary.js')).diaryOutline()), null, { timeout: 10000 });
+await page.evaluate(async () => { for (let i = 0; i < 200; i++) { if (Boolean((await import('/src/diary.js')).diaryOutline())) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error('timed out'); });
 const outlinePrompt = await page.evaluate(() => window.__prompts.map((p) => p.prompt).find((p) => p.includes('每一天的重點')) ?? '');
 check('outline prompt lists each day with its key points', outlinePrompt.includes('2025-01-05：兩人第一次在') && outlinePrompt.includes('2025-05-09：下雨天在家做'), outlinePrompt.slice(-300));
 text = await inject();

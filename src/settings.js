@@ -136,6 +136,10 @@ export const DEFAULTS = Object.freeze({
     // 你的偏好（v0.13.36，使用者要求，預設關）：auto 摘要、寫日記時讓模型把 OOC 裡對角色的長期要求記下來；
     // inject 每回提醒角色。清單存在角色卡自己的資料裡（characters[頭像].prefs），換新聊天也在。
     prefs: { auto: false, inject: true },
+    // 自動備份（v0.13.37，使用者要求）：everyDays 幾天一次（打開聊天時看，0＝不看天數）；everyFloors 摘要多幾層就備份（0＝不看層數）；
+    // keep 每個聊天留幾份；alarm 摘要突然少很多時跳警報。backupIndex 是各聊天的備份清單（autobackup.js）。
+    backup: { auto: true, everyDays: 1, everyFloors: 50, keep: 7, alarm: true },
+    backupIndex: {},
     // 每張角色卡自己的資料，key 是角色卡頭像檔名：{ [avatar]: { scope } }
     characters: {},
     // 設定格式的版本，用來做一次性的轉換。

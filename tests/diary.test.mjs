@@ -63,7 +63,7 @@ const est = await page.textContent('[data-role="diary-start"]');
 check('estimate before starting', est.includes('3 天') && est.includes('4 次呼叫') && est.includes('主 API') && est.includes('寫日記會呼叫'), est.replace(/\s+/g, ' ').slice(0, 200));
 await page.selectOption('#lp-diary-style', 'natural');
 await page.click('[data-action="diary-start"]');
-const idle = () => page.waitForFunction(async () => (await import('/src/diary.js')).diaryPending() === 0, null, { timeout: 20000 });
+const idle = () => page.evaluate(async () => { for (let i = 0; i < 400; i++) { if ((await import('/src/diary.js')).diaryPending() === 0) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error('timed out'); });
 await idle();
 let days = await page.evaluate(async () => (await import('/src/diary.js')).listDiary().map((d) => ({ date: d.date, state: d.state, text: d.original, parts: d.parts.length, points: d.points.length })));
 check('one diary per day, long day in two parts', JSON.stringify(days.map((d) => [d.date, d.state, d.parts])) === JSON.stringify([['2025-03-01', 'done', 1], ['2025-03-02', 'done', 1], ['2025-03-03', 'done', 2]]), JSON.stringify(days));

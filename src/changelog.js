@@ -9,6 +9,26 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.37',
+        new: {
+            'zh-TW': [
+                '🛟 自動備份：每天第一次打開聊天、摘要每多 50 層時，自動把戀人手帳的資料存一份（每個聊天留 7 份），存在酒館的資料夾裡。次數和份數都可以改。在設定 › 資料管理。',
+                '🚨 防失憶警報：摘要突然少了一大半時會跳提醒，按一下就能從備份放回去；放回之前會先把現在的樣子再存一份。',
+                '📦 一鍵備份全部聊天：這個角色或所有角色的聊天打包成一個檔下載。導入後，現在的聊天馬上放回，其他聊天打開時自動放回。',
+            ],
+            'zh-CN': [
+                '🛟 自动备份：每天第一次打开聊天、摘要每多 50 层时，自动把恋人手帐的数据存一份（每个聊天留 7 份），存在酒馆的文件夹里。次数和份数都可以改。在设置 › 资料管理。',
+                '🚨 防失忆警报：摘要突然少了一大半时会跳提醒，按一下就能从备份放回去；放回之前会先把现在的样子再存一份。',
+                '📦 一键备份全部聊天：这个角色或所有角色的聊天打包成一个文件下载。导入后，现在的聊天马上放回，其他聊天打开时自动放回。',
+            ],
+            en: [
+                '🛟 Automatic backups: when you first open a chat each day and after every 50 more summarized floors, the Lover\'s Planner data is saved (7 kept per chat) in the tavern\'s data folder. Both numbers can be changed. In Settings › Data.',
+                '🚨 Lost-memory alarm: if the summaries suddenly drop by more than half, you are warned and can restore them with one tap; the current state is saved first.',
+                '📦 Back up all chats: pack the chats of this character or every character into one file. After importing, the open chat is restored right away and the others when you open them.',
+            ],
+        },
+    },
+    {
         v: '0.13.36',
         new: {
             'zh-TW': [

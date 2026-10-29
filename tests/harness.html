@@ -72,6 +72,28 @@ window.__runInterceptor = async (type = 'normal') => {
   return { kept: coreChat.map((m) => m.send_date), injection: window.__extPrompts.lovers_planner ?? null, aborted };
 };
 window.__chatMetadata = chatMetadata;
+// 酒館的檔案 API（自動備份用，v0.13.37）：存在記憶體裡。要自己用 page.route 模擬的測試設 window.__realFiles = true。
+if (!window.__realFiles) {
+  window.__files = new Map();
+  const realFetch = window.fetch.bind(window);
+  window.fetch = async (url, opts = {}) => {
+    const u = String(url);
+    if (u.endsWith('/api/files/upload')) {
+      const { name, data } = JSON.parse(opts.body);
+      window.__files.set(name, new TextDecoder().decode(Uint8Array.from(atob(data), (c) => c.charCodeAt(0))));
+      return new Response(JSON.stringify({ path: `user/files/${name}` }), { status: 200 });
+    }
+    if (u.endsWith('/api/files/delete')) {
+      window.__files.delete(JSON.parse(opts.body).path.replace('user/files/', ''));
+      return new Response('', { status: 200 });
+    }
+    if (u.startsWith('/user/files/')) {
+      const name = u.slice('/user/files/'.length);
+      return window.__files.has(name) ? new Response(window.__files.get(name), { status: 200 }) : new Response('', { status: 404 });
+    }
+    return realFetch(url, opts);
+  };
+}
 </script>
 </head><body>
 <div id="extensionsMenu"></div>

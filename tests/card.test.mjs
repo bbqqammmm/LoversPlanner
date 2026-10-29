@@ -129,7 +129,7 @@ check('long fields flagged', issues.length === 1 && issues[0].fields.includes('�
 await page.click('[data-action="check-toggle"]');
 check('check row with tidy button', (await page.textContent('[data-check^="longField"]')).includes('請模型整理'));
 await page.click('[data-check^="longField"] [data-action="check-fix"]');
-await page.waitForFunction(async () => !(await import('/src/check.js')).runChecks().some((x) => x.kind === 'longField'), null, { timeout: 10000 });
+await page.evaluate(async () => { for (let i = 0; i < 200; i++) { if (!(await import('/src/check.js')).runChecks().some((x) => x.kind === 'longField')) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error('timed out'); });
 char = await lead('char');
 check('fields shortened', char.data.status === '感冒中、在家休息' && char.data.note === '對貓過敏', JSON.stringify(char.data));
 const mems = await page.evaluate(async () => (await import('/src/memories.js')).listMemories().map((m) => m.title));

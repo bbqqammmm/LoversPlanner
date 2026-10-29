@@ -27,11 +27,12 @@ function clone(v) {
     return v === undefined ? undefined : JSON.parse(JSON.stringify(v));
 }
 
-function withoutSecrets(settings) {
+export function withoutSecrets(settings) {
     const out = clone(settings) ?? {};
     // 角色的快照屬於各個聊天，不放進設定的備份；調用紀錄也不放。
     delete out.characters;
     delete out.usage;
+    delete out.backupIndex;
     for (const path of SECRET_PATHS) {
         let obj = out;
         for (const k of path.slice(0, -1)) obj = obj?.[k];
@@ -180,26 +181,31 @@ export function importBackup(data, { mode = 'merge', settings = false } = {}) {
         delete meta?.catchup;
         c.chatMetadata[MODULE] = mode === 'replace' ? meta : mergeMeta(c.chatMetadata[MODULE] ?? {}, meta);
     }
-    if (settings && data.settings) {
-        const cur = getSettings();
-        const keep = { custom: cur.custom?.key, vector: cur.recall?.vector?.key, characters: cur.characters, usage: cur.usage,
-            profiles: new Map((cur.profiles ?? []).map((p) => [p.id, p.key])) };
-        const next = clone(data.settings);
-        delete next.characters;
-        delete next.usage;
-        Object.assign(cur, next);
-        if (cur.custom) cur.custom.key = keep.custom ?? '';
-        if (cur.recall?.vector) cur.recall.vector.key = keep.vector ?? '';
-        // 另外存的幾組 API：Key 不導出，導入時同一組（同 id）沿用這台裝置的 Key。
-        for (const p of cur.profiles ?? []) p.key = keep.profiles.get(p.id) ?? '';
-        cur.characters = keep.characters;
-        cur.usage = keep.usage;
-        saveSettings();
-    }
+    if (settings && data.settings) applySettings(data.settings);
     invalidateNotes();
     saveChatSoon();
     saveMeta();
     return { matched, unmatched, skipped };
+}
+
+/** 導入設定：不會蓋掉現在的 API 金鑰、角色卡的資料、調用紀錄和備份索引。 */
+export function applySettings(settings) {
+    const cur = getSettings();
+    const keep = { custom: cur.custom?.key, vector: cur.recall?.vector?.key, characters: cur.characters, usage: cur.usage, backupIndex: cur.backupIndex,
+        profiles: new Map((cur.profiles ?? []).map((p) => [p.id, p.key])) };
+    const next = clone(settings);
+    delete next.characters;
+    delete next.usage;
+    delete next.backupIndex;
+    Object.assign(cur, next);
+    if (cur.custom) cur.custom.key = keep.custom ?? '';
+    if (cur.recall?.vector) cur.recall.vector.key = keep.vector ?? '';
+    // 另外存的幾組 API：Key 不導出，導入時同一組（同 id）沿用這台裝置的 Key。
+    for (const p of cur.profiles ?? []) p.key = keep.profiles.get(p.id) ?? '';
+    cur.characters = keep.characters;
+    cur.usage = keep.usage;
+    cur.backupIndex = keep.backupIndex ?? {};
+    saveSettings();
 }
 
 /** 刪除這個聊天的戀人手帳內容（聊天本身不動；共用的記事不動）。回傳清掉了幾層。 */

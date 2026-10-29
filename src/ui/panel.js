@@ -45,6 +45,8 @@ import {
 import { closedDateOf, noteDates, storyToday } from '../notedates.js';
 import { fillTitles, onTitleProgress, TITLE_BATCH, titleProgress } from '../titles.js';
 import { buildBackup, downloadBackup, importBackup, parseBackup, wipeChat } from '../backup.js';
+import { backupAlarm, backupNow, backupStatus, dismissAlarm, listBackups, markIntentional, onBackupChange, restoreBackup } from '../autobackup.js';
+import { buildBundle, downloadBundle, importBundle, isBundle, pendingCount as pendingImports } from '../bundle.js';
 import { stHiddenCount } from '../sthide.js';
 import { clearUsage, localDay, onUsageChange, recentUsage, usageSummary } from '../usage.js';
 import { acceptAllDigests, acceptDigest, checkManualChapter, compressSelected, compressionDue, deleteChapter, digestLabel, editChapter, editVolume, structure } from '../compress.js';
@@ -110,6 +112,9 @@ const NUMBER_LIMITS = {
     'custom.timeout': [30, 600],
     'diary.recentDays': [0, 30],
     'diary.recallTopK': [0, 10],
+    'backup.everyDays': [0, 30],
+    'backup.everyFloors': [0, 1000],
+    'backup.keep': [1, 30],
 };
 
 /** 成對的上下限：下限比上限大時，把上限拉到和下限一樣。 */
@@ -185,7 +190,8 @@ const view = {
     // 補建前找到的番外：清單（算一次就好）和每層的選擇（預設跳過）。rescan：資料管理的「重新檢查所有樓層」。
     extras: { key: null, list: [], choice: new Map(), rescan: false },
     // 資料管理：導出要不要含設定、導入讀到的檔案和方式、刪除的確認。
-    data: { exportSettings: true, file: null, fileName: '', mode: 'merge', importSettings: false, confirmWipe: false, confirmReplace: false, message: null },
+    data: { exportSettings: true, file: null, bundle: null, fileName: '', mode: 'merge', importSettings: false, confirmWipe: false, confirmReplace: false, message: null },
+    backup: { confirm: null, msg: '', busy: false, scope: 'character', bundling: '', bundleMsg: '', pending: 0 },
     // 設定頁的標籤掃描：掃最新 2 層、最新 30 層，還是整個聊天。
     tagScan: 'latest',
     // 從其他聊天匯入：選哪個聊天、帶哪些。
@@ -352,7 +358,7 @@ function render() {
     const searchFocus = active?.dataset?.search ? { scope: active.dataset.search, pos: active.selectionStart } : null;
     panel.setAttribute('aria-label', t('app.name'));
     panel.setAttribute('lang', currentLocale());
-    panel.innerHTML = renderHeader() + renderTabs() + `<div class="lp-body">${renderWhatsNew()}${renderEggs()}${renderBanner()}${renderTab()}</div>`;
+    panel.innerHTML = renderHeader() + renderTabs() + `<div class="lp-body">${renderAlarmBanner()}${renderWhatsNew()}${renderEggs()}${renderBanner()}${renderTab()}</div>`;
     // 紀念日：每個故事日飄一次花瓣（小彩蛋）。
     // 放在大視窗外面那層：大視窗重畫時不會把花瓣一起清掉。
     if (isActive() && takePetals()) burst(panel.parentElement ?? document.body, ['🌸', '💕', '🌷', '✿']);
@@ -438,6 +444,14 @@ function renderTabs() {
 function changeHtml(c, { head = true } = {}) {
     const list = (title, items) => (items.length ? `<div class="lp-whatsnew-sec">${esc(title)}</div><ul>${items.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
     return `${head ? `<div class="lp-whatsnew-v">v${esc(c.v)}</div>` : ''}${list(t('whatsnew.new'), c.news)}${list(t('whatsnew.fix'), c.fixes)}`;
+}
+
+/** 防失憶警報（v0.13.37）：大視窗最上面也提醒，點了到 設定 › 資料管理。 */
+function renderAlarmBanner() {
+    const a = backupAlarm();
+    if (!a || (view.tab === 'settings' && view.openSections.has('data'))) return '';
+    return `<div class="lp-callout lp-warn lp-row" data-role="alarm-banner" role="alert"><span>${esc(t('backup.alarmShort', { then: a.backup.total, now: a.now.total }))}</span><span class="lp-spacer"></span>
+        <button type="button" class="menu_button lp-btn lp-primary" data-action="alarm-go">${esc(t('backup.alarmGo'))}</button></div>`;
 }
 
 /** 更新通知（v0.13.30）：有沒看過的更新時，大視窗最上面的卡片。 */
@@ -1866,6 +1880,7 @@ onNotesChange(scheduleRefresh);
 onCarryChange(scheduleRefresh);
 onDiaryChange(scheduleRefresh);
 onPrefsChange(scheduleRefresh);
+onBackupChange(scheduleRefresh);
 onCalendarChange(scheduleRefresh);
 onMemoriesChange(scheduleRefresh);
 onTitleProgress(() => { if (isPanelOpen() && ['notes', 'done'].includes(view.tab)) render(); });
@@ -2160,13 +2175,106 @@ function renderUsageSection() {
 }
 
 /** 設定 › 資料管理：導出、導入、重新檢查番外、刪除（v0.13.7）。 */
+// ===== 🛟 自動備份＋防失憶警報（v0.13.37） =====
+
+const BACKUP_REASONS = ['day', 'floors', 'manual', 'before'];
+
+function backupRow(e) {
+    const v = view.backup;
+    const info = [t(`backup.reason.${BACKUP_REASONS.includes(e.reason) ? e.reason : 'manual'}`), t('backup.counts', { floors: e.floors ?? 0, digests: e.digests ?? 0, diary: e.diary ?? 0 }),
+        `${Math.max(1, Math.round((e.size ?? 0) / 1024)).toLocaleString()} KB`, t(`backup.where.${e.where === 'browser' ? 'browser' : 'tavern'}`)].join('・');
+    const confirm = v.confirm === String(e.slot)
+        ? `<div class="lp-callout lp-warn lp-row"><span>${esc(t('backup.restoreConfirm'))}</span><span class="lp-spacer"></span>
+            <button type="button" class="menu_button lp-btn lp-primary" data-action="backup-restore-yes" data-slot="${esc(e.slot)}">${esc(t('backup.restoreYes'))}</button>
+            <button type="button" class="menu_button lp-btn" data-action="backup-restore-no">${esc(t('act.cancel'))}</button></div>` : '';
+    return `<li class="lp-backup-row" data-backup="${esc(e.slot)}"><div class="lp-row"><b>${esc(new Date(e.at).toLocaleString())}</b><span class="lp-spacer"></span>
+        <button type="button" class="menu_button lp-btn lp-mini" data-action="backup-restore" data-slot="${esc(e.slot)}"${v.busy ? ' disabled' : ''}>${esc(t('backup.restore'))}</button></div>
+        <div class="lp-note">${esc(info)}</div>${confirm}</li>`;
+}
+
+function renderAutoBackup() {
+    const v = view.backup;
+    const s = getSettings().backup ?? {};
+    const list = listBackups();
+    const st = backupStatus();
+    const latest = list.find((e) => e.slot !== 'r');
+    const alarm = backupAlarm();
+    const head = latest
+        ? t('backup.latest', { date: new Date(latest.at).toLocaleString(), floors: latest.floors ?? 0, where: t(`backup.where.${latest.where === 'browser' ? 'browser' : 'tavern'}`) })
+        : t('backup.none');
+    const alarmBox = alarm ? `<div class="lp-callout lp-warn" data-role="backup-alarm" role="alert">
+        <div><b>${esc(t('backup.alarmTitle'))}</b></div>
+        <div>${esc(t('backup.alarm', { then: alarm.backup.total, now: alarm.now.total, date: new Date(alarm.backup.at).toLocaleString() }))}</div>
+        <div class="lp-row"><button type="button" class="menu_button lp-btn lp-primary" data-action="backup-restore-yes" data-slot="${esc(alarm.backup.slot)}">${esc(t('backup.restoreLatest'))}</button>
+          <button type="button" class="menu_button lp-btn" data-action="backup-dismiss">${esc(t('backup.alarmDismiss'))}</button></div></div>` : '';
+    return `<div class="lp-card lp-backup" data-role="autobackup">
+        <div class="lp-scope-title">${esc(t('backup.title'))}</div>
+        <div class="lp-note">${esc(t('backup.desc'))}</div>
+        ${alarmBox}
+        <div data-role="backup-status">${esc(head)}</div>
+        ${st.where === 'browser' ? `<div class="lp-note lp-warn">${esc(t('backup.browserNote'))}</div>` : ''}
+        ${st.error ? `<div class="lp-error-text">${esc(t('backup.fail', { error: st.error }))}</div>` : ''}
+        ${v.msg ? `<div class="lp-note" role="status" data-role="backup-msg">${esc(v.msg)}</div>` : ''}
+        ${checkbox('backup.auto', t('backup.auto'), true)}
+        ${s.auto ? `<div class="lp-row">${inline('backup.everyDays', { n: numberInput('backup.everyDays', t('backup.everyDays.aria')) })}</div>
+        <div class="lp-row">${inline('backup.everyFloors', { n: numberInput('backup.everyFloors', t('backup.everyFloors.aria')) })}</div>
+        <div class="lp-note">${esc(t('backup.zeroNote'))}</div>` : ''}
+        <div class="lp-row">${inline('backup.keep', { n: numberInput('backup.keep', t('backup.keep.aria')) })}</div>
+        ${checkbox('backup.alarm', t('backup.alarmOpt'))}
+        <div class="lp-row"><button type="button" class="menu_button lp-btn" data-action="backup-now"${st.busy || v.busy ? ' disabled' : ''}>${esc(t(st.busy ? 'backup.saving' : 'backup.now'))}</button></div>
+        ${list.length ? `<details class="lp-backup-list" data-role="backup-list"${v.confirm ? ' open' : ''}><summary>${esc(t('backup.list', { n: list.length }))}</summary><ul>${list.map(backupRow).join('')}</ul></details>` : ''}
+      </div>`;
+}
+
+function renderBundle() {
+    const v = view.backup;
+    const scope = (x) => `<label class="lp-check"><input type="radio" name="lp-bundle-scope" data-role="bundle-scope" value="${x}"${v.scope === x ? ' checked' : ''}><span>${esc(t(`bundle.scope.${x}`))}</span></label>`;
+    return `<div class="lp-card lp-bundle" data-role="bundle">
+        <div class="lp-scope-title">${esc(t('bundle.title'))}</div>
+        <div class="lp-note">${esc(t('bundle.desc'))}</div>
+        ${scope('character')}${scope('all')}
+        <div class="lp-row"><button type="button" class="menu_button lp-btn lp-primary" data-action="bundle-export"${v.bundling ? ' disabled' : ''}>${esc(t('bundle.export'))}</button></div>
+        ${v.bundling ? `<div class="lp-note" role="status" data-role="bundle-progress">${esc(v.bundling)}</div>` : ''}
+        ${v.bundleMsg ? `<div class="lp-note" role="status" data-role="bundle-msg">${esc(v.bundleMsg)}</div>` : ''}
+        ${v.pending ? `<div class="lp-note" data-role="bundle-pending">${esc(t('bundle.pending', { n: v.pending }))}</div>` : ''}
+      </div>`;
+}
+
+async function exportBundle() {
+    const v = view.backup;
+    v.bundleMsg = '';
+    v.bundling = t('bundle.listing');
+    render();
+    try {
+        const r = await buildBundle({ scope: v.scope, settings: view.data.exportSettings, onProgress: (p) => {
+            v.bundling = t('bundle.reading', p);
+            if (isPanelOpen()) {
+                const el = panel.querySelector('[data-role="bundle-progress"]');
+                if (el) el.textContent = v.bundling;
+            }
+        } });
+        if (!r.chats) v.bundleMsg = t('bundle.empty');
+        else {
+            const name = downloadBundle(r.data);
+            v.bundleMsg = t('bundle.done', { chats: r.chats, characters: r.characters, name });
+        }
+        if (r.failed.length) v.bundleMsg += ` ${t('bundle.failed', { n: r.failed.length, list: r.failed.slice(0, 3).map((x) => x.chat || x.character).join('、') })}`;
+    } catch (e) {
+        v.bundleMsg = t('bundle.fail', { error: errorText(e) });
+    }
+    v.bundling = '';
+    if (isPanelOpen()) render();
+}
+
 function renderDataSection() {
     if (!isActive()) return `<div class="lp-note">${esc(t('data.needChat'))}</div>`;
     const d = view.data;
     const opt = (key, label) => `<label class="lp-check"><input type="checkbox" data-role="data-opt" data-key="${key}"${d[key] ? ' checked' : ''}><span>${esc(label)}</span></label>`;
     const modeRadio = (m) => `<label class="lp-check"><input type="radio" name="lp-import-mode" data-role="data-opt" data-key="mode" value="${m}"${d.mode === m ? ' checked' : ''}><span>${esc(t(`data.mode.${m}`))}</span></label>`;
     const f = d.file;
-    const fileInfo = f ? `<div class="lp-note" data-role="data-file-info">${esc(t('data.fileInfo', { name: d.fileName, character: f.character || '?', chat: f.chat || '?', n: f.floors.length, date: String(f.exportedAt ?? '').slice(0, 10) }))}</div>` : '';
+    const b = d.bundle;
+    const fileInfo = f ? `<div class="lp-note" data-role="data-file-info">${esc(t('data.fileInfo', { name: d.fileName, character: f.character || '?', chat: f.chat || '?', n: f.floors.length, date: String(f.exportedAt ?? '').slice(0, 10) }))}</div>`
+        : b ? `<div class="lp-note" data-role="data-file-info">${esc(t('bundle.fileInfo', { name: d.fileName, chats: b.chats.length, characters: new Set(b.chats.map((x) => x.avatar)).size, date: String(b.exportedAt ?? '').slice(0, 10) }))}</div>` : '';
     const wipe = d.confirmWipe
         ? `<div class="lp-callout lp-warn lp-row" data-role="data-wipe-confirm"><span>${esc(t('data.wipeConfirm'))}</span><span class="lp-spacer"></span>
             <button type="button" class="menu_button lp-btn lp-danger" data-action="data-wipe">${esc(t('data.wipeYes'))}</button>
@@ -2174,6 +2282,8 @@ function renderDataSection() {
         : `<button type="button" class="menu_button lp-btn lp-danger" data-action="data-wipe">${esc(t('data.wipe'))}</button>`;
     return `
       ${d.message ? `<div class="lp-callout" role="status" data-role="data-message">${esc(d.message)}</div>` : ''}
+      ${renderAutoBackup()}
+      ${renderBundle()}
       <div class="lp-scope-title">${esc(t('data.export'))}</div>
       <div class="lp-note">${esc(t('data.export.note'))}</div>
       ${opt('exportSettings', t('data.exportSettings'))}
@@ -2184,7 +2294,7 @@ function renderDataSection() {
       ${modeRadio('merge')}${modeRadio('replace')}
       ${opt('importSettings', t('data.importSettings'))}
       ${d.confirmReplace ? `<div class="lp-callout lp-warn">${esc(t('data.replaceConfirm'))}</div>` : ''}
-      <div class="lp-row"><button type="button" class="menu_button lp-btn" data-action="data-import"${f ? '' : ' disabled'}>${esc(t(d.confirmReplace ? 'data.importYes' : 'data.importBtn'))}</button>
+      <div class="lp-row"><button type="button" class="menu_button lp-btn" data-action="data-import"${f || b ? '' : ' disabled'}>${esc(t(d.confirmReplace ? 'data.importYes' : 'data.importBtn'))}</button>
         ${d.confirmReplace ? `<button type="button" class="menu_button lp-btn" data-action="data-wipe-cancel">${esc(t('act.cancel'))}</button>` : ''}</div>
       <div class="lp-scope-title">${esc(t('data.rescan'))}</div>
       <div class="lp-note">${esc(t('data.rescan.note'))}</div>
@@ -3728,6 +3838,42 @@ function onClick(e) {
             toast(m ? t('egg.secret', { title: m.title, content: m.content }) : t('egg.secretEmpty'), 'info');
             return;
         }
+        case 'alarm-go':
+            view.tab = 'settings';
+            view.openSections.add('data');
+            render();
+            panel.querySelector('[data-role="autobackup"]')?.scrollIntoView({ block: 'start' });
+            return;
+        case 'backup-now':
+            view.backup.busy = true;
+            render();
+            backupNow('manual').then((e) => { view.backup.msg = e ? t('backup.saved', { date: new Date(e.at).toLocaleString() }) : t('backup.nothing'); })
+                .finally(() => { view.backup.busy = false; if (isPanelOpen()) render(); });
+            return;
+        case 'backup-restore':
+            view.backup.confirm = String(btn.dataset.slot);
+            render();
+            return;
+        case 'backup-restore-no':
+            view.backup.confirm = null;
+            render();
+            return;
+        case 'backup-restore-yes':
+            view.backup.confirm = null;
+            view.backup.busy = true;
+            render();
+            restoreBackup(btn.dataset.slot)
+                .then((r) => { view.backup.msg = t('backup.restored', r); })
+                .catch((e) => { view.backup.msg = t('backup.restoreFail', { error: errorText(e) }); })
+                .finally(() => { view.backup.busy = false; if (isPanelOpen()) render(); });
+            return;
+        case 'backup-dismiss':
+            dismissAlarm();
+            render();
+            return;
+        case 'bundle-export':
+            if (!view.backup.bundling) exportBundle();
+            return;
         case 'whatsnew-ok':
             view.whatsNewAll = false;
             markSeen();
@@ -3869,15 +4015,26 @@ function onClick(e) {
         }
         case 'data-import': {
             const d = view.data;
-            if (!d.file) return;
+            if (!d.file && !d.bundle) return;
             if (d.mode === 'replace' && !d.confirmReplace) {
                 d.confirmReplace = true;
                 render();
                 return;
             }
-            const r = importBackup(d.file, { mode: d.mode, settings: d.importSettings });
-            view.data = { ...d, file: null, fileName: '', confirmReplace: false, message: t('data.imported', r) };
-            render();
+            if (d.bundle) {
+                importBundle(d.bundle, { mode: d.mode, settings: d.importSettings })
+                    .then((r) => { view.data = { ...view.data, bundle: null, fileName: '', confirmReplace: false, message: t('bundle.imported', { now: r.now?.matched ?? 0, later: r.later }) }; })
+                    .catch((e) => { view.data = { ...view.data, message: t('bundle.fail', { error: errorText(e) }) }; })
+                    .finally(() => { pendingImports().then((n) => { view.backup.pending = n; if (isPanelOpen()) render(); }); });
+                return;
+            }
+            // 導入之前先自動備份一份（覆蓋選錯了可以從備份放回）。
+            backupNow('before').finally(() => {
+                const r = importBackup(d.file, { mode: d.mode, settings: d.importSettings });
+                markIntentional();
+                view.data = { ...view.data, file: null, fileName: '', confirmReplace: false, message: t('data.imported', r) };
+                if (isPanelOpen()) render();
+            });
             return;
         }
         case 'data-wipe':
@@ -3889,6 +4046,8 @@ function onClick(e) {
             // 刪除前先下載一份備份（使用者決定）。
             downloadBackup(buildBackup({ settings: true }));
             view.data = { ...view.data, confirmWipe: false, message: t('data.wiped', { n: wipeChat() }) };
+            // 自己刪的，不算失憶。
+            markIntentional();
             render();
             return;
         case 'data-wipe-cancel':
@@ -4015,8 +4174,16 @@ function onChange(e) {
         const file = el.files?.[0];
         if (!file) return;
         file.text().then((text) => {
+            // 一鍵備份全部聊天的打包檔（v0.13.37）。
+            let raw = null;
+            try { raw = JSON.parse(text); } catch (err) { /* 交給 parseBackup 報錯 */ }
+            if (isBundle(raw)) {
+                view.data = { ...view.data, file: null, bundle: raw, fileName: file.name, confirmReplace: false, message: null };
+                render();
+                return;
+            }
             const r = parseBackup(text);
-            view.data = { ...view.data, file: r.data ?? null, fileName: file.name, confirmReplace: false, message: r.error ? t(`data.bad.${r.error}`) : null };
+            view.data = { ...view.data, file: r.data ?? null, bundle: null, fileName: file.name, confirmReplace: false, message: r.error ? t(`data.bad.${r.error}`) : null };
             render();
         });
         return;
@@ -4039,6 +4206,10 @@ function onChange(e) {
         else s0.routes = { ...(s0.routes ?? {}), [el.dataset.route]: el.value };
         saveSettings();
         render();
+        return;
+    }
+    if (el.dataset?.role === 'bundle-scope') {
+        if (el.checked) view.backup.scope = el.value;
         return;
     }
     if (el.dataset?.role === 'old-only') {
@@ -4300,4 +4471,8 @@ function onToggle(e) {
     if (!sec) return;
     if (e.target.open) view.openSections.add(sec);
     else view.openSections.delete(sec);
+    // 資料管理打開時，看看還有幾個聊天等著放回導入的備份。
+    if (sec === 'data' && e.target.open) {
+        pendingImports().then((n) => { if (n !== view.backup.pending) { view.backup.pending = n; if (isPanelOpen()) render(); } });
+    }
 }

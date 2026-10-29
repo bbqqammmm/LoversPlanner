@@ -20,6 +20,8 @@ import { mergePlans } from './src/planmerge.js';
 import { applyTheme } from './src/theme.js';
 import { initSent } from './src/sent.js';
 import { initEggs } from './src/eggs.js';
+import { initAutoBackup } from './src/autobackup.js';
+import { initBundle } from './src/bundle.js';
 
 function onSettingChanged(path) {
     if (path === 'language') relabelEntries();
@@ -55,6 +57,9 @@ async function start() {
     initAttention();
     initSent();
     initEggs();
+    // 自動備份、防失憶警報、放回導入的備份（v0.13.37）。
+    initBundle();
+    initAutoBackup();
     initMessageBlocks();
     renderAllBlocks();
     initUpdateWatch();

@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.39',
+        new: {
+            'zh-TW': ['⏰ 約定／待辦的預定日期過了一個星期以上還沒完成時（常見於從舊聊天帶來的），行事曆／約定分頁上方會提醒，可以一次標成已完成，或先篩出來一條一條看。'],
+            'zh-CN': ['⏰ 约定／待办的预定日期过了一个星期以上还没完成时（常见于从旧聊天带来的），行事历／约定分页上方会提醒，可以一次标成已完成，或先筛出来一条一条看。'],
+            en: ['⏰ When promises / to-dos are more than a week past their date and still open (common for ones carried over from an old chat), the Calendar & promises tab offers to mark them all done, or to show them first.'],
+        },
+    },
+    {
         v: '0.13.38',
         fix: {
             'zh-TW': [

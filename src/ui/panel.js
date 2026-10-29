@@ -2181,7 +2181,41 @@ function renderNotesTab(types = NOTE_TYPES) {
     const sort = dated ? `<div class="lp-row lp-note-sort"><div class="lp-chips" data-role="note-filters">${chips}</div><span class="lp-spacer"></span>
         <label class="lp-label" for="lp-note-sort">${esc(t('notes.sort'))}</label>
         <select id="lp-note-sort" class="text_pole lp-select" data-role="note-sort">${['due', 'newest', 'oldest'].map((k) => `<option value="${k}"${view.notes.sort === k ? ' selected' : ''}>${esc(t(`notes.sort.${k}`))}</option>`).join('')}</select></div>` : '';
-    return `${searchBox(view.tab)}${sort}${dated ? titlesBar() : ''}${empty}${none}<div class="lp-notes-stack">${sections}</div>`;
+    return `${searchBox(view.tab)}${sort}${dated ? titlesBar() : ''}${dated ? overdueBar(pool, today) : ''}${empty}${none}<div class="lp-notes-stack">${sections}</div>`;
+}
+
+/** 預定日期過了多少天以上，算「過期很久」。 */
+const OVERDUE_DAYS = 7;
+
+function longOverdue(pool, today) {
+    if (!today) return [];
+    return pool.filter((n) => {
+        if (n.state !== 'active') return false;
+        const { due } = noteDates(n);
+        return due && daysBetween(due, today) > OVERDUE_DAYS;
+    });
+}
+
+/**
+ * 過期很久的約定／待辦（v0.13.39，使用者回報：從舊聊天帶來的、當時沒標成完成的，現在顯示「已過 300 多天」）：
+ * 一次標成已完成（約定＝已履行、待辦＝已完成，都可以在「已完成」還原），或先篩出來看。
+ */
+function overdueBar(pool, today) {
+    const v = view.notes;
+    const list = longOverdue(pool, today);
+    if (!list.length || v.overdueHidden) return '';
+    const confirm = v.overdueConfirm
+        ? `<div class="lp-row"><span>${esc(t('overdue.confirm', { n: list.length }))}</span><span class="lp-spacer"></span>
+            <button type="button" class="menu_button lp-btn lp-primary" data-action="overdue-done">${esc(t('overdue.yes'))}</button>
+            <button type="button" class="menu_button lp-btn" data-action="overdue-cancel">${esc(t('act.cancel'))}</button></div>`
+        : `<div class="lp-row">
+            <button type="button" class="menu_button lp-btn lp-primary" data-action="overdue-ask">${esc(t('overdue.all', { n: list.length }))}</button>
+            <button type="button" class="menu_button lp-btn" data-action="overdue-look">${esc(t('overdue.look'))}</button>
+            <button type="button" class="menu_button lp-btn" data-action="overdue-hide">${esc(t('overdue.hide'))}</button></div>`;
+    return `<div class="lp-callout" data-role="overdue">
+        <div>${esc(t('overdue.hint', { n: list.length, days: OVERDUE_DAYS }))}</div>
+        ${confirm}
+      </div>`;
 }
 
 const USAGE_ERRORS = ['empty', 'empty_notice', 'empty_length', 'timeout', 'http', 'network', 'parse', 'bad_response'];
@@ -3623,6 +3657,31 @@ function onClick(e) {
             render();
             return;
         }
+        case 'overdue-ask':
+            view.notes.overdueConfirm = true;
+            render();
+            return;
+        case 'overdue-cancel':
+            view.notes.overdueConfirm = false;
+            render();
+            return;
+        case 'overdue-done': {
+            const today = storyToday();
+            const list = longOverdue(['promise', 'todo'].flatMap((type) => notesOfType(type)), today);
+            for (const n of list) completeNoteManual(n.id, n.type === 'promise' ? 'kept' : 'done');
+            view.notes.overdueConfirm = false;
+            toast(t('overdue.doneMsg', { n: list.length }), 'success');
+            render();
+            return;
+        }
+        case 'overdue-look':
+            view.notes.filter = 'late';
+            render();
+            return;
+        case 'overdue-hide':
+            view.notes.overdueHidden = true;
+            render();
+            return;
         case 'cal-carry':
             carryCalendar();
             return;

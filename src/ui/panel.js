@@ -52,7 +52,7 @@ import { clearUsage, localDay, onUsageChange, recentUsage, usageSummary } from '
 import { acceptAllDigests, acceptDigest, checkManualChapter, compressSelected, compressionDue, deleteChapter, digestLabel, editChapter, editVolume, structure } from '../compress.js';
 import { actionsFor, byLine, eventLabel, hintFor, revealFloor, runAction, sceneHtml, STATUS_ICONS, versionsHtml } from './message.js';
 import {
-    addCarriedEvents, addManualEvent, buildCalendar, ACTIVE_CAL_TYPES, calendarOn, calTracked, dayInfo, daysBetween, monthGrid, monthTitle, onCalendarChange,
+    addCarriedEvents, addManualEvent, buildCalendar, ACTIVE_CAL_TYPES, calendarOn, carryAsked, markCarryAsked, calTracked, dayInfo, daysBetween, monthGrid, monthTitle, onCalendarChange,
     periodStatus, removeEvent, restoreRemoved, shiftMonth, upcoming, weekdayName,
 } from '../calendar.js';
 import {
@@ -965,7 +965,48 @@ function renderCalendarTab() {
         <span class="lp-scope-title">${esc(t('tab.calendar'))}</span>
         ${!open && cal.today ? `<span class="lp-note">${esc(t('cal.todayIs', { date: cal.today, weekday: weekdayName(cal.today, 'long') }))}</span>` : ''}
       </button></div>`;
-    return `<div class="lp-calendar" data-role="calendar">${toggle}${open ? `${calendarStatus(cal)}${nav}${grid}${calendarDay(cal)}${annivList(cal)}` : ''}</div>`;
+    return `<div class="lp-calendar" data-role="calendar">${toggle}${open ? `${calendarCarry(cal)}${calendarStatus(cal)}${nav}${grid}${calendarDay(cal)}${annivList(cal)}` : ''}</div>`;
+}
+
+/** 從哪個聊天帶過來的（帶到新聊天、手動匯入）。 */
+function carrySource() {
+    return lastCarry()?.source ?? getRecap()?.source ?? '';
+}
+
+/**
+ * 帶到新聊天時還沒帶行事曆（v0.13.33 以前開的聊天，使用者回報生理期沒過去，v0.13.38）：
+ * 從來源聊天補帶生理期、親熱、紀念日（不打開那個聊天，直接讀聊天檔）。
+ */
+function calendarCarry(cal) {
+    const src = carrySource();
+    if (!src || src === chatKey() || carryAsked(src)) return '';
+    if (cal.items.some((x) => x.source === 'carried' && (x.from === src || String(x.origin ?? '').startsWith(`${src}#`)))) return '';
+    const v = view.cal;
+    return `<div class="lp-callout" data-role="cal-carry">
+        <div>${esc(t('cal.carryHint', { chat: src }))}</div>
+        ${v.carryMsg ? `<div class="lp-note" role="status">${esc(v.carryMsg)}</div>` : ''}
+        <div class="lp-row"><button type="button" class="menu_button lp-btn lp-primary" data-action="cal-carry"${v.carryBusy ? ' disabled' : ''}>${esc(t(v.carryBusy ? 'cal.carryReading' : 'cal.carryGo'))}</button>
+          <button type="button" class="menu_button lp-btn" data-action="cal-carry-no"${v.carryBusy ? ' disabled' : ''}>${esc(t('cal.carryNo'))}</button></div>
+      </div>`;
+}
+
+async function carryCalendar() {
+    const src = carrySource();
+    const v = view.cal;
+    if (!src || v.carryBusy) return;
+    v.carryBusy = true;
+    v.carryMsg = '';
+    render();
+    try {
+        const r = analyzeChats([{ id: src, data: await loadOldChat(src) }], { keepDays: false });
+        const n = addCarriedEvents(r.calendar.items, src);
+        markCarryAsked(src);
+        toast(n ? t('cal.carryDone', { n, period: r.calendar.period, intimacy: r.calendar.intimacy, anniversary: r.calendar.anniversary }) : t('cal.carryNone'), n ? 'success' : 'info');
+    } catch (e) {
+        v.carryMsg = t('cal.carryFail', { error: errorText(e) });
+    }
+    v.carryBusy = false;
+    if (isPanelOpen()) render();
 }
 
 /** 紀念日：同一個日子＋名稱併成一組（劇情裡常提到好幾次），照「還有幾天」排。 */
@@ -3579,6 +3620,15 @@ function onClick(e) {
             const days = listDiary().filter((d) => d.state === 'done' && d.original.length >= min && d.use !== 'compressed');
             for (const d of days) compressDay(d.date, { ratio: view.diary.batchRatio });
             view.diary.msg = days.length ? t('diary.queued', { n: days.length }) : t('diary.batchNone', { n: min });
+            render();
+            return;
+        }
+        case 'cal-carry':
+            carryCalendar();
+            return;
+        case 'cal-carry-no': {
+            const src = carrySource();
+            if (src) markCarryAsked(src);
             render();
             return;
         }

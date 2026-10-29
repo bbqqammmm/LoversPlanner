@@ -826,6 +826,8 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
 - **summarize.js 的 queuedTasks(label) 會把正在跑的那一個也算進去**：在工作自己裡面判斷「這批是不是寫完了」要用 `<= 1`，不是 `=== 0`（v0.13.36 自動寫大綱一直不觸發就是這樣）。
 - **Playwright 的 `page.waitForFunction(async () => …)` 不會等**（v0.13.37 寫備份測試時發現）：async 函式回傳的是 Promise 物件，一定是「真」，所以馬上就放行。以前 card、diary、diarysend、timeline 的測試這樣寫，等於沒在等（剛好都夠快才過）。改成在 `page.evaluate` 裡自己輪詢（每 50 毫秒看一次，逾時就丟錯）。要等「頁面裡的同步條件」才用 waitForFunction。
 - **測試頁會假裝酒館的檔案 API**（v0.13.37）：自動備份在打開聊天 6 秒後會存檔，測試用的靜態伺服器不接受 POST（405，會被算成錯誤）。tests/harness.html 把 /api/files/upload、/api/files/delete、/user/files/* 接到記憶體；要自己用 page.route 模擬的測試（autobackup）設 `window.__realFiles = true`。
+- **約定每條都被當成「提到名字」送出去**（使用者回報，v0.13.38 修）：只送相關的記事時，約定是拿「和誰」比對最近的原文，但「和誰」幾乎都是 {{char}} 或 {{user}}，每回都會提到，所以 88 條裡 31 條都說「提到名字」。改成比對名字時不算主角（{{char}}、{{user}}、指定成主角的人物和別名）；約定的「和誰」只要含有主角的名字（例如「為小雨」）也不算。人物、物件是完全一樣才排除（不然「沈言的母親」也會被排除）。這種約定改靠向量、最近幾層有變動、釘選或快到期送。
+- **v0.13.33 以前帶到新聊天的，行事曆沒帶過去**（使用者回報，v0.13.38）：帶行事曆是 v0.13.33 才加的，之前開的新聊天不會補；舊聊天的快照也要那個聊天打開過才會有行事曆（太長的聊天打不開）。改成：這個聊天有帶入記錄（carry.source 或前情提要的 source）、但沒有從那裡帶來的行事曆 → 行事曆上方提醒「補帶行事曆」，直接讀那個聊天檔（oldchats 的讀法，不動寫日記用的「上次讀到的每一天」）加進 carried；補過或按「不用」記在 calendar.carryAsked，不再問。
 - **測試時 Playwright 攔截的回應不會觸發 CORS 檢查。** 要模擬「被 CORS 擋」，用 `route.abort()`（對插件來說錯誤一樣是 TypeError）。
 
 ## 📝 決策紀錄
@@ -971,3 +973,4 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
   - **放回**：先存 r 格，再用 importBackup 覆蓋，角色卡資料只補沒有的（共用記事照 id、偏好照內容）。資料管理的「導入備份」也先存 r 格。
   - **📦 一鍵備份全部聊天**（src/bundle.js）：這個角色／所有角色；用 /api/characters/chats＋/api/chats/get 讀檔（不打開聊天），只取戀人手帳的資料，現在開著的聊天用記憶體裡的。檔案格式 lovers-planner-bundle（每個聊天的 data 和單一聊天的導出一樣，加上各角色的角色卡資料，可選設定）。導入：現在開著的聊天馬上放回（先存 r 格）；其他的記在 IndexedDB（pending-imports），打開那個聊天時（autobackup 的 onChatReady，在檢查警報之前）自動放回並通知。不在背景改聊天檔。
   - 測試 tests/autobackup.test.mjs、tests/bundle.test.mjs；順便修好四個測試的假等待（見已知問題）。
+- 2026-10-30（v0.13.38，使用者回報兩個問題）：約定的「和誰」不再因為主角名字被當成提到；補帶行事曆（見已知問題）。測試 tests/calcarry.test.mjs，recall.test.mjs 多一條。

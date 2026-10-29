@@ -63,6 +63,9 @@ await page.evaluate(async () => {
     { op: 'add', id: 'i_bracelet', type: 'item', data: { name: '銀色手鍊', holder: '小雨' } },
     { op: 'add', id: 'i_qin', type: 'item', data: { name: '古琴', holder: '沈言' } },
     { op: 'add', id: 'p_sea', type: 'promise', data: { content: '一起去看海', with: '林曉' } },
+    // v0.13.38：「和誰」是主角的約定，不能因為提到主角的名字就送（使用者回報）。
+    { op: 'add', id: 'p_home', type: 'promise', data: { content: '回家煮火鍋', with: '小雨' } },
+    { op: 'add', id: 'p_for', type: 'promise', data: { content: '訂海邊民宿', with: '為小雨' } },
     { op: 'add', id: 't_flower', type: 'todo', data: { content: '買花' } },
   ];
   (await import('/src/notes.js')).invalidateNotes();
@@ -89,12 +92,13 @@ check('cast of a recent floor sent', inj.includes('名字：周老闆'));
 check('unmentioned character not sent', !inj.includes('王阿姨'));
 check('unmentioned item not sent', !inj.includes('銀色手鍊'));
 check('unmentioned todo not sent', !inj.includes('買花'));
+check('promise with a lead is not sent just because the lead is named', !inj.includes('回家煮火鍋') && !inj.includes('訂海邊民宿'), inj.slice(0, 400));
 check('memory recall section present', inj.includes('【相關回憶】\n［第4天｜海邊］林曉在海邊撿到貝殼'), inj);
 check('unrelated old floor not recalled', !inj.includes('沈言煮咖啡'));
 check('memory goes between summaries and notes', inj.indexOf('【前情摘要】') < inj.indexOf('【相關回憶】') && inj.indexOf('【相關回憶】') < inj.indexOf('【記事】'));
 check('no embedding calls when vectors are off', embedCalls === 0);
 let st = await page.evaluate(async () => (await import('/src/hide.js')).getLastStats());
-check('stats count notes sent', st.notesSent === 6 && st.notesTotal === 9 && st.memories === 1 && st.vector === 'off', JSON.stringify(st));
+check('stats count notes sent', st.notesSent === 6 && st.notesTotal === 11 && st.memories === 1 && st.vector === 'off', JSON.stringify(st));
 
 let sel = await select();
 check('reasons', sel.notes.c_shen === 'lead' && sel.notes.c_lin === 'mention' && sel.notes.c_zhou === 'recent' && sel.notes.p_sea === 'mention', JSON.stringify(sel.notes));

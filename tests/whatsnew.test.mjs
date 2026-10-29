@@ -78,7 +78,7 @@ await page.close();
 page = await open({ lovers_planner: { settingsVersion: 5, language: 'en' } });
 await openPanel(page);
 card = await page.textContent('[data-role="whatsnew"]');
-check('english card', card.includes("Lover's Planner was updated") && card.includes(await page.evaluate(async () => (await import('/src/changelog.js')).CHANGES[0].new.en[0].slice(0, 12))) && card.includes('Got it'), card.slice(0, 160));
+check('english card', card.includes("Lover's Planner was updated") && card.includes(await page.evaluate(async () => (({ CHANGES }) => (CHANGES[0].new ?? CHANGES[0].fix).en[0].slice(0, 12))(await import('/src/changelog.js')))) && card.includes('Got it'), card.slice(0, 160));
 const missing = await page.evaluate(async () => (await import('/src/i18n.js')).missingKeys());
 check('i18n keys complete', !missing.length, JSON.stringify(missing));
 // 每一版三種語言都有寫

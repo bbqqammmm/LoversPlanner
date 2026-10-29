@@ -9,6 +9,23 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.38',
+        fix: {
+            'zh-TW': [
+                '約定的「和誰」是 char 或 user 時，不會再因為提到他們的名字就被送出去（以前幾乎每條約定都算「提到名字」）。',
+                '在 v0.13.33 以前帶到新聊天的，行事曆（生理期、親熱、紀念日）沒有跟著過去：行事曆上方會問要不要補帶，按一下就從舊聊天讀過來，不用打開它。',
+            ],
+            'zh-CN': [
+                '约定的「和谁」是 char 或 user 时，不会再因为提到他们的名字就被发送出去（以前几乎每条约定都算「提到名字」）。',
+                '在 v0.13.33 以前带到新聊天的，行事历（生理期、亲热、纪念日）没有跟着过去：行事历上方会问要不要补带，按一下就从旧聊天读过来，不用打开它。',
+            ],
+            en: [
+                'Promises made with {{char}} or {{user}} are no longer sent just because their names come up (almost every promise used to count as "name mentioned").',
+                'Chats carried over before v0.13.33 did not bring the calendar (periods, intimacy, anniversaries): the calendar now offers to bring it over from the old chat with one tap, without opening it.',
+            ],
+        },
+    },
+    {
         v: '0.13.37',
         new: {
             'zh-TW': [

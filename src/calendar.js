@@ -212,6 +212,17 @@ export function addCarriedEvents(list, from = '') {
     return add.length;
 }
 
+/** 從來源聊天補帶行事曆（v0.13.38）：問過了（補了或使用者說不用）就記下來，不再問。 */
+export function carryAsked(from) {
+    return (record(false)?.carryAsked ?? []).includes(from);
+}
+
+export function markCarryAsked(from) {
+    const rec = record(true);
+    rec.carryAsked = [...new Set([...(rec.carryAsked ?? []), from])];
+    saveMeta();
+}
+
 /** 拿掉從某個聊天帶來的事件（復原帶入用）。 */
 export function removeCarriedFrom(from) {
     const rec = record(false);

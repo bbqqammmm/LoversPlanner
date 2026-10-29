@@ -65,12 +65,28 @@ export function isLead(note, leads = leadAliases(), roles = null) {
     return leads.some((l) => sameName(mine, l));
 }
 
-/** 記事裡哪些名字可以拿來比對：人物、物件看名字；約定看「和誰」。 */
-function noteAliases(note) {
-    if (note.type === 'character') return [...aliasesOf(note.data.name), ...String(note.data.alias ?? '').split(/[、,，/／;；]+/).flatMap(aliasesOf)];
-    if (note.type === 'item') return aliasesOf(note.data.name);
-    if (note.type === 'promise') return aliasesOf(note.data.with);
-    return [];
+/**
+ * 記事裡哪些名字可以拿來比對：人物、物件看名字；約定看「和誰」。
+ * 主角（{{char}}、{{user}} 和他們的別名）不算（v0.13.38，使用者回報：約定的「和誰」幾乎都是主角，
+ * 每回都提到名字，結果每條約定都被當成「提到名字」送出去）。約定的「和誰」裡有主角的名字也不算（例如「為小雨」）。
+ */
+function noteAliases(note, leads = []) {
+    const isLeadName = (a, loose) => leads.some((l) => a === l || (loose && (a.includes(l) || l.includes(a))));
+    let list = [];
+    if (note.type === 'character') list = [...aliasesOf(note.data.name), ...String(note.data.alias ?? '').split(/[、,，/／;；]+/).flatMap(aliasesOf)];
+    else if (note.type === 'item') list = aliasesOf(note.data.name);
+    else if (note.type === 'promise') return aliasesOf(note.data.with).filter((a) => !isLeadName(a, true));
+    return list.filter((a) => !isLeadName(a, false));
+}
+
+/** 主角的所有名字：{{char}}、{{user}}，和指定成主角的人物記事的名字、別名。 */
+function leadNames(roles = leadRoles()) {
+    const out = new Set(leadAliases().flat());
+    for (const n of getNotes().notes.values()) {
+        if (n.type !== 'character' || !isLead(n, undefined, roles)) continue;
+        for (const a of noteAliases(n)) out.add(a);
+    }
+    return [...out];
 }
 
 /** 這次會送出的最新原文（保留原文的那幾層＋剛送出的話）。 */
@@ -157,12 +173,13 @@ export async function selectRelevant({ keepFrom, limit = getChat().length, previ
     if (out.filtered) {
         const leads = leadAliases();
         const roles = leadRoles();
+        const names = leadNames(roles);
         const { cast, touched } = recentActivity(limit, Number(r.recentFloors) || 0);
         for (const n of notes) {
             let reason = null;
             if (n.pinned) reason = 'pinned';
             else if (isLead(n, leads, roles)) reason = 'lead';
-            else if (mentioned(noteAliases(n), text)) reason = 'mention';
+            else if (mentioned(noteAliases(n, names), text)) reason = 'mention';
             else if (touched.has(n.id) || (n.type === 'character' && cast.some((c) => sameName(aliasesOf(n.data.name), c)))) reason = 'recent';
             if (reason) out.notes.set(n.id, { reason });
             else rest.push(n);

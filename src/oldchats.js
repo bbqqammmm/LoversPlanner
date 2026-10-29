@@ -126,8 +126,9 @@ function plainEvent(ev, date, origin) {
 /**
  * 分析讀到的聊天（照勾選的順序，舊的先）。
  * loaded：[{ id, data }]。回傳 { chats, days, totals, calendar, overlaps }。
+ * keepDays：false 時不換掉「上次讀到的每一天」（只是來讀行事曆的，不影響寫日記，v0.13.38）。
  */
-export function analyzeChats(loaded) {
+export function analyzeChats(loaded, { keepDays = true } = {}) {
     const seen = new Set();
     const days = new Map();
     const day = (date) => {
@@ -224,7 +225,7 @@ export function analyzeChats(loaded) {
         for (const ev of meta.calendar?.carried ?? []) if (EVENT_TYPES.includes(ev?.type) && ev.origin) events.push({ ...ev });
         chats.push(info);
     }
-    lastUnits = new Map([...days.values()].map((d) => [d.date, d.units]));
+    if (keepDays) lastUnits = new Map([...days.values()].map((d) => [d.date, d.units]));
     const list = [...days.values()]
         .filter((d) => d.ai || d.side)
         .map((d) => {

@@ -1,0 +1,1695 @@
+/* 戀人手帳：第一版只用酒館主題的 CSS 變數，換主題時自動配合。 */
+
+.lp-overlay,
+.lp-sum {
+    --lp-text: var(--SmartThemeBodyColor, #dcdcd2);
+    --lp-muted: var(--SmartThemeEmColor, #9a9a92);
+    --lp-accent: var(--SmartThemeQuoteColor, #e18a24);
+    --lp-border: var(--SmartThemeBorderColor, #343434);
+    --lp-bg: var(--SmartThemeBlurTintColor, #171717);
+    --lp-card: color-mix(in srgb, var(--lp-text) 5%, transparent);
+    /* 狀態色和文字色混合：深色主題會偏亮、淺色主題會偏暗，兩邊都看得清楚。 */
+    --lp-warn: color-mix(in srgb, #e0a020 60%, var(--lp-text));
+    --lp-ok: color-mix(in srgb, #3fae5f 60%, var(--lp-text));
+    --lp-error: color-mix(in srgb, #e5534b 65%, var(--lp-text));
+    --lp-info: color-mix(in srgb, #4a90d9 60%, var(--lp-text));
+}
+
+.lp-overlay {
+    position: fixed;
+    inset: 0;
+    /* 美化主題的工具列常常設很高的 z-index；能用最上層（popover）時會改用最上層。 */
+    z-index: 2147483000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.lp-panel {
+    width: min(960px, 100%);
+    height: min(760px, 100%);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+    color: var(--lp-text);
+    background: var(--lp-bg);
+    border: 1px solid var(--lp-border);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px var(--SmartThemeShadowColor, rgba(0, 0, 0, 0.55));
+    backdrop-filter: blur(var(--SmartThemeBlurStrength, 0px));
+    font-size: var(--mainFontSize, 15px);
+}
+
+/* 手機：全螢幕 */
+@media (max-width: 768px) {
+    .lp-overlay { padding: 0; }
+    .lp-panel {
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        border: none;
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+}
+
+.lp-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 12px 10px 18px;
+    border-bottom: 1px solid var(--lp-border);
+}
+.lp-title-icon { color: var(--lp-accent); font-size: 1.3em; }
+.lp-title-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.lp-title { font-size: 1.15em; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-subtitle { font-weight: 400; font-size: 0.85em; color: var(--lp-muted); }
+.lp-stats { font-size: 0.85em; color: var(--lp-muted); }
+
+.lp-icon-btn {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--lp-text);
+    font-size: 1.2em;
+    cursor: pointer;
+}
+.lp-icon-btn:hover, .lp-icon-btn:focus-visible { background: var(--lp-card); }
+
+.lp-tabs {
+    display: flex;
+    gap: 2px;
+    padding: 0 10px;
+    border-bottom: 1px solid var(--lp-border);
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.lp-tab {
+    min-height: 44px;
+    padding: 0 16px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: var(--lp-muted);
+    font: inherit;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.lp-tab.lp-on { color: var(--lp-text); font-weight: 700; border-bottom-color: var(--lp-accent); }
+.lp-tab:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: -2px; }
+
+.lp-body {
+    flex: 1;
+    overflow: auto;
+    padding: 14px 18px 24px;
+    -webkit-overflow-scrolling: touch;
+}
+
+.lp-banner {
+    margin-bottom: 12px;
+    padding: 10px 14px;
+    border: 1px solid color-mix(in srgb, var(--lp-warn) 40%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--lp-warn) 10%, transparent);
+    color: var(--lp-text);
+}
+
+.lp-wip {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--lp-muted);
+    border: 1px dashed var(--lp-border);
+    border-radius: 8px;
+}
+
+/* ===== 設定頁 ===== */
+
+.lp-settings { display: flex; flex-direction: column; gap: 8px; }
+
+.lp-sec {
+    border: 1px solid var(--lp-border);
+    border-radius: 8px;
+    background: var(--lp-card);
+}
+.lp-sec > summary {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    cursor: pointer;
+    list-style: none;
+}
+.lp-sec > summary::-webkit-details-marker { display: none; }
+.lp-sec > summary::before {
+    content: '▸';
+    width: 12px;
+    color: var(--lp-muted);
+}
+.lp-sec[open] > summary::before { content: '▾'; }
+.lp-sec-title { flex: 1; font-weight: 600; }
+.lp-sec-hint { color: var(--lp-muted); font-size: 0.85em; text-align: right; }
+
+.lp-sec-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 4px 14px 14px 36px;
+}
+
+.lp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.lp-label { color: var(--lp-muted); font-size: 0.9em; }
+.lp-note { color: var(--lp-muted); font-size: 0.85em; }
+.lp-warn { color: var(--lp-warn); }
+.lp-warn-text { color: var(--lp-warn); font-size: 0.9em; }
+.lp-ok-text { color: var(--lp-ok); font-size: 0.9em; }
+.lp-error-text { color: var(--lp-error); font-size: 0.9em; }
+.lp-spacer { flex: 1; }
+
+.lp-callout {
+    padding: 8px 12px;
+    border: 1px solid color-mix(in srgb, var(--lp-warn) 40%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--lp-warn) 8%, transparent);
+    font-size: 0.9em;
+}
+
+.lp-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    cursor: pointer;
+}
+.lp-check input { width: 18px; height: 18px; margin: 0; flex-shrink: 0; accent-color: var(--lp-accent); }
+
+.lp-overlay .text_pole { margin: 0; }
+/* 放進最上層（popover）時，蓋掉瀏覽器對 popover 的預設樣式（置中、邊框、白底、自動大小）。 */
+.lp-overlay[popover] {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    max-height: none;
+    border: 0;
+    color: inherit;
+    overflow: visible;
+}
+.lp-overlay[popover]:not(:popover-open) { display: none; }
+.lp-num { width: 72px !important; height: 36px; box-sizing: border-box; }
+.lp-select { width: auto !important; max-width: 100%; height: 36px; box-sizing: border-box; }
+
+.lp-card {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--lp-card);
+}
+.lp-field { display: flex; flex-direction: column; gap: 4px; }
+.lp-inline { display: flex; align-items: center; gap: 8px; }
+.lp-grow { flex: 1; min-width: 0; width: auto !important; height: 36px; box-sizing: border-box; }
+.lp-custom { display: flex; flex-direction: column; gap: 12px; max-width: 640px; }
+.lp-custom .text_pole { height: 36px; box-sizing: border-box; }
+.lp-custom-status { display: flex; flex-wrap: wrap; gap: 4px 10px; flex: 1 1 200px; }
+.lp-primary { border-color: var(--lp-accent) !important; }
+@media (max-width: 560px) {
+    .lp-sec-body { padding-left: 14px; }
+}
+
+.lp-scroll-x { overflow-x: auto; }
+.lp-scope-grid {
+    display: grid;
+    grid-template-columns: auto repeat(3, minmax(0, 1fr));
+    gap: 4px 10px;
+    align-items: center;
+    max-width: 560px;
+}
+/* 欄位標題太長時換行，不要被切掉 */
+.lp-scope-grid .lp-label { overflow-wrap: anywhere; line-height: 1.3; }
+.lp-scope-kind { font-weight: 500; }
+.lp-radio-cell { display: flex; align-items: center; min-height: 36px; cursor: pointer; }
+.lp-radio-cell input { width: 18px; height: 18px; margin: 0; accent-color: var(--lp-accent); }
+
+.lp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.lp-chip {
+    min-height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--lp-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--lp-muted);
+    font: inherit;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+.lp-chip.lp-on {
+    border-color: var(--lp-accent);
+    color: var(--lp-text);
+    background: color-mix(in srgb, var(--lp-accent) 14%, transparent);
+}
+.lp-chip-static {
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--lp-accent) 50%, transparent);
+    color: var(--lp-accent);
+    font-size: 0.8em;
+}
+.lp-chip-static[hidden] { display: none; }
+
+.lp-template {
+    width: 100%;
+    min-height: 220px;
+    box-sizing: border-box;
+    padding: 10px;
+    line-height: 1.6;
+    font-family: var(--monoFontFamily, monospace);
+    font-size: 0.9em;
+    resize: vertical;
+}
+.lp-btn { margin: 0 !important; min-height: 36px; }
+/* 中文字可以在任何兩個字之間換行，窄螢幕上按鈕會被擠成一個字寬的直條（使用者截圖）。
+   標籤保持一行、不要縮；真的太長就截斷。有些主題會把 .menu_button 設成 min-content，一併蓋掉。 */
+.lp-overlay .lp-btn,
+.lp-sum .lp-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+    width: auto !important;
+    min-width: max-content;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.lp-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* ===== 擴充設定面板的入口 ===== */
+.lp-drawer-hint { margin-bottom: 8px; color: var(--SmartThemeEmColor, #9a9a92); font-size: 0.9em; }
+
+/* ===== 狀態標籤（聊天畫面和大視窗共用） ===== */
+.lp-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    font-size: 0.8em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.lp-st-none { color: var(--lp-muted); }
+.lp-st-queued, .lp-st-busy { color: var(--lp-info); }
+.lp-st-ok { color: var(--lp-ok); }
+.lp-st-stale { color: var(--lp-warn); }
+.lp-st-fail { color: var(--lp-error); }
+.lp-st-skip { color: var(--lp-muted); }
+.lp-st-side { color: var(--lp-muted); }
+
+.lp-sum-text { line-height: 1.7; white-space: pre-wrap; }
+.lp-sum-hint { color: var(--lp-muted); font-size: 0.9em; }
+.lp-sum-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.lp-sum-actions .lp-btn { min-height: 32px; font-size: 0.85em; }
+
+/* ===== 聊天畫面：每條 AI 訊息下面的摘要區塊 ===== */
+/* 包成一個獨立的框：用主題底色＋霧面模糊，放在任何背景圖上都讀得清楚。 */
+.lp-sum {
+    margin: 8px 0 4px;
+    padding: 2px 10px;
+    border: 1px solid color-mix(in srgb, var(--lp-text) 18%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--lp-bg) 88%, transparent);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    color: var(--lp-text);
+    font-size: 0.9em;
+}
+/* 最後一則訊息底下有切換 swipe 的按鈕，留點空間別被蓋住。 */
+.mes.last_mes .lp-sum { margin-bottom: 2.6em; }
+.lp-sum-head {
+    width: 100%;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 4px;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.lp-sum-head:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: -2px; border-radius: 4px; }
+.lp-sum-chev { width: 12px; color: var(--lp-muted); }
+.lp-sum-preview {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--lp-muted);
+}
+.lp-sum-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin: 0 0 8px;
+    padding: 8px 2px 0;
+    border-top: 1px dashed color-mix(in srgb, var(--lp-text) 18%, transparent);
+}
+.lp-sum-editor {
+    width: 100%;
+    min-height: 80px;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    line-height: 1.6;
+    resize: vertical;
+}
+
+/* ===== 大視窗：摘要分頁 ===== */
+.lp-summary { display: flex; flex-direction: column; gap: 12px; }
+.lp-floor-list { display: flex; flex-direction: column; gap: 8px; }
+.lp-floor-row {
+    display: flex;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--lp-border);
+    border-radius: 8px;
+    background: var(--lp-card);
+}
+.lp-floor-no { width: 44px; flex-shrink: 0; padding-top: 2px; color: var(--lp-muted); font-size: 0.9em; }
+.lp-floor-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-more { align-self: center; }
+.lp-callout.lp-row { gap: 8px; }
+
+/* ===== 記憶範圍 ===== */
+.lp-scope-block { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 8px; background: var(--lp-card); }
+.lp-scope-title { font-weight: 600; }
+
+/* ===== 時間、地點、人物 ===== */
+.lp-scene { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--lp-muted); font-size: 0.9em; }
+.lp-scene-item { display: inline-flex; align-items: center; gap: 5px; }
+.lp-sr {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* ===== 這層的記事變化 ===== */
+.lp-changes { display: flex; flex-direction: column; gap: 4px; }
+.lp-changes-title { color: var(--lp-muted); font-size: 0.85em; }
+.lp-changes ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.lp-change { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.lp-change > span { min-width: 0; overflow-wrap: anywhere; }
+.lp-undone > span { text-decoration: line-through; color: var(--lp-muted); }
+.lp-invalid > span { color: var(--lp-muted); }
+.lp-mini { min-height: 30px !important; padding: 0 10px !important; font-size: 0.8em !important; flex-shrink: 0; }
+
+.lp-editor-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .lp-editor-grid { grid-template-columns: minmax(0, 1fr); } }
+.lp-sum .text_pole, .lp-note-form .text_pole { margin: 0; width: 100%; box-sizing: border-box; }
+
+/* ===== 記事分頁 ===== */
+.lp-notes-stack { display: flex; flex-direction: column; gap: 18px; }
+.lp-card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
+.lp-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 10px; }
+.lp-note-form { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+    .lp-card-grid, .lp-form-grid { grid-template-columns: minmax(0, 1fr); }
+}
+.lp-qty { display: flex; align-items: center; gap: 8px; }
+.lp-qty-btn { width: 36px; justify-content: center; font-size: 1em !important; }
+.lp-qty-val { min-width: 2.5em; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+.lp-track-group { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; }
+.lp-track-group > .lp-label { width: 100%; }
+.lp-note-section { display: flex; flex-direction: column; gap: 8px; }
+.lp-note-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--lp-border);
+    border-radius: 8px;
+    background: var(--lp-card);
+}
+.lp-note-form { gap: 8px; border-color: var(--lp-accent); }
+.lp-note-broken { border-style: dashed; }
+.lp-note-head { display: flex; align-items: center; gap: 8px; }
+.lp-note-title { font-weight: 600; overflow-wrap: anywhere; }
+.lp-note-line { font-size: 0.9em; overflow-wrap: anywhere; }
+.lp-note-trace { font-size: 0.8em; color: var(--lp-muted); }
+.lp-link {
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--lp-accent);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.lp-danger { color: var(--lp-error) !important; }
+.lp-done-actions { flex-shrink: 0; align-self: center; }
+
+/* ===== 失敗／過期的強制彈窗 ===== */
+.lp-dialog {
+    width: min(560px, 100%);
+    max-height: min(640px, 100%);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+    color: var(--lp-text);
+    background: var(--lp-bg);
+    border: 1px solid var(--lp-border);
+    border-radius: 10px;
+    box-shadow: 0 12px 40px var(--SmartThemeShadowColor, rgba(0, 0, 0, 0.55));
+    font-size: var(--mainFontSize, 15px);
+}
+.lp-dialog-head { display: flex; flex-direction: column; gap: 4px; padding: 16px 18px 10px; border-bottom: 1px solid var(--lp-border); }
+.lp-dialog-body { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; padding: 12px 18px; }
+.lp-dialog-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 18px 14px; border-top: 1px solid var(--lp-border); }
+@media (max-width: 560px) {
+    .lp-attention { padding: 12px; }
+}
+
+/* ===== 被隱藏的樓層 ===== */
+.lp-hidden-tag {
+    flex-shrink: 0;
+    padding: 1px 8px;
+    border-radius: 999px;
+    border: 1px dashed color-mix(in srgb, var(--lp-text) 35%, transparent);
+    color: var(--lp-muted);
+    font-size: 0.75em;
+    white-space: nowrap;
+}
+.mes.lp-hidden-user .mes_text { opacity: 0.6; }
+
+/* ===== 送出預覽 ===== */
+.lp-preview > summary .lp-sec-hint { font-variant-numeric: tabular-nums; }
+.lp-preview-table { display: flex; flex-direction: column; border-top: 1px solid var(--lp-border); }
+.lp-preview-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 2px; border-bottom: 1px solid color-mix(in srgb, var(--lp-border) 60%, transparent); }
+.lp-preview-total { font-weight: 600; }
+.lp-preview-num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lp-preview-raw > summary { cursor: pointer; color: var(--lp-accent); min-height: 36px; display: flex; align-items: center; }
+.lp-preview-text { margin: 0; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 0.85em; line-height: 1.6; padding: 10px; border-radius: 6px; background: var(--lp-card); }
+
+/* ===== 摘要分頁：卷 → 章 → 各層 ===== */
+.lp-group { display: flex; flex-direction: column; gap: 8px; }
+.lp-group-head {
+    width: 100%;
+    min-height: 44px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    padding: 6px 12px;
+    border: 1px solid var(--lp-border);
+    border-radius: 8px;
+    background: var(--lp-card);
+    color: var(--lp-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.lp-group-title { font-weight: 600; }
+.lp-group-meta { white-space: nowrap; }
+.lp-kind-tag {
+    padding: 0 6px;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--lp-accent) 16%, transparent);
+    color: var(--lp-accent);
+    font-size: 0.75em;
+}
+.lp-group-body { display: flex; flex-direction: column; gap: 8px; padding-left: 16px; border-left: 2px solid color-mix(in srgb, var(--lp-border) 70%, transparent); margin-left: 8px; }
+.lp-digest {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px dashed color-mix(in srgb, var(--lp-accent) 45%, transparent);
+    background: color-mix(in srgb, var(--lp-accent) 5%, transparent);
+}
+@media (max-width: 560px) {
+    .lp-group-body { padding-left: 8px; margin-left: 4px; }
+}
+
+/* ===== 摺疊和搜尋 ===== */
+.lp-row-head {
+    width: 100%;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.lp-row-head:focus-visible, .lp-sec-toggle:focus-visible { outline: 2px solid var(--lp-accent); outline-offset: 2px; border-radius: 4px; }
+.lp-row-preview {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--lp-muted);
+    font-size: 0.9em;
+}
+.lp-floor-row.lp-folded, .lp-floor-row.lp-unfolded { flex-direction: column; gap: 6px; padding: 4px 12px; }
+.lp-floor-row.lp-unfolded { padding-bottom: 12px; }
+.lp-floor-row .lp-row-head .lp-floor-no { width: auto; padding: 0; }
+.lp-floor-row.lp-unfolded .lp-floor-main { padding-left: 20px; }
+.lp-note-card.lp-folded { padding: 2px 12px; }
+.lp-qty-tag { font-variant-numeric: tabular-nums; color: var(--lp-muted); white-space: nowrap; }
+.lp-sec-toggle {
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+.lp-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px;
+    border: 1px solid var(--lp-border);
+    border-radius: 8px;
+    background: var(--lp-card);
+    color: var(--lp-muted);
+}
+.lp-search input { flex: 1; min-width: 0; height: 40px; border: none !important; background: transparent !important; margin: 0; box-shadow: none !important; }
+.lp-notes-stack > .lp-search, .lp-summary > .lp-search { margin-bottom: 4px; }
+.lp-mark { background: color-mix(in srgb, var(--lp-accent) 35%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.lp-group-label { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lp-global-head { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.lp-global-head .lp-search { flex: 1; }
+.lp-result-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.lp-result {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    border: 1px solid var(--lp-border);
+    border-radius: 8px;
+    background: var(--lp-card);
+    color: var(--lp-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.lp-result:hover, .lp-result:focus-visible { border-color: var(--lp-accent); }
+.lp-result-title { font-weight: 600; }
+.lp-result-sub { color: var(--lp-muted); font-size: 0.9em; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.lp-icon-btn.lp-on { color: var(--lp-accent); }
+
+/* ===== 只送相關的＋回憶召回 ===== */
+.lp-pin-tag { font-size: 0.85em; flex: none; }
+.lp-recall-list { margin: 0.2em 0 0.5em; padding-left: 1.3em; }
+.lp-recall-list li { margin: 0.1em 0; overflow-wrap: anywhere; }
+
+/* ===== 前情提要 ===== */
+.lp-recap { border: 1px solid var(--lp-border, rgba(127,127,127,0.3)); border-radius: 8px; padding: 0.5em 0.7em; margin: 0.3em 0 0.6em; }
+.lp-recap .lp-row { gap: 0.5em; flex-wrap: wrap; }
+.lp-recap-text { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0.3em 0; line-height: 1.5; }
+.lp-recap-linked { border-style: dashed; }
+.lp-toast-actions { display: flex; gap: 0.4em; flex-wrap: wrap; margin-top: 0.4em; }
+
+/* ===== 補建舊樓層 ===== */
+.lp-catchup { display: flex; flex-direction: column; gap: 0.5em; padding: 0.7em 0.8em; margin-bottom: 0.6em; }
+.lp-catchup .lp-row { gap: 0.4em; flex-wrap: wrap; align-items: center; }
+.lp-catchup .lp-callout { margin: 0; }
+
+/* ===== 🩺 檢查 ===== */
+.lp-check-btn { position: relative; }
+.lp-count { position: absolute; top: -2px; right: -4px; min-width: 1.3em; padding: 0 0.3em; border-radius: 999px; font-size: 0.7em; line-height: 1.3em; text-align: center; background: var(--lp-error); color: #fff; }
+.lp-checkup { display: flex; flex-direction: column; gap: 0.5em; }
+.lp-checkup-group { margin-top: 0.6em; font-weight: 600; }
+.lp-check-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35em; }
+.lp-check-row { display: flex; gap: 0.6em; align-items: flex-start; padding: 0.45em 0.6em; border: 1px solid var(--lp-border); border-radius: 8px; }
+.lp-check-row > .fa-solid { margin-top: 0.2em; flex: none; }
+.lp-check-main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.lp-check-btns { display: flex; gap: 0.3em; flex-wrap: wrap; justify-content: flex-end; flex: none; max-width: 45%; }
+.lp-sev-error > .fa-solid { color: var(--lp-error); }
+.lp-sev-warn > .fa-solid { color: var(--lp-warn); }
+.lp-sev-info > .fa-solid { color: var(--lp-info); }
+.lp-check-audit { display: flex; flex-direction: column; gap: 0.4em; padding: 0.7em 0.8em; margin-top: 0.6em; }
+
+/* ===== 行事曆 ===== */
+.lp-calendar { display: flex; flex-direction: column; gap: 0.6em; }
+.lp-cal-nav { align-items: center; gap: 0.4em; }
+.lp-cal-title { font-weight: 600; min-width: 7em; text-align: center; }
+.lp-cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.lp-cal-head { text-align: center; font-size: 0.8em; color: var(--lp-muted); padding: 2px 0; }
+.lp-cal-cell { min-height: 3.2em; padding: 3px 2px; border: 1px solid var(--lp-border); border-radius: 6px; background: transparent; color: inherit; font: inherit; display: flex; flex-direction: column; align-items: center; gap: 1px; cursor: pointer; }
+.lp-cal-empty { border: none; cursor: default; }
+.lp-cal-cell:hover, .lp-cal-cell:focus-visible { background: var(--lp-card); }
+.lp-cal-cell.lp-on { outline: 2px solid var(--lp-accent); outline-offset: -2px; }
+.lp-cal-today .lp-cal-num { background: var(--lp-accent); color: #fff; border-radius: 999px; padding: 0 0.4em; }
+.lp-cal-period { background: color-mix(in srgb, #e5534b 14%, transparent); }
+.lp-cal-num { font-size: 0.85em; line-height: 1.4; }
+.lp-cal-marks { display: flex; flex-wrap: wrap; justify-content: center; gap: 1px; font-size: 0.7em; line-height: 1.2; }
+.lp-cal-status { display: flex; flex-direction: column; gap: 0.2em; }
+.lp-cal-day { display: flex; flex-direction: column; gap: 0.4em; padding: 0.7em 0.8em; }
+.lp-cal-day .lp-row { flex-wrap: wrap; gap: 0.4em; align-items: center; }
+.lp-cal-item { display: flex; flex-wrap: wrap; gap: 0.4em; align-items: center; }
+.lp-cal-chip { font-size: 0.9em; }
+
+/* ===== 標籤掃描 ===== */
+.lp-tag-scan { display: flex; flex-direction: column; gap: 0.4em; padding: 0.7em 0.8em; }
+.lp-tag-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35em; }
+.lp-tag-row { display: flex; gap: 0.6em; align-items: center; justify-content: space-between; padding: 0.35em 0.5em; border: 1px solid var(--lp-border); border-radius: 6px; }
+.lp-tag-main { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.lp-tag-sample { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-tag-row .lp-select { flex: none; width: auto; }
+
+/* ===== 回憶錄 ===== */
+.lp-memories { display: flex; flex-direction: column; gap: 0.5em; }
+.lp-mem-content { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.lp-mem-form { display: flex; flex-direction: column; gap: 0.4em; padding: 0.6em 0.7em; }
+.lp-version { font-weight: 400; opacity: 0.7; margin-left: 0.3em; }
+
+/* ===== 摘要分頁：多選 ===== */
+.lp-bulk { position: sticky; top: 0; z-index: 2; box-shadow: 0 -16px 0 var(--lp-bg); display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; background: var(--lp-bg); border: 1px solid var(--lp-accent); border-radius: 8px; }
+.lp-bulk .lp-row { flex-wrap: wrap; gap: 6px; align-items: center; }
+.lp-bulk .lp-num { width: 5.5em; }
+.lp-floor-row.lp-pickable .lp-row-head { gap: 8px; }
+.lp-floor-row.lp-picked { border-color: var(--lp-accent); background: color-mix(in srgb, var(--lp-accent) 12%, transparent); }
+.lp-pick-box { flex: none; width: 1.15em; height: 1.15em; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid var(--lp-muted); border-radius: 4px; font-size: 0.85em; line-height: 1; }
+.lp-picked .lp-pick-box { border-color: var(--lp-accent); background: var(--lp-accent); color: var(--lp-bg); }
+.lp-bulk-range > summary { cursor: pointer; color: var(--lp-muted); font-size: 0.9em; }
+.lp-bulk-range[open] > summary { margin-bottom: 6px; }
+
+/* ===== 約定／待辦的日期 ===== */
+.lp-due-tag { flex: none; white-space: nowrap; font-weight: normal; }
+.lp-note-dates { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; }
+.lp-note-dates .lp-dot { color: var(--lp-muted); }
+.lp-note-sort { gap: 8px; }
+.lp-note-sort .lp-select { width: auto; }
+
+/* ===== 標籤檢查：類型、日期、完整內容、參考 ===== */
+.lp-tag-kind { font-weight: normal; }
+.lp-tag-flags, .lp-tag-keys { overflow-wrap: anywhere; }
+.lp-tag-hint { color: var(--lp-accent); }
+.lp-tag-ref { color: var(--lp-ok); overflow-wrap: anywhere; }
+.lp-tag-full > summary { cursor: pointer; color: var(--lp-muted); font-size: 0.9em; }
+.lp-tag-full pre { max-height: 16em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.lp-cal-pred { opacity: 0.4; }
+
+/* ===== 補建前找到的番外 ===== */
+.lp-extras { display: flex; flex-direction: column; gap: 8px; border-color: var(--lp-accent); }
+.lp-extras-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 60vh; overflow: auto; }
+.lp-extra-row { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border: 1px solid var(--lp-border); border-radius: 6px; }
+.lp-extra-row .lp-row { gap: 8px; align-items: center; }
+.lp-extra-row .lp-select { width: auto; }
+.lp-extra-text { overflow-wrap: anywhere; font-size: 0.92em; }
+.lp-extra-user { overflow-wrap: anywhere; }
+
+/* ===== 摘要的其他版本 ===== */
+.lp-versions > summary { cursor: pointer; color: var(--lp-muted); font-size: 0.9em; margin-top: 6px; }
+.lp-ver-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-ver { border: 1px dashed var(--lp-border); border-radius: 6px; padding: 6px 8px; }
+.lp-ver .lp-row { gap: 8px; align-items: center; }
+.lp-ver-text { overflow-wrap: anywhere; }
+.lp-sum-by { font-size: 0.85em; }
+
+/* ===== 這一回送了什麼（v0.13.30） ===== */
+.lp-sent { margin-top: 8px; padding: 4px 10px; border: 1px dashed var(--lp-border); border-radius: 8px; font-size: 0.92em; }
+.lp-sent > summary { cursor: pointer; color: var(--lp-muted); }
+.lp-sent[open] > summary { margin-bottom: 4px; }
+.lp-sent-sum { margin-left: 4px; opacity: 0.85; }
+.lp-sent-sec { margin-top: 8px; font-weight: 600; }
+.lp-sent ul { margin: 2px 0 0; padding-left: 1.2em; line-height: 1.6; }
+.lp-sent li { overflow-wrap: anywhere; }
+.lp-why { display: inline-block; margin-left: 2px; padding: 0 6px; border-radius: 999px; font-size: 0.8em; background: color-mix(in srgb, currentColor 12%, transparent); }
+.lp-why-vec { background: color-mix(in srgb, #5b8def 25%, transparent); }
+.lp-sent-foot { margin: 8px 0 4px; font-size: 0.85em; color: var(--lp-muted); }
+
+/* ===== 花費紀錄 ===== */
+.lp-usage-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.lp-usage-card { border: 1px solid var(--lp-border); border-radius: 8px; padding: 8px 10px; background: var(--lp-card); }
+.lp-usage-big { font-size: 1.15em; font-weight: 600; }
+.lp-usage-table { width: 100%; border-collapse: collapse; font-size: 0.9em; display: block; overflow-x: auto; }
+.lp-usage-table th, .lp-usage-table td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--lp-border); white-space: nowrap; }
+.lp-usage-recent { margin: 6px 0 0; padding-left: 1.2em; font-size: 0.88em; overflow-wrap: anywhere; }
+.lp-world-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; }
+.lp-world-list .lp-row-head { gap: 8px; width: 100%; }
+
+/* ===== 排版美化（v0.13.21，使用者要求）：手機上少佔幾行、看得出可以左右滑 ===== */
+.lp-preview > summary .lp-sec-title { flex: none; white-space: nowrap; }
+.lp-preview > summary .lp-sec-hint { flex: 1; min-width: 0; text-align: right; }
+.lp-sum-toolbar .lp-chips { min-width: 0; }
+@media (max-width: 560px) {
+    /* 篩選：一排，左右滑（以前會擠成兩三排） */
+    .lp-chips {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        padding: 2px 24px 2px 2px;
+        margin: -2px;
+        mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+        -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    }
+    .lp-chips::-webkit-scrollbar { display: none; }
+    .lp-chip { flex: none; }
+    .lp-sum-toolbar .lp-chips { flex: 1 1 100%; }
+    .lp-sum-toolbar .lp-spacer { display: none; }
+    .lp-sum-toolbar > .lp-btn { flex: 1 1 0; min-width: 0; padding-inline: 6px; }
+    /* 分頁列：右邊淡出，看得出還有分頁 */
+    .lp-tabs {
+        padding-right: 32px;
+        mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+        -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+    }
+    /* 記事區塊的標題列：按鈕一排靠右，說明放到下一行 */
+    .lp-sec-head { flex-wrap: wrap; row-gap: 6px; }
+    .lp-sec-head .lp-sec-hint-text { order: 10; flex: 1 1 100%; }
+    .lp-sec-head .lp-spacer { flex: 1 1 0; }
+    [data-role="sum-actions"] { flex-wrap: wrap; }
+    /* 月曆：格子矮一點，一個月不會佔滿整個畫面 */
+    .lp-cal-cell { min-height: 2.6em; padding: 2px 1px; border-radius: 5px; }
+    .lp-cal-marks { font-size: 0.65em; }
+}
+.lp-tabs::-webkit-scrollbar { display: none; }
+
+/* =====================================================================
+ * 📒 日系手帳主題（v0.13.22，使用者要求）：設定 › 一般 › 外觀。
+ * 方格紙的底、紙膠帶、索引貼的分頁、圓體字。<html> 上有 .lp-theme-techo 時才生效；
+ * 聊天裡的摘要區塊要另外勾「也套用」（.lp-theme-techo-blocks）。
+ * 顏色全部是變數：白天版在這裡，夜間護眼版（v0.13.23：淡綠、淺藍、粉色）在後面只換變數。
+ * ===================================================================== */
+.lp-theme-techo .lp-overlay,
+.lp-theme-techo-blocks .lp-sum {
+    --lp-text: #5b4636;
+    --lp-muted: #a08c79;
+    --lp-accent: #e0849a;
+    --lp-border: #e6d7c2;
+    --lp-bg: #fbf5ea;
+    --lp-card: #fffdf8;
+    --lp-warn: #c98a1a;
+    --lp-ok: #5d9c70;
+    --lp-error: #cf6157;
+    --lp-info: #5a8dc2;
+    /* 紙 */
+    --lp-dot: #eadcc7;
+    --lp-overlay-bg: rgba(70, 48, 34, 0.45);
+    --lp-panel-shadow: 0 18px 50px rgba(60, 38, 24, 0.35), inset 0 0 0 1px #efe2cf;
+    --lp-shadow: 0 1px 0 #efe3d1, 0 3px 8px rgba(120, 88, 60, 0.07);
+    --lp-stripe: rgba(236, 150, 170, 0.16);
+    --lp-stripe-2: rgba(255, 255, 255, 0.35);
+    /* 紙膠帶、螢光筆 */
+    --lp-tape-pink: rgba(236, 150, 170, 0.55);
+    --lp-tape-mint: rgba(140, 200, 178, 0.6);
+    --lp-tape-butter: rgba(242, 205, 112, 0.65);
+    --lp-tape-sky: rgba(146, 188, 228, 0.6);
+    --lp-tape-lilac: rgba(186, 164, 222, 0.6);
+    --lp-hl: var(--lp-tape-butter);
+    /* 索引貼 */
+    --lp-tab-1: #fbdbe3; --lp-tab-2: #d5ecdf; --lp-tab-3: #faecc4; --lp-tab-4: #d7e6f6;
+    --lp-tab-5: #e6dcf4; --lp-tab-6: #fbe0d2; --lp-tab-7: #ece4d8;
+    --lp-tab-text: #7b6553;
+    --lp-tab-on-text: #4a3428;
+    --lp-tab-on-mix: #c98a9a;
+    /* 按鈕、輸入框、標籤 */
+    --lp-control: #fffdf8;
+    --lp-control-shadow: #eadcc8;
+    --lp-hover: #fff1f4;
+    --lp-hover-border: #f2c2cd;
+    --lp-focus-ring: #fde3ea;
+    --lp-primary-text: #fff;
+    --lp-primary-shadow: #c46b80;
+    --lp-chip-text: #7b6553;
+    --lp-chip-on-bg: #fde4ea;
+    --lp-chip-on-text: #b5566c;
+    --lp-kind-bg: #faecc4;
+    --lp-kind-text: #9a6b12;
+    --lp-link: #c06a80;
+    --lp-pick: #cdb9a1;
+    --lp-callout-bg: #fff8e3;
+    --lp-callout-border: #f0dca6;
+    --lp-danger-border: #efc4bf;
+    --lp-badge-bg: rgba(255, 255, 255, 0.6);
+    --lp-cal-cell: #fffdf8;
+    --lp-cal-line: #eee0cc;
+    --lp-cal-period: #fde4ea;
+    --lp-font: 'Huninn', 'Hiragino Maru Gothic ProN', 'PingFang TC', 'PingFang SC', 'Microsoft JhengHei', sans-serif;
+    font-family: var(--lp-font);
+    accent-color: var(--lp-accent);
+}
+
+/* ===== 夜間護眼（v0.13.23，使用者要求）：深色但不是全黑、字不是純白，對比柔和；紙膠帶顏色調暗 ===== */
+.lp-techo-night .lp-overlay,
+.lp-techo-night.lp-theme-techo-blocks .lp-sum {
+    --lp-warn: #d6b06a;
+    --lp-ok: #8cc4a2;
+    --lp-error: #e09a92;
+    --lp-info: #8fb3d9;
+    --lp-overlay-bg: rgba(0, 0, 0, 0.55);
+    --lp-panel-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), inset 0 0 0 1px var(--lp-border);
+    --lp-shadow: 0 1px 0 rgba(0, 0, 0, 0.25), 0 3px 8px rgba(0, 0, 0, 0.18);
+    --lp-stripe-2: rgba(255, 255, 255, 0.015);
+    --lp-tape-pink: rgba(214, 128, 150, 0.4);
+    --lp-tape-mint: rgba(110, 176, 150, 0.42);
+    --lp-tape-butter: rgba(200, 168, 92, 0.42);
+    --lp-tape-sky: rgba(112, 156, 204, 0.42);
+    --lp-tape-lilac: rgba(152, 132, 196, 0.42);
+    --lp-hl: rgba(200, 168, 92, 0.35);
+    --lp-tab-1: #4a3640; --lp-tab-2: #2f453c; --lp-tab-3: #4a4330; --lp-tab-4: #2f3f52;
+    --lp-tab-5: #3e3651; --lp-tab-6: #4b3a32; --lp-tab-7: #3d3833;
+    --lp-tab-on-mix: #ffffff;
+    --lp-primary-text: #1b1a1a;
+    --lp-badge-bg: rgba(255, 255, 255, 0.04);
+    --lp-kind-bg: rgba(200, 168, 92, 0.22);
+    --lp-kind-text: #d9bd7e;
+    --lp-danger-border: rgba(224, 154, 146, 0.45);
+}
+/* 🌿 淡綠 */
+.lp-techo-mint .lp-overlay,
+.lp-techo-mint.lp-theme-techo-blocks .lp-sum {
+    --lp-text: #d3e2d9;
+    --lp-muted: #8ea698;
+    --lp-accent: #88cdb0;
+    --lp-border: #34463e;
+    --lp-bg: #1d2723;
+    --lp-card: #24302b;
+    --lp-dot: #2c3a34;
+    --lp-stripe: rgba(136, 205, 176, 0.06);
+    --lp-tab-1: #2e4a3e; --lp-tab-2: #2b4446; --lp-tab-3: #3a4a33; --lp-tab-4: #2f4840;
+    --lp-tab-5: #354536; --lp-tab-6: #2c4a47; --lp-tab-7: #344036;
+    --lp-tab-text: #a9bfb3;
+    --lp-tab-on-text: #e6f2eb;
+    --lp-control: #26332d;
+    --lp-control-shadow: #18201d;
+    --lp-hover: #2c3d35;
+    --lp-hover-border: #4f7564;
+    --lp-focus-ring: rgba(136, 205, 176, 0.22);
+    --lp-primary-shadow: #5e9c82;
+    --lp-chip-text: #a9bfb3;
+    --lp-chip-on-bg: rgba(136, 205, 176, 0.18);
+    --lp-chip-on-text: #a6e0c8;
+    --lp-link: #9ad8be;
+    --lp-pick: #557064;
+    --lp-callout-bg: #263a31;
+    --lp-callout-border: #3c5a4c;
+    --lp-cal-cell: #222d29;
+    --lp-cal-line: #314139;
+    --lp-cal-period: rgba(214, 128, 150, 0.2);
+}
+/* 💧 淺藍 */
+.lp-techo-sky .lp-overlay,
+.lp-techo-sky.lp-theme-techo-blocks .lp-sum {
+    --lp-text: #d4dfea;
+    --lp-muted: #8ea0b3;
+    --lp-accent: #8ab8e3;
+    --lp-border: #34414f;
+    --lp-bg: #1c232c;
+    --lp-card: #232c37;
+    --lp-dot: #2b3542;
+    --lp-stripe: rgba(138, 184, 227, 0.06);
+    --lp-tab-1: #2c3e55; --lp-tab-2: #30405c; --lp-tab-3: #2b4652; --lp-tab-4: #343d5a;
+    --lp-tab-5: #2d4a5c; --lp-tab-6: #393f55; --lp-tab-7: #2f3b4b;
+    --lp-tab-text: #a8b8c9;
+    --lp-tab-on-text: #e6eef7;
+    --lp-control: #25303c;
+    --lp-control-shadow: #171d24;
+    --lp-hover: #2b3847;
+    --lp-hover-border: #4d6886;
+    --lp-focus-ring: rgba(138, 184, 227, 0.22);
+    --lp-primary-shadow: #5d87b0;
+    --lp-chip-text: #a8b8c9;
+    --lp-chip-on-bg: rgba(138, 184, 227, 0.18);
+    --lp-chip-on-text: #aed0f0;
+    --lp-link: #9cc5ec;
+    --lp-pick: #50647a;
+    --lp-callout-bg: #243246;
+    --lp-callout-border: #3a4f69;
+    --lp-cal-cell: #212a34;
+    --lp-cal-line: #2f3a47;
+    --lp-cal-period: rgba(214, 128, 150, 0.2);
+}
+/* 🌸 粉色 */
+.lp-techo-sakura .lp-overlay,
+.lp-techo-sakura.lp-theme-techo-blocks .lp-sum {
+    --lp-text: #ecdce1;
+    --lp-muted: #b0959e;
+    --lp-accent: #eba2b5;
+    --lp-border: #4a3840;
+    --lp-bg: #261e22;
+    --lp-card: #2f252a;
+    --lp-dot: #382b31;
+    --lp-stripe: rgba(235, 162, 181, 0.06);
+    --lp-tab-1: #4a3341; --lp-tab-2: #4d3540; --lp-tab-3: #4a3a48; --lp-tab-4: #503542;
+    --lp-tab-5: #46323f; --lp-tab-6: #4f3a3f; --lp-tab-7: #433540;
+    --lp-tab-text: #c7adb5;
+    --lp-tab-on-text: #f7e8ec;
+    --lp-control: #32272c;
+    --lp-control-shadow: #1d1619;
+    --lp-hover: #3c2c33;
+    --lp-hover-border: #7d5463;
+    --lp-focus-ring: rgba(235, 162, 181, 0.22);
+    --lp-primary-shadow: #b06f81;
+    --lp-chip-text: #c7adb5;
+    --lp-chip-on-bg: rgba(235, 162, 181, 0.18);
+    --lp-chip-on-text: #f3bccb;
+    --lp-link: #f0b0c1;
+    --lp-pick: #7a5f69;
+    --lp-callout-bg: #3a2a31;
+    --lp-callout-border: #5b4049;
+    --lp-cal-cell: #2c2227;
+    --lp-cal-line: #3d2f35;
+    --lp-cal-period: rgba(235, 162, 181, 0.22);
+}
+
+/* ===== 白天的換色版（v0.13.24，使用者要求）：🌱 小草淡綠、☁️ 白雲淺藍、🌸 櫻花粉色。只換變數 ===== */
+/* 🌱 小草淡綠 */
+.lp-techo-grass .lp-overlay,
+.lp-techo-grass.lp-theme-techo-blocks .lp-sum {
+    --lp-text: #3f5146; --lp-muted: #8aa092; --lp-accent: #74ba93; --lp-border: #d3e3d4;
+    --lp-bg: #f3f8f1; --lp-card: #fcfefb; --lp-dot: #d9e8d6;
+    --lp-stripe: rgba(124, 191, 154, 0.18);
+    --lp-panel-shadow: 0 18px 50px rgba(40, 70, 50, 0.3), inset 0 0 0 1px #dbe9db;
+    --lp-shadow: 0 1px 0 #e1ede0, 0 3px 8px rgba(60, 100, 70, 0.07);
+    --lp-overlay-bg: rgba(40, 60, 46, 0.4);
+    --lp-hl: rgba(170, 215, 140, 0.5);
+    --lp-tab-1: #dcefdc; --lp-tab-2: #e7f3d6; --lp-tab-3: #d3ece4; --lp-tab-4: #eef5d8;
+    --lp-tab-5: #d8eadf; --lp-tab-6: #e3f0e8; --lp-tab-7: #e9efe2;
+    --lp-tab-text: #5d7364; --lp-tab-on-text: #2f4637; --lp-tab-on-mix: #6faa88;
+    --lp-control: #fcfefb; --lp-control-shadow: #d6e5d6;
+    --lp-hover: #eef8f1; --lp-hover-border: #b9dcc7; --lp-focus-ring: #dff2e7;
+    --lp-primary-shadow: #5a9a77;
+    --lp-chip-text: #5d7364; --lp-chip-on-bg: #dff2e7; --lp-chip-on-text: #3f8a63;
+    --lp-kind-bg: #e7f3d6; --lp-kind-text: #5d7a2e;
+    --lp-link: #4f9a73; --lp-pick: #a9c4b3;
+    --lp-callout-bg: #f4f9e6; --lp-callout-border: #dbe9b8;
+    --lp-cal-cell: #fcfefb; --lp-cal-line: #dde9dc;
+}
+/* ☁️ 白雲淺藍 */
+.lp-techo-cloud .lp-overlay,
+.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
+    --lp-text: #3e4a5a; --lp-muted: #8a98aa; --lp-accent: #79acdc; --lp-border: #d6e1ee;
+    --lp-bg: #f2f6fb; --lp-card: #fdfeff; --lp-dot: #d8e3f0;
+    --lp-stripe: rgba(127, 178, 224, 0.18);
+    --lp-panel-shadow: 0 18px 50px rgba(40, 60, 90, 0.3), inset 0 0 0 1px #dce6f2;
+    --lp-shadow: 0 1px 0 #e2eaf4, 0 3px 8px rgba(60, 90, 130, 0.07);
+    --lp-overlay-bg: rgba(40, 52, 70, 0.4);
+    --lp-hl: rgba(150, 195, 235, 0.45);
+    --lp-tab-1: #dbe9f7; --lp-tab-2: #e4eefa; --lp-tab-3: #d6ecf2; --lp-tab-4: #e8e6f7;
+    --lp-tab-5: #dfeef5; --lp-tab-6: #eaf1f8; --lp-tab-7: #e3e8ef;
+    --lp-tab-text: #5b6b80; --lp-tab-on-text: #2c3b50; --lp-tab-on-mix: #7aa4cf;
+    --lp-control: #fdfeff; --lp-control-shadow: #d8e2ee;
+    --lp-hover: #eef5fc; --lp-hover-border: #bcd5ee; --lp-focus-ring: #dceafa;
+    --lp-primary-shadow: #5b8bb9;
+    --lp-chip-text: #5b6b80; --lp-chip-on-bg: #dceafa; --lp-chip-on-text: #3d75ad;
+    --lp-kind-bg: #e4eefa; --lp-kind-text: #456c99;
+    --lp-link: #4a83bd; --lp-pick: #a8bcd2;
+    --lp-callout-bg: #f0f6fd; --lp-callout-border: #cfe0f3;
+    --lp-cal-cell: #fdfeff; --lp-cal-line: #dfe7f1;
+}
+/* 🌸 櫻花粉色 */
+.lp-techo-blossom .lp-overlay,
+.lp-techo-blossom.lp-theme-techo-blocks .lp-sum {
+    --lp-text: #5a4048; --lp-muted: #b08f99; --lp-accent: #ea8aa4; --lp-border: #f0d6de;
+    --lp-bg: #fdf3f5; --lp-card: #fffafb; --lp-dot: #f2d9e0;
+    --lp-stripe: rgba(236, 143, 168, 0.2);
+    --lp-panel-shadow: 0 18px 50px rgba(90, 40, 55, 0.3), inset 0 0 0 1px #f3dde4;
+    --lp-shadow: 0 1px 0 #f5e2e7, 0 3px 8px rgba(130, 70, 90, 0.07);
+    --lp-overlay-bg: rgba(70, 40, 50, 0.4);
+    --lp-hl: rgba(244, 170, 190, 0.45);
+    --lp-tab-1: #fcdbe4; --lp-tab-2: #fbe5ea; --lp-tab-3: #f8dde8; --lp-tab-4: #fde8e0;
+    --lp-tab-5: #f3e0ee; --lp-tab-6: #fdeef1; --lp-tab-7: #f0e4e8;
+    --lp-tab-text: #8a6470; --lp-tab-on-text: #5a2f3c; --lp-tab-on-mix: #e07c97;
+    --lp-control: #fffafb; --lp-control-shadow: #f1dbe2;
+    --lp-hover: #fff0f4; --lp-hover-border: #f4c1cf; --lp-focus-ring: #fde1e9;
+    --lp-primary-shadow: #c66a83;
+    --lp-chip-text: #8a6470; --lp-chip-on-bg: #fde1e9; --lp-chip-on-text: #c04f6e;
+    --lp-kind-bg: #fde1e9; --lp-kind-text: #b0506b;
+    --lp-link: #c9607d; --lp-pick: #e0b3c0;
+    --lp-callout-bg: #fff4f6; --lp-callout-border: #f6d3dc;
+    --lp-cal-cell: #fffafb; --lp-cal-line: #f3dfe5; --lp-cal-period: #fbd5df;
+}
+/* ===== 🌸 花朵主題（v0.13.25，使用者要求：要的是花朵花朵的粉色美化，不是手帳換粉色） =====
+ * 沿用手帳的按鈕、輸入框等結構，但把手帳的元素（方格紙、紙膠帶、索引貼、螢光筆）全部換成花：
+ * 粉色漸層的底和四角的大花、小花花圈的標題列、花瓣膠囊分頁、花邊卡片＋角落小花、壓花貼紙、✿ 標題、波浪底線、花朵墊底的今天。 */
+html.lp-techo-blossom .lp-overlay,
+html.lp-techo-blossom.lp-theme-techo-blocks .lp-sum {
+    --lp-flower: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill='%23f6aec2' fill-opacity='1'><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(0 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(72 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(144 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(216 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(288 20 20)'/></g><circle cx='20' cy='20' r='4' fill='%23fde3a7'/></svg>");
+    --lp-flower-light: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill='%23fbd3de' fill-opacity='1'><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(0 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(72 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(144 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(216 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(288 20 20)'/></g><circle cx='20' cy='20' r='4' fill='%23fff0c4'/></svg>");
+    --lp-flower-white: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill='%23ffffff' fill-opacity='0.95'><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(0 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(72 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(144 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(216 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(288 20 20)'/></g><circle cx='20' cy='20' r='4' fill='%23f9d3a0'/></svg>");
+    --lp-flower-deep: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill='%23ec8fa8' fill-opacity='1'><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(0 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(72 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(144 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(216 20 20)'/><ellipse cx='20' cy='10.5' rx='6.2' ry='9.5' transform='rotate(288 20 20)'/></g><circle cx='20' cy='20' r='4' fill='%23fde3a7'/></svg>");
+    --lp-border: #f4cfda;
+    --lp-card: #fffafc;
+    --lp-shadow: 0 2px 10px rgba(236, 143, 168, 0.13);
+}
+/* 底：粉色漸層＋四角的大花（不用方格紙） */
+html.lp-techo-blossom .lp-panel {
+    background-color: #fff6f9;
+    background-image:
+        var(--lp-flower-light), var(--lp-flower-light), var(--lp-flower-light),
+        linear-gradient(170deg, #fff8fa 0%, #fdeef3 55%, #fbe4ec 100%);
+    background-repeat: no-repeat;
+    background-size: 130px 130px, 80px 80px, 110px 110px, 100% 100%;
+    background-position: right -38px top 72px, left -26px bottom 140px, right -30px bottom -30px, 0 0;
+    box-shadow: 0 18px 50px rgba(120, 50, 75, 0.28), inset 0 0 0 1.5px #f6d6e0;
+}
+/* 標題列：一排小花的花圈 */
+html.lp-techo-blossom .lp-header {
+    background:
+        var(--lp-flower) bottom 2px left 6px / 18px 18px repeat-x,
+        linear-gradient(180deg, #fde3ec, #fff1f5);
+    border-bottom: none;
+    padding-bottom: 22px;
+}
+html.lp-techo-blossom .lp-title::before { content: '✿ '; color: var(--lp-accent); }
+/* 分頁：花瓣膠囊 */
+html.lp-techo-blossom .lp-tabs { gap: 6px; padding: 8px 10px 6px; border-bottom: 1.5px dashed #f2c3d1; }
+html.lp-techo-blossom .lp-tab {
+    min-height: 34px;
+    margin: 0;
+    padding: 0 14px;
+    border: 1.5px solid #f4cfda;
+    border-radius: 999px;
+    background: #fffafc;
+    color: #a0687a;
+    transform: none;
+}
+html.lp-techo-blossom .lp-tab.lp-on {
+    transform: none;
+    background: linear-gradient(135deg, #f7b2c5, #ec8fa8);
+    border-color: #ec8fa8;
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(236, 143, 168, 0.35);
+}
+html.lp-techo-blossom .lp-tab.lp-on::before { content: '✿ '; }
+/* 卡片：花邊＋右上角一朵小花 */
+html.lp-techo-blossom .lp-note-card,
+html.lp-techo-blossom .lp-floor-row,
+html.lp-techo-blossom .lp-group,
+html.lp-techo-blossom .lp-card,
+html.lp-techo-blossom .lp-sec,
+html.lp-techo-blossom .lp-preview,
+html.lp-techo-blossom .lp-check-row,
+html.lp-techo-blossom .lp-result {
+    border: 1.5px solid #f6d3dd;
+    border-radius: 18px;
+    background: rgba(255, 250, 252, 0.92);
+    box-shadow: var(--lp-shadow);
+}
+html.lp-techo-blossom .lp-note-card,
+html.lp-techo-blossom .lp-card,
+html.lp-techo-blossom .lp-sec,
+html.lp-techo-blossom .lp-group { position: relative; }
+html.lp-techo-blossom .lp-note-card::after,
+html.lp-techo-blossom .lp-card::after,
+html.lp-techo-blossom .lp-sec::after,
+html.lp-techo-blossom .lp-group::after {
+    content: '';
+    position: absolute;
+    top: -7px;
+    right: 12px;
+    width: 18px;
+    height: 18px;
+    background: var(--lp-flower) center / contain no-repeat;
+    pointer-events: none;
+}
+html.lp-techo-blossom .lp-group-body { border-left: 2px dotted #f2bccb; }
+html.lp-techo-blossom .lp-callout {
+    background: linear-gradient(135deg, #fff4f7, #fff9ec);
+    border: 1.5px dashed #f2bfcd;
+    border-radius: 18px;
+}
+/* 標題：波浪底線（不用螢光筆） */
+html.lp-techo-blossom .lp-group-title,
+html.lp-techo-blossom .lp-scope-title {
+    background: none;
+    text-decoration: underline wavy #f2a7bc;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 5px;
+}
+/* 設定的每一區：✿ 開頭（不用紙膠帶） */
+html.lp-techo-blossom .lp-sec > summary { border-left: none; border-radius: 18px; }
+html.lp-techo-blossom .lp-sec-title::before { content: '✿ '; color: var(--lp-accent); }
+/* 回憶錄：壓花貼紙（不用紙膠帶） */
+html.lp-techo-blossom .lp-memories .lp-note-card::before {
+    top: -12px;
+    left: 14px;
+    width: 28px;
+    height: 28px;
+    transform: rotate(-12deg);
+    background: var(--lp-flower-deep) center / contain no-repeat;
+    border: none;
+    filter: drop-shadow(0 1px 1px rgba(160, 70, 100, 0.25));
+}
+html.lp-techo-blossom .lp-memories .lp-note-card:nth-of-type(odd)::before { background-image: var(--lp-flower); transform: rotate(18deg); }
+html.lp-techo-blossom .lp-memories .lp-note-card::after { display: none; }
+/* 按鈕、標籤：粉色漸層 */
+html.lp-techo-blossom .lp-overlay .menu_button.lp-btn,
+html.lp-techo-blossom.lp-theme-techo-blocks .lp-sum .menu_button.lp-btn {
+    background: linear-gradient(180deg, #fffdfe, #fff1f5);
+    border: 1.5px solid #f4c6d3;
+    box-shadow: 0 2px 6px rgba(236, 143, 168, 0.18);
+}
+html.lp-techo-blossom .lp-overlay .menu_button.lp-btn.lp-primary,
+html.lp-techo-blossom.lp-theme-techo-blocks .lp-sum .menu_button.lp-btn.lp-primary {
+    background: linear-gradient(135deg, #f7b2c5, #ea86a1);
+    border-color: #ea86a1;
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(234, 134, 161, 0.4);
+}
+html.lp-techo-blossom .lp-chip { border-color: #f4cfda; background: #fffafc; color: #a0687a; }
+html.lp-techo-blossom .lp-chip.lp-on { background: linear-gradient(135deg, #f7b2c5, #ec8fa8); border-color: #ec8fa8; color: #fff; }
+html.lp-techo-blossom .lp-badge { border-radius: 999px; }
+/* 月曆：今天墊一朵花 */
+html.lp-techo-blossom .lp-cal-cell { border-radius: 12px; border-color: #f6dbe3; background: rgba(255, 250, 252, 0.9); }
+html.lp-techo-blossom .lp-cal-empty { background: transparent; border: none; }
+html.lp-techo-blossom .lp-cal-today .lp-cal-num {
+    background: var(--lp-flower) center / 2.1em 2.1em no-repeat;
+    color: #8a3550;
+    font-weight: 700;
+    padding: 0.35em 0.5em;
+}
+/* 聊天裡的摘要區塊（也套用時） */
+html.lp-techo-blossom.lp-theme-techo-blocks .lp-sum {
+    background: linear-gradient(170deg, #fff8fa, #fdeef3);
+    border: 1.5px solid #f6d3dd;
+    border-radius: 18px;
+    position: relative;
+}
+
+/* ===== 🌱 草地主題（v0.13.26，使用者要求：做成完整主題，不只是手帳換色） ===== */
+html.lp-techo-grass .lp-overlay,
+html.lp-techo-grass.lp-theme-techo-blocks .lp-sum {
+    --lp-accent: #6cb58b;
+    --lp-border: #cfe5d2;
+    --lp-card: #fbfefb;
+    --lp-shadow: 0 2px 10px rgba(90, 160, 110, 0.13);
+}
+html.lp-techo-grass .lp-panel {
+    background-color: #f2faf0;
+    background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill='%23bfe6c9' fill-opacity='0.9'><circle cx='14' cy='14' r='7.2'/><circle cx='26' cy='14' r='7.2'/><circle cx='14' cy='26' r='7.2'/><circle cx='26' cy='26' r='7.2'/></g><path d='M21 21Q26 31 31 38' stroke='%239fd1ae' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-opacity='0.9'/></svg>"), url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill='%23bfe6c9' fill-opacity='0.9'><circle cx='14' cy='14' r='7.2'/><circle cx='26' cy='14' r='7.2'/><circle cx='14' cy='26' r='7.2'/><circle cx='26' cy='26' r='7.2'/></g><path d='M21 21Q26 31 31 38' stroke='%239fd1ae' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-opacity='0.9'/></svg>"), url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill='%23bfe6c9' fill-opacity='0.9'><circle cx='14' cy='14' r='7.2'/><circle cx='26' cy='14' r='7.2'/><circle cx='14' cy='26' r='7.2'/><circle cx='26' cy='26' r='7.2'/></g><path d='M21 21Q26 31 31 38' stroke='%239fd1ae' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-opacity='0.9'/></svg>"), url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 90' preserveAspectRatio='none'><path d='M0 52Q60 18 125 44T250 38T400 30V90H0Z' fill='%23d3ecce'/><path d='M0 66Q90 42 180 62T400 54V90H0Z' fill='%23bde2b6'/></svg>"), linear-gradient(180deg, #f4fbf2 0%, #eaf6e5 100%);
+    background-repeat: no-repeat;
+    background-size: 30px 30px, 24px 24px, 28px 28px, 100% 90px, 100% 100%;
+    background-position: right 14px bottom 150px, left 10px bottom 210px, right 34% bottom 96px, left bottom, 0 0;
+    box-shadow: 0 18px 50px rgba(40, 80, 50, 0.25), inset 0 0 0 1.5px #d6ead6;
+}
+html.lp-techo-grass .lp-header {
+    background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 12'><path d='M0 12L3 2L6 12ZM6 12L10 0L13 12ZM13 12L17 3L20 12ZM19 12L22 5L24 12Z' fill='%2386c79a'/></svg>") bottom left / 24px 12px repeat-x, linear-gradient(180deg, #e3f3df, #f3faf1);
+    border-bottom: none;
+    padding-bottom: 20px;
+}
+html.lp-techo-grass .lp-title::before { content: '🍀 '; }
+html.lp-techo-grass .lp-tabs { gap: 6px; padding: 8px 10px 6px; border-bottom: 1.5px dashed #bfdcc4; }
+html.lp-techo-grass .lp-tab {
+    min-height: 34px;
+    margin: 0;
+    padding: 0 14px;
+    border: 1.5px solid #cfe5d2;
+    border-radius: 16px 3px 16px 3px;
+    background: #fbfefb;
+    color: #5f8a6d;
+    transform: none;
+}
+html.lp-techo-grass .lp-tab.lp-on {
+    transform: none;
+    background: linear-gradient(135deg, #95d3a9, #67b386);
+    border-color: #67b386;
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(103, 179, 134, 0.35);
+}
+html.lp-techo-grass .lp-tab.lp-on::before { content: '🌱 '; }
+html.lp-techo-grass .lp-note-card,
+html.lp-techo-grass .lp-floor-row,
+html.lp-techo-grass .lp-group,
+html.lp-techo-grass .lp-card,
+html.lp-techo-grass .lp-sec,
+html.lp-techo-grass .lp-preview,
+html.lp-techo-grass .lp-check-row,
+html.lp-techo-grass .lp-result {
+    border: 1.5px solid #cfe5d2;
+    border-radius: 16px 4px 16px 4px;
+    background: rgba(251, 254, 251, 0.92);
+    box-shadow: var(--lp-shadow);
+}
+html.lp-techo-grass .lp-note-card,
+html.lp-techo-grass .lp-card,
+html.lp-techo-grass .lp-sec,
+html.lp-techo-grass .lp-group { position: relative; }
+html.lp-techo-grass .lp-note-card::after,
+html.lp-techo-grass .lp-card::after,
+html.lp-techo-grass .lp-sec::after,
+html.lp-techo-grass .lp-group::after {
+    content: '';
+    position: absolute;
+    top: -8px;
+    right: 12px;
+    width: 16px;
+    height: 18px;
+    background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><path d='M20 37C5 27 6 10 20 3C34 10 35 27 20 37Z' fill='%2393d1a9'/><path d='M20 34V8' stroke='%235fa77b' stroke-width='1.6' fill='none' stroke-linecap='round'/></svg>") center / contain no-repeat;
+    pointer-events: none;
+}
+html.lp-techo-grass .lp-group-body { border-left: 2px dotted #b5d8be; }
+html.lp-techo-grass .lp-callout {
+    background: linear-gradient(135deg, #f1f9ea, #fbfbe8);
+    border: 1.5px dashed #b5d8be;
+    border-radius: 16px 4px 16px 4px;
+}
+html.lp-techo-grass .lp-group-title,
+html.lp-techo-grass .lp-scope-title {
+    background: none;
+    text-decoration: underline dotted #7cc497;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 5px;
+}
+html.lp-techo-grass .lp-sec > summary { border-left: none; border-radius: 16px 4px 16px 4px; }
+html.lp-techo-grass .lp-sec-title::before { content: '☘ '; color: var(--lp-accent); }
+html.lp-techo-grass .lp-memories .lp-note-card::before {
+    top: -13px;
+    left: 14px;
+    width: 28px;
+    height: 28px;
+    transform: rotate(-10deg);
+    background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill='%236dbb8c' fill-opacity='1'><circle cx='14' cy='14' r='7.2'/><circle cx='26' cy='14' r='7.2'/><circle cx='14' cy='26' r='7.2'/><circle cx='26' cy='26' r='7.2'/></g><path d='M21 21Q26 31 31 38' stroke='%234d9469' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-opacity='1'/></svg>") center / contain no-repeat;
+    border: none;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
+}
+html.lp-techo-grass .lp-memories .lp-note-card:nth-of-type(odd)::before { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill='%238fd0a6' fill-opacity='1'><circle cx='14' cy='14' r='7.2'/><circle cx='26' cy='14' r='7.2'/><circle cx='14' cy='26' r='7.2'/><circle cx='26' cy='26' r='7.2'/></g><path d='M21 21Q26 31 31 38' stroke='%235fa77b' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-opacity='1'/></svg>"); transform: rotate(14deg); }
+html.lp-techo-grass .lp-memories .lp-note-card::after { display: none; }
+html.lp-techo-grass .lp-overlay .menu_button.lp-btn,
+html.lp-techo-grass.lp-theme-techo-blocks .lp-sum .menu_button.lp-btn {
+    background: linear-gradient(180deg, #fdfffd, #eef8ef);
+    border: 1.5px solid #b5d8be;
+    border-radius: 16px 3px 16px 3px;
+    box-shadow: 0 2px 6px rgba(103, 179, 134, 0.18);
+}
+html.lp-techo-grass .lp-overlay .menu_button.lp-btn.lp-primary,
+html.lp-techo-grass.lp-theme-techo-blocks .lp-sum .menu_button.lp-btn.lp-primary {
+    background: linear-gradient(135deg, #95d3a9, #67b386);
+    border-color: #67b386;
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(103, 179, 134, 0.35);
+}
+html.lp-techo-grass .lp-chip { border-color: #cfe5d2; background: #fbfefb; color: #5f8a6d; border-radius: 16px 3px 16px 3px; }
+html.lp-techo-grass .lp-chip.lp-on { background: linear-gradient(135deg, #95d3a9, #67b386); border-color: #67b386; color: #fff; }
+html.lp-techo-grass .lp-badge { border-radius: 999px; }
+html.lp-techo-grass .lp-cal-cell { border-radius: 12px; border-color: #cfe5d2; background: rgba(251, 254, 251, 0.92); }
+html.lp-techo-grass .lp-cal-empty { background: transparent; border: none; }
+html.lp-techo-grass .lp-cal-today .lp-cal-num {
+    background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g fill='%238fd0a6' fill-opacity='1'><circle cx='14' cy='14' r='7.2'/><circle cx='26' cy='14' r='7.2'/><circle cx='14' cy='26' r='7.2'/><circle cx='26' cy='26' r='7.2'/></g><path d='M21 21Q26 31 31 38' stroke='%235fa77b' stroke-width='2.2' fill='none' stroke-linecap='round' stroke-opacity='1'/></svg>") center / 2.2em 2.2em no-repeat;
+    color: #24543a;
+    font-weight: 700;
+    padding: 0.35em 0.5em;
+}
+html.lp-techo-grass.lp-theme-techo-blocks .lp-sum {
+    background: linear-gradient(180deg, #f4fbf2, #eaf6e5);
+    border: 1.5px solid #cfe5d2;
+    border-radius: 16px 4px 16px 4px;
+    position: relative;
+}
+/* ===== ☁️ 天空主題（v0.13.26，使用者要求：做成完整主題，不只是手帳換色） ===== */
+html.lp-techo-cloud .lp-overlay,
+html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
+    --lp-accent: #6fa6dc;
+    --lp-border: #d3e3f3;
+    --lp-card: #ffffff;
+    --lp-shadow: 0 4px 14px rgba(110, 160, 215, 0.16);
+}
+html.lp-techo-cloud .lp-panel {
+    background-color: #eef5fd;
+    background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 36'><g fill='%23ffffff'><circle cx='18' cy='22' r='11'/><circle cx='30' cy='15' r='13'/><circle cx='43' cy='22' r='10'/><rect x='12' y='21' width='38' height='12' rx='6'/></g></svg>"), url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 36'><g fill='%23ffffff'><circle cx='18' cy='22' r='11'/><circle cx='30' cy='15' r='13'/><circle cx='43' cy='22' r='10'/><rect x='12' y='21' width='38' height='12' rx='6'/></g></svg>"), url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 36'><g fill='%23ffffff'><circle cx='18' cy='22' r='11'/><circle cx='30' cy='15' r='13'/><circle cx='43' cy='22' r='10'/><rect x='12' y='21' width='38' height='12' rx='6'/></g></svg>"), linear-gradient(180deg, #d6e9fb 0%, #eef5fd 45%, #ffffff 100%);
+    background-repeat: no-repeat;
+    background-size: 120px 72px, 90px 54px, 140px 84px, 100% 100%;
+    background-position: left -34px top 52%, right 14% bottom 26%, right -36px bottom 30px, 0 0;
+    box-shadow: 0 18px 50px rgba(40, 70, 110, 0.25), inset 0 0 0 1.5px #d9e7f5;
+}
+html.lp-techo-cloud .lp-header {
+    background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g stroke='%23f6c25e' stroke-width='2.6' stroke-linecap='round'><line x1='20' y1='3' x2='20' y2='8' transform='rotate(0 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(45 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(90 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(135 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(180 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(225 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(270 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(315 20 20)'/></g><circle cx='20' cy='20' r='9' fill='%23ffd978'/></svg>") right 18px top 10px / 34px 34px no-repeat, url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 36'><g fill='%23ffffff'><circle cx='18' cy='22' r='11'/><circle cx='30' cy='15' r='13'/><circle cx='43' cy='22' r='10'/><rect x='12' y='21' width='38' height='12' rx='6'/></g></svg>") right 64px top 8px / 64px 38px no-repeat, url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 36'><g fill='%23ffffff'><circle cx='18' cy='22' r='11'/><circle cx='30' cy='15' r='13'/><circle cx='43' cy='22' r='10'/><rect x='12' y='21' width='38' height='12' rx='6'/></g></svg>") right 10px top 34px / 44px 26px no-repeat, url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 36'><g fill='%23ffffff'><circle cx='18' cy='22' r='11'/><circle cx='30' cy='15' r='13'/><circle cx='43' cy='22' r='10'/><rect x='12' y='21' width='38' height='12' rx='6'/></g></svg>") left 52% bottom 2px / 52px 31px no-repeat, linear-gradient(180deg, #cfe5fa, #e8f2fc);
+    border-bottom: none;
+    padding-bottom: 20px;
+}
+html.lp-techo-cloud .lp-title::before { content: '☁️ '; }
+html.lp-techo-cloud .lp-tabs { gap: 6px; padding: 8px 10px 6px; border-bottom: 1.5px dashed #c3d9f0; }
+html.lp-techo-cloud .lp-tab {
+    min-height: 34px;
+    margin: 0;
+    padding: 0 14px;
+    border: 1.5px solid #d6e5f4;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #5f7fa3;
+    transform: none;
+}
+html.lp-techo-cloud .lp-tab.lp-on {
+    transform: none;
+    background: linear-gradient(135deg, #9cc9f1, #6ea5dc);
+    border-color: #6ea5dc;
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(110, 165, 220, 0.38);
+}
+html.lp-techo-cloud .lp-tab.lp-on::before { content: '☁ '; }
+html.lp-techo-cloud .lp-note-card,
+html.lp-techo-cloud .lp-floor-row,
+html.lp-techo-cloud .lp-group,
+html.lp-techo-cloud .lp-card,
+html.lp-techo-cloud .lp-sec,
+html.lp-techo-cloud .lp-preview,
+html.lp-techo-cloud .lp-check-row,
+html.lp-techo-cloud .lp-result {
+    border: 1.5px solid #d6e5f4;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: var(--lp-shadow);
+}
+html.lp-techo-cloud .lp-note-card,
+html.lp-techo-cloud .lp-card,
+html.lp-techo-cloud .lp-sec,
+html.lp-techo-cloud .lp-group { position: relative; }
+html.lp-techo-cloud .lp-note-card::after,
+html.lp-techo-cloud .lp-card::after,
+html.lp-techo-cloud .lp-sec::after,
+html.lp-techo-cloud .lp-group::after {
+    content: '';
+    position: absolute;
+    top: -9px;
+    right: 12px;
+    width: 26px;
+    height: 16px;
+    background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 36'><g fill='%23cfe2f5'><circle cx='18' cy='22' r='11'/><circle cx='30' cy='15' r='13'/><circle cx='43' cy='22' r='10'/><rect x='12' y='21' width='38' height='12' rx='6'/></g></svg>") center / contain no-repeat;
+    pointer-events: none;
+}
+html.lp-techo-cloud .lp-group-body { border-left: 2px dotted #bcd4ee; }
+html.lp-techo-cloud .lp-callout {
+    background: linear-gradient(135deg, #f2f8ff, #fffbea);
+    border: 1.5px dashed #bcd4ee;
+    border-radius: 20px;
+}
+html.lp-techo-cloud .lp-group-title,
+html.lp-techo-cloud .lp-scope-title {
+    background: none;
+    text-decoration: underline dashed #8cb9e6;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 5px;
+}
+html.lp-techo-cloud .lp-sec > summary { border-left: none; border-radius: 20px; }
+html.lp-techo-cloud .lp-sec-title::before { content: '☁ '; color: var(--lp-accent); }
+html.lp-techo-cloud .lp-memories .lp-note-card::before {
+    top: -13px;
+    left: 14px;
+    width: 34px;
+    height: 22px;
+    transform: rotate(-10deg);
+    background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 36'><g fill='%23a9cbec'><circle cx='18' cy='22' r='11'/><circle cx='30' cy='15' r='13'/><circle cx='43' cy='22' r='10'/><rect x='12' y='21' width='38' height='12' rx='6'/></g></svg>") center / contain no-repeat;
+    border: none;
+    filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.15));
+}
+html.lp-techo-cloud .lp-memories .lp-note-card:nth-of-type(odd)::before { background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g stroke='%23f6c25e' stroke-width='2.6' stroke-linecap='round'><line x1='20' y1='3' x2='20' y2='8' transform='rotate(0 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(45 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(90 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(135 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(180 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(225 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(270 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(315 20 20)'/></g><circle cx='20' cy='20' r='9' fill='%23ffd978'/></svg>"); transform: rotate(14deg); }
+html.lp-techo-cloud .lp-memories .lp-note-card::after { display: none; }
+html.lp-techo-cloud .lp-overlay .menu_button.lp-btn,
+html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum .menu_button.lp-btn {
+    background: linear-gradient(180deg, #ffffff, #eef5fd);
+    border: 1.5px solid #bcd4ee;
+    border-radius: 999px;
+    box-shadow: 0 2px 6px rgba(110, 165, 220, 0.18);
+}
+html.lp-techo-cloud .lp-overlay .menu_button.lp-btn.lp-primary,
+html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum .menu_button.lp-btn.lp-primary {
+    background: linear-gradient(135deg, #9cc9f1, #6ea5dc);
+    border-color: #6ea5dc;
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(110, 165, 220, 0.38);
+}
+html.lp-techo-cloud .lp-chip { border-color: #d6e5f4; background: #ffffff; color: #5f7fa3; border-radius: 999px; }
+html.lp-techo-cloud .lp-chip.lp-on { background: linear-gradient(135deg, #9cc9f1, #6ea5dc); border-color: #6ea5dc; color: #fff; }
+html.lp-techo-cloud .lp-badge { border-radius: 999px; }
+html.lp-techo-cloud .lp-cal-cell { border-radius: 12px; border-color: #d6e5f4; background: rgba(255, 255, 255, 0.94); }
+html.lp-techo-cloud .lp-cal-empty { background: transparent; border: none; }
+html.lp-techo-cloud .lp-cal-today .lp-cal-num {
+    background: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'><g stroke='%23f6c25e' stroke-width='2.6' stroke-linecap='round'><line x1='20' y1='3' x2='20' y2='8' transform='rotate(0 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(45 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(90 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(135 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(180 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(225 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(270 20 20)'/><line x1='20' y1='3' x2='20' y2='8' transform='rotate(315 20 20)'/></g><circle cx='20' cy='20' r='9' fill='%23ffd978'/></svg>") center / 2.2em 2.2em no-repeat;
+    color: #7a4f00;
+    font-weight: 700;
+    padding: 0.35em 0.5em;
+}
+html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
+    background: linear-gradient(180deg, #e3f0fc, #ffffff);
+    border: 1.5px solid #d6e5f4;
+    border-radius: 20px;
+    position: relative;
+}
+
+.lp-theme-techo .lp-overlay { background: var(--lp-overlay-bg); }
+
+/* 紙：方格點點 */
+.lp-theme-techo .lp-panel {
+    background-color: var(--lp-bg);
+    background-image: radial-gradient(circle, var(--lp-dot) 1px, transparent 1.3px);
+    background-size: 20px 20px;
+    border: none;
+    border-radius: 16px;
+    box-shadow: var(--lp-panel-shadow);
+    backdrop-filter: none;
+}
+@media (max-width: 768px) { .lp-theme-techo .lp-panel { border-radius: 0; } }
+
+/* 標題列：斜紋紙膠帶 */
+.lp-theme-techo .lp-header {
+    background: repeating-linear-gradient(-45deg, var(--lp-stripe) 0 8px, var(--lp-stripe-2) 8px 16px);
+    border-bottom: 2px dashed var(--lp-border);
+}
+.lp-theme-techo .lp-title { font-weight: 600; letter-spacing: 0.06em; }
+.lp-theme-techo .lp-title-icon { color: var(--lp-accent); }
+.lp-theme-techo .lp-icon-btn { border-radius: 999px; color: var(--lp-muted); }
+.lp-theme-techo .lp-icon-btn:hover, .lp-theme-techo .lp-icon-btn.lp-on { background: var(--lp-chip-on-bg); color: var(--lp-accent); }
+.lp-theme-techo .lp-count { background: var(--lp-accent); color: var(--lp-primary-text); }
+
+/* 分頁：索引貼 */
+.lp-theme-techo .lp-tabs { gap: 4px; padding-top: 8px; border-bottom: 2px solid var(--lp-border); }
+.lp-theme-techo .lp-tab {
+    min-height: 38px;
+    margin-top: 4px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 10px 10px 0 0;
+    background: var(--lp-tab, var(--lp-tab-7));
+    color: var(--lp-tab-text);
+    transition: transform 0.15s, background 0.15s;
+}
+.lp-theme-techo .lp-tab:nth-child(7n+1) { --lp-tab: var(--lp-tab-1); }
+.lp-theme-techo .lp-tab:nth-child(7n+2) { --lp-tab: var(--lp-tab-2); }
+.lp-theme-techo .lp-tab:nth-child(7n+3) { --lp-tab: var(--lp-tab-3); }
+.lp-theme-techo .lp-tab:nth-child(7n+4) { --lp-tab: var(--lp-tab-4); }
+.lp-theme-techo .lp-tab:nth-child(7n+5) { --lp-tab: var(--lp-tab-5); }
+.lp-theme-techo .lp-tab:nth-child(7n+6) { --lp-tab: var(--lp-tab-6); }
+.lp-theme-techo .lp-tab:nth-child(7n+7) { --lp-tab: var(--lp-tab-7); }
+.lp-theme-techo .lp-tab.lp-on {
+    transform: translateY(-4px);
+    background: color-mix(in srgb, var(--lp-tab) 75%, var(--lp-tab-on-mix) 25%);
+    color: var(--lp-tab-on-text);
+    box-shadow: 0 -2px 0 rgba(255, 255, 255, 0.12) inset;
+}
+
+/* 卡片：便條紙 */
+.lp-theme-techo .lp-note-card,
+.lp-theme-techo .lp-floor-row,
+.lp-theme-techo .lp-group,
+.lp-theme-techo .lp-card,
+.lp-theme-techo .lp-sec,
+.lp-theme-techo .lp-preview,
+.lp-theme-techo .lp-check-row,
+.lp-theme-techo .lp-result {
+    background: var(--lp-card);
+    border: 1px solid var(--lp-border);
+    border-radius: 12px;
+    box-shadow: var(--lp-shadow);
+}
+.lp-theme-techo .lp-group-body { border-left: 2px dashed var(--lp-border); }
+.lp-theme-techo .lp-callout {
+    background: var(--lp-callout-bg);
+    border: 1px solid var(--lp-callout-border);
+    border-radius: 12px;
+    box-shadow: var(--lp-shadow);
+}
+/* 章、卷的標題：螢光筆 */
+.lp-theme-techo .lp-group-title,
+.lp-theme-techo .lp-scope-title {
+    background: linear-gradient(transparent 58%, var(--lp-hl) 58%);
+    padding: 0 2px;
+}
+/* 設定的每一區：左邊一條紙膠帶 */
+.lp-theme-techo .lp-sec > summary { border-left: 6px solid var(--lp-sec, var(--lp-tape-pink)); border-radius: 12px 0 0 12px; }
+.lp-theme-techo .lp-sec:nth-of-type(5n+2) { --lp-sec: var(--lp-tape-mint); }
+.lp-theme-techo .lp-sec:nth-of-type(5n+3) { --lp-sec: var(--lp-tape-butter); }
+.lp-theme-techo .lp-sec:nth-of-type(5n+4) { --lp-sec: var(--lp-tape-sky); }
+.lp-theme-techo .lp-sec:nth-of-type(5n+5) { --lp-sec: var(--lp-tape-lilac); }
+
+/* 回憶錄：上面貼一段紙膠帶 */
+.lp-theme-techo .lp-memories .lp-note-card { position: relative; margin-top: 12px; overflow: visible; }
+.lp-theme-techo .lp-memories .lp-note-card::before {
+    content: '';
+    position: absolute;
+    top: -9px;
+    left: 50%;
+    width: 72px;
+    height: 18px;
+    transform: translateX(-50%) rotate(-3deg);
+    background: var(--lp-tape, var(--lp-tape-pink));
+    border-left: 2px dotted rgba(255, 255, 255, 0.5);
+    border-right: 2px dotted rgba(255, 255, 255, 0.5);
+    pointer-events: none;
+}
+.lp-theme-techo .lp-memories .lp-note-card:nth-of-type(4n+2)::before { --lp-tape: var(--lp-tape-mint); transform: translateX(-40%) rotate(2deg); }
+.lp-theme-techo .lp-memories .lp-note-card:nth-of-type(4n+3)::before { --lp-tape: var(--lp-tape-butter); transform: translateX(-60%) rotate(-1deg); }
+.lp-theme-techo .lp-memories .lp-note-card:nth-of-type(4n+4)::before { --lp-tape: var(--lp-tape-sky); }
+
+/* 按鈕：圓圓的、有一點厚度 */
+.lp-theme-techo .lp-overlay .menu_button.lp-btn,
+.lp-theme-techo-blocks .lp-sum .menu_button.lp-btn {
+    background: var(--lp-control);
+    color: var(--lp-text);
+    border: 1.5px solid var(--lp-border);
+    border-radius: 999px;
+    box-shadow: 0 2px 0 var(--lp-control-shadow);
+    filter: none;
+}
+.lp-theme-techo .lp-overlay .menu_button.lp-btn:hover,
+.lp-theme-techo-blocks .lp-sum .menu_button.lp-btn:hover { background: var(--lp-hover); border-color: var(--lp-hover-border); }
+.lp-theme-techo .lp-overlay .menu_button.lp-btn:active,
+.lp-theme-techo-blocks .lp-sum .menu_button.lp-btn:active { transform: translateY(1px); box-shadow: 0 1px 0 var(--lp-control-shadow); }
+.lp-theme-techo .lp-overlay .menu_button.lp-btn.lp-primary,
+.lp-theme-techo-blocks .lp-sum .menu_button.lp-btn.lp-primary {
+    background: var(--lp-accent);
+    border-color: var(--lp-accent);
+    color: var(--lp-primary-text);
+    box-shadow: 0 2px 0 var(--lp-primary-shadow);
+}
+.lp-theme-techo .lp-overlay .menu_button.lp-btn.lp-danger { color: var(--lp-error); border-color: var(--lp-danger-border); }
+.lp-theme-techo .lp-overlay .menu_button.lp-btn:disabled { opacity: 0.5; }
+
+/* 輸入框 */
+.lp-theme-techo .lp-overlay .text_pole,
+.lp-theme-techo .lp-overlay select,
+.lp-theme-techo-blocks .lp-sum .text_pole {
+    background: var(--lp-control);
+    color: var(--lp-text);
+    border: 1.5px solid var(--lp-border);
+    border-radius: 10px;
+    font-family: var(--lp-font);
+}
+.lp-theme-techo .lp-overlay .text_pole:focus,
+.lp-theme-techo .lp-overlay select:focus { border-color: var(--lp-accent); outline: none; box-shadow: 0 0 0 3px var(--lp-focus-ring); }
+.lp-theme-techo .lp-search { background: transparent; }
+
+/* 篩選標籤、狀態章 */
+.lp-theme-techo .lp-chip { background: var(--lp-control); border: 1.5px solid var(--lp-border); color: var(--lp-chip-text); }
+.lp-theme-techo .lp-chip.lp-on { background: var(--lp-chip-on-bg); border-color: var(--lp-accent); color: var(--lp-chip-on-text); }
+.lp-theme-techo .lp-badge,
+.lp-theme-techo-blocks .lp-sum .lp-badge { border-radius: 6px; border-width: 1.5px; background: var(--lp-badge-bg); }
+.lp-theme-techo .lp-kind-tag { background: var(--lp-kind-bg); color: var(--lp-kind-text); }
+.lp-theme-techo .lp-link { color: var(--lp-link); text-decoration: underline dotted; text-underline-offset: 3px; }
+.lp-theme-techo .lp-pick-box { border-color: var(--lp-pick); border-radius: 5px; }
+
+/* 行事曆：手帳的月曆頁 */
+.lp-theme-techo .lp-cal-cell { background: var(--lp-cal-cell); border-color: var(--lp-cal-line); }
+.lp-theme-techo .lp-cal-cell:hover { background: var(--lp-hover); }
+.lp-theme-techo .lp-cal-grid > .lp-cal-head:nth-child(1) { color: var(--lp-error); }
+.lp-theme-techo .lp-cal-grid > .lp-cal-head:nth-child(7) { color: var(--lp-info); }
+.lp-theme-techo .lp-cal-today .lp-cal-num { background: var(--lp-accent); color: var(--lp-primary-text); }
+.lp-theme-techo .lp-cal-period { background: var(--lp-cal-period); }
+.lp-theme-techo .lp-cal-empty { background: transparent; }
+
+/* 聊天裡的摘要區塊（勾了「也套用」） */
+.lp-theme-techo-blocks .lp-sum {
+    color: var(--lp-text);
+    background: var(--lp-bg);
+    background-image: radial-gradient(circle, var(--lp-dot) 1px, transparent 1.3px);
+    background-size: 16px 16px;
+    border: 1px solid var(--lp-border);
+    border-radius: 12px;
+    box-shadow: var(--lp-shadow);
+}
+.lp-theme-techo-blocks .lp-sum .lp-sum-head { color: var(--lp-text); }
+
+/* ===== 更新通知（v0.13.30） ===== */
+.lp-whatsnew.lp-card { margin-bottom: 12px; border: 1px solid color-mix(in srgb, var(--lp-accent, #c46a6a) 45%, transparent); background: color-mix(in srgb, var(--lp-accent, #c46a6a) 9%, var(--lp-card)); }
+.lp-whatsnew-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.lp-whatsnew-title { font-weight: 700; font-size: 1.05em; }
+.lp-whatsnew-ver { font-size: 0.85em; color: var(--lp-muted); }
+.lp-whatsnew-v { margin-top: 10px; font-weight: 700; }
+.lp-whatsnew-sec { margin-top: 6px; font-weight: 600; }
+.lp-whatsnew ul { margin: 2px 0 0; padding-left: 1.2em; line-height: 1.6; }
+.lp-whatsnew li { margin: 2px 0; overflow-wrap: anywhere; }
+.lp-whatsnew-all { margin-top: 6px; padding-top: 4px; border-top: 1px dashed var(--lp-border); }
+.lp-whatsnew-actions { margin-top: 10px; gap: 8px; flex-wrap: wrap; }
+.lp-changelog > summary { cursor: pointer; color: var(--lp-muted); margin-top: 6px; }
+.lp-new-dot { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 999px; background: #e0625e; color: #fff; font-size: 11px; line-height: 16px; font-weight: 700; vertical-align: middle; }
+
+/* ===== 小彩蛋（v0.13.31） ===== */
+.lp-egg-ann { margin-bottom: 10px; padding: 6px 12px; border-radius: 999px; text-align: center; font-weight: 600; background: color-mix(in srgb, #e88aa2 18%, var(--lp-card)); }
+.lp-egg-day.lp-card { margin-bottom: 12px; border: 1px dashed color-mix(in srgb, #e88aa2 60%, transparent); }
+.lp-egg-title { font-weight: 700; margin-bottom: 4px; }
+.lp-egg-text { line-height: 1.6; overflow-wrap: anywhere; }
+.lp-egg-actions { margin-top: 8px; gap: 8px; flex-wrap: wrap; }
+.lp-title-icon[data-action="egg"] { cursor: default; user-select: none; }
+.lp-burst { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 2147483647; }
+.lp-burst span { position: absolute; top: -40px; animation-name: lp-fall; animation-timing-function: linear; animation-fill-mode: forwards; opacity: 0.9; }
+.lp-burst-up span { top: auto; bottom: -40px; animation-name: lp-rise; }
+@keyframes lp-fall { to { transform: translate(30px, 110vh) rotate(260deg); opacity: 0.2; } }
+@keyframes lp-rise { to { transform: translate(-20px, -110vh) scale(1.3); opacity: 0; } }
+
+/* ===== 紀念日清單（v0.13.32） ===== */
+.lp-anniv.lp-card { margin-top: 12px; }
+.lp-anniv-list { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-anniv-item { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 4px 0; border-bottom: 1px dashed var(--lp-border); }
+.lp-anniv-item.lp-on { background: color-mix(in srgb, var(--lp-accent) 10%, transparent); }
+.lp-anniv-form { flex-wrap: wrap; gap: 6px; align-items: center; }
+.lp-anniv-form .lp-num { width: 4.2em; }
+
+/* ===== 舊聊天整理（v0.13.33） ===== */
+.lp-old.lp-card { margin: 8px 0 12px; display: flex; flex-direction: column; gap: 8px; }
+.lp-old .lp-pick-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow: auto; }
+.lp-old-result { display: flex; flex-direction: column; gap: 6px; border-top: 1px dashed var(--lp-border); padding-top: 8px; }
+.lp-old-cal { flex-wrap: wrap; gap: 8px; align-items: center; }
+.lp-old-days ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow: auto; }
+.lp-old-day { padding: 4px 6px; border-radius: 6px; overflow-wrap: anywhere; }
+.lp-old-big { background: color-mix(in srgb, var(--lp-warn) 10%, transparent); }
+.lp-old-overlap { outline: 1px dashed var(--lp-warn); }
+.lp-old .lp-row-head { gap: 8px; width: 100%; }
+
+/* ===== 日記（v0.13.34） ===== */
+.lp-diary-start { display: flex; flex-direction: column; gap: 6px; padding-top: 8px; border-top: 1px dashed var(--lp-border); }
+.lp-diary .lp-sec-body { display: flex; flex-direction: column; gap: 8px; }
+.lp-diary-batch { flex-wrap: wrap; gap: 6px; align-items: center; }
+.lp-diary-batch .lp-num { width: 5.5em; }
+.lp-diary-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-diary-day { border: 1px solid var(--lp-border); border-radius: 8px; background: var(--lp-card); }
+.lp-diary-day > .lp-row-head { width: 100%; gap: 8px; padding: 6px 10px; flex-wrap: wrap; }
+.lp-diary-body { padding: 0 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+.lp-diary-text { white-space: pre-wrap; line-height: 1.7; overflow-wrap: anywhere; }
+.lp-diary-actions, .lp-diary-versions { flex-wrap: wrap; gap: 6px; }
+.lp-diary-points ul, .lp-diary-keep { margin: 4px 0 0; padding-left: 1.2em; line-height: 1.6; }
+.lp-diary-keep { list-style: none; padding-left: 0; }
+.lp-diary-edit { width: 100%; min-height: 10em; }
+
+/* ===== 好幾組 API（v0.13.35） ===== */
+.lp-profiles, .lp-routes { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--lp-border); }
+.lp-profile-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lp-profile-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 4px 6px; border-radius: 6px; }
+.lp-profile-row.lp-on { background: color-mix(in srgb, var(--lp-accent) 10%, transparent); }
+.lp-profile-editor { display: flex; flex-direction: column; gap: 8px; }
+.lp-route-row { gap: 8px; flex-wrap: wrap; align-items: center; }
+.lp-route-row .lp-select { max-width: 100%; }

@@ -60,6 +60,7 @@ const TEXT = {
         evAnniversary: 'anniversary：紀念日或生日（每年重複），date 寫 MM-DD，title 寫是什麼日子（例如「小雨的生日」）。',
         keepsakes: 'keepsakes：真正值得珍藏、以後兩人可能會一起回想的時刻（第一次做某件事、告白、和好、很甜或很重要的對話、特別的約定或禮物）。大部分樓層沒有，寧缺勿濫，沒有就是空陣列。title 不超過 15 字；content 用一兩句寫清楚發生了什麼、說了什麼關鍵的話。',
         keepsakesTheater: '「小劇場」是番外，不是正劇：不要寫進 summary 和 ops；但裡面有意義的時刻可以收進 keepsakes，加上 "from": "theater"。',
+        prefs: 'prefs：{user} 在 OOC（劇情外的說明，例如括號裡的「OOC：…」）裡，對角色或寫法提出的長期要求或偏好（例如希望 {char} 更主動、別一直重複 {user} 的話）。一次性的指示（這段寫長一點、繼續、重寫）不算。只寫要求本身，一條一句；沒有就是空陣列。OOC 不寫進 summary。',
         summarySide: 'summary：這一整層是「小劇場」（番外、IF 線），不是正劇。用一句話（不超過 50 字）寫這段小劇場在演什麼，只給使用者看，不會當成劇情。',
         keepsakesSide: '小劇場裡有意義的時刻可以收進 keepsakes（寧缺勿濫）。',
         opsSide: 'ops：只在小劇場裡明確說好、之後正劇也要算數的約定或待辦才用 add 新增；其他記事（人物、物件）不要動，也不要 update 或 complete。沒有就是空陣列。',
@@ -117,6 +118,7 @@ const TEXT = {
         evAnniversary: 'anniversary：纪念日或生日（每年重复），date 写 MM-DD，title 写是什么日子（例如「小雨的生日」）。',
         keepsakes: 'keepsakes：真正值得珍藏、以后两人可能会一起回想的时刻（第一次做某件事、告白、和好、很甜或很重要的对话、特别的约定或礼物）。大部分楼层没有，宁缺毋滥，没有就是空数组。title 不超过 15 字；content 用一两句写清楚发生了什么、说了什么关键的话。',
         keepsakesTheater: '「小剧场」是番外，不是正剧：不要写进 summary 和 ops；但里面有意义的时刻可以收进 keepsakes，加上 "from": "theater"。',
+        prefs: 'prefs：{user} 在 OOC（剧情外的说明，例如括号里的「OOC：…」）里，对角色或写法提出的长期要求或偏好（例如希望 {char} 更主动、别一直重复 {user} 的话）。一次性的指示（这段写长一点、继续、重写）不算。只写要求本身，一条一句；没有就是空数组。OOC 不写进 summary。',
         summarySide: 'summary：这一整层是「小剧场」（番外、IF 线），不是正剧。用一句话（不超过 50 字）写这段小剧场在演什么，只给用户看，不会当成剧情。',
         keepsakesSide: '小剧场里有意义的时刻可以收进 keepsakes（宁缺毋滥）。',
         opsSide: 'ops：只在小剧场里明确说好、之后正剧也要算数的约定或待办才用 add 新增；其他记事（人物、物品）不要动，也不要 update 或 complete。没有就是空数组。',
@@ -174,6 +176,7 @@ const TEXT = {
         evAnniversary: 'anniversary: an anniversary or birthday (repeats every year); date as MM-DD, title says what day it is (e.g. "Xiaoyu\'s birthday").',
         keepsakes: 'keepsakes: moments truly worth treasuring that the two might look back on later (a first time, a confession, making up, a very sweet or important conversation, a special promise or gift). Most floors have none; less is more; leave it as an empty array if none. title at most 8 words; content in one or two sentences says what happened and the key words said.',
         keepsakesTheater: 'The "side scene" is an extra, not the main story: keep it out of summary and ops, but meaningful moments from it may go into keepsakes with "from": "theater".',
+        prefs: 'prefs: lasting requests or preferences {user} makes in OOC (out-of-character notes, e.g. "(OOC: …)") about {char} or the writing (e.g. wanting {char} to take more initiative, not to keep repeating {user}\'s words). One-off instructions (make this part longer, continue, rewrite) do not count. Write just the request, one per item; empty array if none. Keep OOC out of summary.',
         summarySide: 'summary: this whole floor is a "side scene" (an extra or IF line), not the main story. In one sentence (at most 25 words) say what the side scene is about; it is only shown to the user, never treated as the plot.',
         keepsakesSide: 'Meaningful moments in the side scene may go into keepsakes (less is more).',
         opsSide: 'ops: only add a promise or to-do that is clearly agreed in the side scene and should still count in the main story; leave other notes (characters, items) alone, and do not update or complete anything. Empty array if none.',
@@ -243,6 +246,9 @@ export function buildL1Parts({ length, char, user, chapter = false, previousDate
     // 回憶錄：讓模型挑值得珍藏的時刻。
     const keep = memoriesOn() && getSettings().memories?.auto;
     if (keep) rules.push([T.keepsakes, ...(theater ? [`   - ${T.keepsakesTheater}`] : [])].join('\n'));
+    // 你的偏好（v0.13.36，預設關）：OOC 裡的長期要求。章、卷的壓縮不用。
+    const prefs = !chapter && getSettings().prefs?.auto;
+    if (prefs) rules.push(fill(T.prefs, vars));
     const numbered = rules.map((r, i) => `${i + 1}. ${r}`).join('\n');
 
     // JSON 格式範例：只列有勾選的欄位和記事類型。
@@ -256,6 +262,7 @@ export function buildL1Parts({ length, char, user, chapter = false, previousDate
         lines.push(`  "events": [${evTypes.map((x) => ex[x]).join(', ')}],`);
     }
     if (keep) lines.push('  "keepsakes": [{ "title": "…", "content": "…" }],');
+    if (prefs) lines.push('  "prefs": ["…"],');
     if (types.length) {
         lines.push('  "summary": "…",', '  "ops": [');
         const ex = types.map((type) => {

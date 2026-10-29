@@ -115,6 +115,8 @@ export function sentHtml(index) {
     const parts = [t('sent.notesPart', { sent: r.notesSent, total: r.notesTotal })];
     if (r.floors.length) parts.push(t('sent.floorsPart', { n: r.floors.length }));
     if (r.reminders.length) parts.push(t('sent.remPart', { n: r.reminders.length }));
+    const diary = Array.isArray(r.diary) ? r.diary : [];
+    if (diary.length) parts.push(t('sent.diaryPart', { n: diary.length }));
     const list = (items) => `<ul>${items.join('')}</ul>`;
     let html = '';
     if (r.type === 'continue') html += `<div class="lp-note">${esc(t('sent.continue'))}</div>`;
@@ -131,11 +133,15 @@ export function sentHtml(index) {
             return `<li>${at} ${esc(f.line)} ${why(f.reason, f.score)}</li>`;
         }));
     }
+    if (diary.length) {
+        html += `<div class="lp-sent-sec">${esc(t('sent.diary', { n: diary.length }))}</div>`;
+        html += list(diary.map((d) => `<li>${esc(d.line)} ${why(d.reason, d.score)}</li>`));
+    }
     if (r.reminders.length) {
         html += `<div class="lp-sent-sec">${esc(t('sent.reminders', { n: r.reminders.length }))}</div>`;
         html += list(r.reminders.map((m) => `<li>${esc(m.title)} ${why(m.reason === 'pinned' ? 'pinnedMemory' : 'random')}</li>`));
     }
-    if (r.filtered && !r.notes.length && !r.floors.length && !r.reminders.length) html += `<div class="lp-note">${esc(t('sent.none'))}</div>`;
+    if (r.filtered && !r.notes.length && !r.floors.length && !r.reminders.length && !diary.length) html += `<div class="lp-note">${esc(t('sent.none'))}</div>`;
     const vector = r.vector === 'ok' ? t('sent.vector.ok', { n: r.fetched }) : r.vector === 'error' ? t('sent.vector.error', { error: r.error }) : t('sent.vector.off');
     html += `<div class="lp-sent-foot${r.vector === 'error' ? ' lp-warn' : ''}">${esc(vector)}<br>${esc(t('sent.tokens', { n: r.injectedTokens.toLocaleString(), saved: r.hiddenTokens.toLocaleString() }))}</div>`;
     return `<details class="lp-sent" data-role="sent"><summary>${esc(t('sent.title'))} <span class="lp-sent-sum">${esc(parts.join('・'))}</span></summary>${html}</details>`;

@@ -51,6 +51,11 @@ export function recordSend({ type, selection, reminders = [], pinnedKey = null, 
             ...(m.reason === 'vector' && typeof m.score === 'number' ? { score: Math.round(m.score * 100) } : {}),
         })),
         reminders: reminders.map((m) => ({ title: cut(m.title), reason: m.key === pinnedKey ? 'pinned' : 'random' })),
+        // 以前的日記（v0.13.36）：找回了哪幾段。最近幾天的全文、大綱每回都送，不用記。
+        diary: (selection?.diary ?? []).map((d) => ({
+            date: d.date, part: d.part, total: d.total, line: cut(d.line), reason: d.reason,
+            ...(d.reason === 'vector' && typeof d.score === 'number' ? { score: Math.round(d.score * 100) } : {}),
+        })),
         vector: selection?.vector ?? 'off',
         error: selection?.error || '',
         fetched: selection?.fetched ?? 0,

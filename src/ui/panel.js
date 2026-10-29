@@ -14,8 +14,10 @@ import { VERSION } from '../version.js';
 import { ROUTES, usesMain } from '../llm.js';
 import { allChanges, markSeen, seenVersion, unseenChanges } from '../changelog.js';
 import { analyzeChats, hasLoadedDays, listOldChats, loadOldChat } from '../oldchats.js';
+import { diaryPlan } from '../diarysend.js';
+import { addPref, editPref, listPrefs, onPrefsChange, removePref, togglePref } from '../prefs.js';
 import {
-    buildCompressPrompt, compressDay, deleteDay, diaryPending, diaryStyle, dropCompressed, editDay, listDiary, MIN_SAFE_RATIO, onDiaryChange, pauseDiary, queueDays, RATIOS, setSources, useVersion,
+    buildCompressPrompt, compressDay, conflictDays, deleteDay, deleteOutline, diaryOutline, diaryPending, outlineError, diaryStyle, dropCompressed, editDay, editOutline, listDiary, MIN_SAFE_RATIO, onDiaryChange, pauseDiary, queueDays, queueOutline, RATIOS, setSources, useVersion,
 } from '../diary.js';
 import { anniversariesToday, burst, dismissOnThisDay, onThisDay, randomMemory, remindOnThisDay, takePetals } from '../eggs.js';
 import { addMemory, editMemory, listMemories, memoriesOn, nextPinned, onMemoriesChange, removeMemory, surfaceNext } from '../memories.js';
@@ -106,6 +108,8 @@ const NUMBER_LIMITS = {
     'memories.cooldown': [0, 1000],
     'calendar.ahead': [0, 60],
     'custom.timeout': [30, 600],
+    'diary.recentDays': [0, 30],
+    'diary.recallTopK': [0, 10],
 };
 
 /** 成對的上下限：下限比上限大時，把上限拉到和下限一樣。 */
@@ -172,9 +176,10 @@ const view = {
     // 紀念日清單（v0.13.32）：正在改哪一條（同一個日子＋名稱的一組）。
     anniv: { editing: null },
     // 📦 舊聊天整理（v0.13.33）：聊天清單、勾了哪些、讀取中、分析結果、訊息。
-    old: { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '' },
+    old: { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '', only: {} },
     // 📖 日記（v0.13.34）：展開的日子、正在編輯的、正在設定再壓一次的（比例、要留的重點）、一次壓很多天的設定。
-    diary: { open: new Set(), editing: null, compress: null, ratio: MIN_SAFE_RATIO, keep: new Set(), batchMin: 1000, batchRatio: MIN_SAFE_RATIO, msg: '', show: true },
+    diary: { open: new Set(), editing: null, compress: null, ratio: MIN_SAFE_RATIO, keep: new Set(), batchMin: 1000, batchRatio: MIN_SAFE_RATIO, msg: '', show: true, conflicts: [], outlineEdit: false },
+    prefs: { editing: null },
     // 補建舊樓層的設定卡片。
     catchup: { open: false, from: null, to: null, fine: 30, block: null },
     // 補建前找到的番外：清單（算一次就好）和每層的選擇（預設跳過）。rescan：資料管理的「重新檢查所有樓層」。
@@ -412,6 +417,7 @@ function statsText() {
     const extra = [];
     if (st.notesSent !== null && st.notesSent !== undefined) extra.push(t('panel.statsNotes', { n: st.notesSent, total: st.notesTotal }));
     if (st.memories) extra.push(t('panel.statsMemories', { n: st.memories }));
+    if (st.diary) extra.push(t('panel.statsDiary', { n: st.diary }));
     if (st.reminders) extra.push(t('panel.statsReminders', { n: st.reminders }));
     if (st.vector === 'error') extra.push(t('panel.statsVectorError'));
     if (st.unsummarized) extra.push(t('panel.statsPending', { n: st.unsummarized }));
@@ -1255,12 +1261,30 @@ function diaryStartHtml(r) {
           </select>
         </div>
         <div class="lp-note">${esc(t('diary.estimate', { days: dated.length, calls, chars: sumSent.toLocaleString(), diary: r.totals.diary.toLocaleString() }))}</div>
+        ${overlapHtml(r)}
         <div class="lp-note">${esc(t('diary.filterHint'))}</div>
         ${warn}
         <div class="lp-row">
           <button type="button" class="menu_button lp-btn lp-primary" data-action="diary-start"${pending || !calls ? ' disabled' : ''}>${esc(t('diary.start', { n: dated.length }))}</button>
         </div>
       </div>`;
+}
+
+/** 同一天有好幾個聊天都寫到（可能是 IF 線）：每天選都用，還是只用其中一個（v0.13.36）。 */
+function overlapHtml(r) {
+    const days = r.days.filter((d) => r.overlaps.includes(d.date));
+    if (!days.length) return '';
+    const only = view.old.only;
+    const rows = days.map((d) => {
+        const opts = [['', t('diary.overlapAll')], ...d.chats.map((id) => [id, t('diary.overlapOnly', { chat: id })])]
+            .map(([value, label]) => `<option value="${esc(value)}"${(only[d.date] ?? '') === value ? ' selected' : ''}>${esc(label)}</option>`).join('');
+        return `<li><b>${esc(d.date)}</b> <select class="text_pole lp-select" data-role="old-only" data-date="${esc(d.date)}" aria-label="${esc(t('diary.overlapAria', { date: d.date }))}">${opts}</select></li>`;
+    }).join('');
+    return `<details class="lp-diary-overlaps" data-role="diary-overlaps"${days.length <= 5 ? ' open' : ''}>
+        <summary>${esc(t('diary.overlapTitle', { n: days.length }))}</summary>
+        <div class="lp-note">${esc(t('diary.overlapHint'))}</div>
+        <ul>${rows}</ul>
+      </details>`;
 }
 
 const DIARY_STATE_ICON = { done: '✅', partial: '⏳', error: '⚠️', none: '…' };
@@ -1298,10 +1322,81 @@ function diarySection() {
           ${progress}
           <div class="lp-note">${esc(t('diary.hint'))}</div>
           ${v.msg ? `<div class="lp-note" role="status" data-role="diary-msg">${esc(v.msg)}</div>` : ''}
+          ${conflictHtml()}
+          ${list.length ? diarySendHtml() : ''}
+          ${list.some((d) => d.original) ? outlineHtml() : ''}
           ${batch}
           <ul class="lp-diary-list">${rows}</ul>
         </div>
       </details>`;
+}
+
+/** 日記送給角色（v0.13.36）：開關、最近幾天送全文、更早的最多找回幾段，和現在會送哪幾天。 */
+function diarySendHtml() {
+    const on = getSettings().diary?.send !== false;
+    return `<div class="lp-card lp-diary-send" data-role="diary-send">
+        <div class="lp-scope-title">${esc(t('diary.sendTitle'))}</div>
+        ${checkbox('diary.send', t('diary.send'), true)}
+        ${on ? `<div class="lp-row">${inline('diary.recentDays', { n: numberInput('diary.recentDays', t('diary.recentDays.aria')) })}</div>
+        <div class="lp-row">${inline('diary.recallTopK', { n: numberInput('diary.recallTopK', t('diary.recallTopK.aria')) })}</div>` : ''}
+        <div class="lp-note" data-role="diary-send-info">${esc(diarySendInfo())}</div>
+        ${on && getRecap()?.text ? `<div class="lp-note lp-warn" data-role="diary-recap">${esc(t('diary.recapOverlap'))}</div>` : ''}
+      </div>`;
+}
+
+function diarySendInfo() {
+    if (getSettings().diary?.send === false) return t('diary.sendOff');
+    const plan = diaryPlan();
+    const older = new Set(plan.older.map((u) => u.date)).size;
+    const recent = plan.recent.length
+        ? t('diary.sendRecent', { n: plan.recent.length, from: plan.recent[0].date, to: plan.recent[plan.recent.length - 1].date })
+        : t('diary.sendNoRecent');
+    const rest = older ? t('diary.sendOlder', { n: older, k: Number(getSettings().diary?.recallTopK) || 0 }) : '';
+    return [t('diary.sendAnchor', { date: plan.anchor || '—' }), recent, rest].filter(Boolean).join(currentLocale().startsWith('zh') ? '' : ' ');
+}
+
+/** 大綱：看、改、重寫、刪除；日記改過了提醒重寫。 */
+function outlineHtml() {
+    const v = view.diary;
+    const o = diaryOutline();
+    const busy = diaryPending() > 0;
+    const err = o ? '' : outlineError();
+    if (v.outlineEdit) {
+        return `<div class="lp-card lp-diary-outline" data-role="diary-outline">
+            <div class="lp-scope-title">${esc(t('diary.outlineTitle'))}</div>
+            <textarea class="text_pole lp-diary-edit" data-role="outline-edit" rows="6">${esc(o?.text ?? '')}</textarea>
+            <div class="lp-row"><button type="button" class="menu_button lp-btn lp-primary" data-action="outline-save">${esc(t('anniv.save'))}</button>
+            <button type="button" class="menu_button lp-btn" data-action="outline-cancel">${esc(t('anniv.cancel'))}</button></div>
+          </div>`;
+    }
+    const body = o
+        ? `<div class="lp-diary-text" data-role="outline-text">${esc(o.text)}</div>
+           <div class="lp-note">${esc([t('diary.chars', { n: o.text.length.toLocaleString() }), byLine(o.by), ...(o.stale ? [t('diary.outlineStale')] : [])].filter(Boolean).join('・'))}</div>`
+        : `<div class="lp-note">${esc(err ? t('diary.outlineFail', { error: err }) : t('diary.outlineNone'))}</div>`;
+    return `<div class="lp-card lp-diary-outline" data-role="diary-outline">
+        <div class="lp-scope-title">${esc(t('diary.outlineTitle'))}</div>
+        <div class="lp-note">${esc(t('diary.outlineHint'))}</div>
+        ${body}
+        <div class="lp-row">
+          <button type="button" class="menu_button lp-btn lp-mini${o?.stale || !o ? ' lp-primary' : ''}" data-action="outline-write"${busy ? ' disabled' : ''}>${esc(t(o ? 'diary.outlineRewrite' : 'diary.outlineWrite'))}</button>
+          ${o ? `<button type="button" class="menu_button lp-btn lp-mini" data-action="outline-edit">${esc(t('act.edit'))}</button>
+          <button type="button" class="menu_button lp-btn lp-mini lp-danger" data-action="outline-delete">${esc(t('anniv.remove'))}</button>` : ''}
+        </div>
+      </div>`;
+}
+
+/** 已經用別的聊天寫好的日子：這次先跳過了，使用者可以選擇照這次讀到的重寫。 */
+function conflictHtml() {
+    const list = view.diary.conflicts;
+    if (!list.length) return '';
+    return `<div class="lp-callout lp-warn" data-role="diary-conflicts">
+        <div>${esc(t('diary.conflicts', { n: list.length, days: list.slice(0, 6).join('、') + (list.length > 6 ? '…' : '') }))}</div>
+        <div class="lp-note">${esc(t('diary.conflictsHint'))}</div>
+        <div class="lp-row">
+          <button type="button" class="menu_button lp-btn" data-action="diary-replace"${hasLoadedDays() ? '' : ' disabled'}>${esc(t('diary.conflictsReplace'))}</button>
+          <button type="button" class="menu_button lp-btn" data-action="diary-conflicts-ok">${esc(t('diary.conflictsKeep'))}</button>
+        </div>
+      </div>`;
 }
 
 function ratioSelect(role, value) {
@@ -1316,6 +1411,7 @@ function diaryBody(d, loaded) {
           <button type="button" class="menu_button lp-btn" data-action="diary-edit-cancel">${esc(t('anniv.cancel'))}</button></div></div>`;
     }
     const meta = [d.parts.find((p) => p?.time)?.time, d.parts.find((p) => p?.location)?.location].filter(Boolean).join('・');
+    const from = d.chats.length ? `<div class="lp-note" data-role="diary-from">${esc(t('diary.from', { chats: d.chats.join('、') }))}</div>` : '';
     const text = d.use === 'compressed' ? d.compressed.summary : d.original;
     const errors = d.errors.length ? `<div class="lp-note lp-warn">${esc(t('diary.errors', { error: d.errors[0] }))}</div>` : '';
     const versions = d.compressed ? `<div class="lp-row lp-diary-versions">
@@ -1327,7 +1423,7 @@ function diaryBody(d, loaded) {
     const compress = v.compress === d.date ? compressBox(d) : '';
     const style = d.style === 'concise' ? 'natural' : 'concise';
     return `<div class="lp-diary-body">
-        ${meta ? `<div class="lp-note">${esc(meta)}</div>` : ''}
+        ${meta ? `<div class="lp-note">${esc(meta)}</div>` : ''}${from}
         <div class="lp-diary-text">${esc(text)}</div>
         ${errors}${versions}${points}
         <div class="lp-row lp-diary-actions">
@@ -1769,6 +1865,7 @@ onSummaryChange(scheduleRefresh);
 onNotesChange(scheduleRefresh);
 onCarryChange(scheduleRefresh);
 onDiaryChange(scheduleRefresh);
+onPrefsChange(scheduleRefresh);
 onCalendarChange(scheduleRefresh);
 onMemoriesChange(scheduleRefresh);
 onTitleProgress(() => { if (isPanelOpen() && ['notes', 'done'].includes(view.tab)) render(); });
@@ -2688,6 +2785,7 @@ function renderSettings() {
       ${section('filter', t('sec.filter'), t('sec.filter.hint'), filter)}
       ${section('track', t('sec.track'), t('sec.track.hint'), track)}
       ${section('memories', t('sec.memories'), t(s.memories.enabled ? 'sec.calendar.on' : 'sec.calendar.off'), memories)}
+      ${section('prefs', t('sec.prefs'), t('sec.prefs.hint', { n: listPrefs().filter((p) => !p.off).length }), renderPrefs())}
       ${section('calendar', t('sec.calendar'), t(s.calendar.enabled ? 'sec.calendar.on' : 'sec.calendar.off'), calendar)}
       ${section('compress', t('sec.compress'), t('sec.compress.hint'), compress)}
       ${section('hide', t('sec.hide'), t('sec.hide.hint'), hide)}
@@ -2698,6 +2796,37 @@ function renderSettings() {
       ${section('data', t('sec.data'), t('sec.data.hint'), renderDataSection())}
       ${section('advanced', t('sec.advanced'), t('sec.advanced.hint'), advanced)}
     </div>`;
+}
+
+// ===== 💬 你的偏好（v0.13.36） =====
+
+function renderPrefs() {
+    const v = view.prefs;
+    const rows = listPrefs().map((p) => {
+        if (v.editing === p.id) {
+            return `<li class="lp-pref" data-pref="${esc(p.id)}"><input type="text" class="text_pole lp-grow" data-role="pref-edit" value="${esc(p.text)}" aria-label="${esc(t('act.edit'))}">
+              <button type="button" class="menu_button lp-btn lp-mini lp-primary" data-action="pref-save" data-id="${esc(p.id)}">${esc(t('anniv.save'))}</button>
+              <button type="button" class="menu_button lp-btn lp-mini" data-action="pref-cancel">${esc(t('anniv.cancel'))}</button></li>`;
+        }
+        return `<li class="lp-pref${p.off ? ' lp-pref-off' : ''}" data-pref="${esc(p.id)}">
+            <span class="lp-pref-text">${esc(p.text)}</span>
+            <span class="lp-note">${esc(t(`prefs.from.${p.from}`) + (p.off ? `・${t('prefs.paused')}` : ''))}</span>
+            <span class="lp-spacer"></span>
+            <button type="button" class="menu_button lp-btn lp-mini" data-action="pref-toggle" data-id="${esc(p.id)}">${esc(t(p.off ? 'prefs.resume' : 'prefs.pause'))}</button>
+            <button type="button" class="menu_button lp-btn lp-mini" data-action="pref-edit" data-id="${esc(p.id)}">${esc(t('act.edit'))}</button>
+            <button type="button" class="menu_button lp-btn lp-mini lp-danger" data-action="pref-delete" data-id="${esc(p.id)}">${esc(t('anniv.remove'))}</button>
+          </li>`;
+    }).join('');
+    const hasChar = Boolean(ctx()?.characters?.[ctx()?.characterId]?.avatar);
+    return `
+      <div class="lp-note">${esc(t('prefs.desc'))}</div>
+      ${checkbox('prefs.auto', t('prefs.auto'))}
+      <div class="lp-note">${esc(t('prefs.autoNote'))}</div>
+      ${checkbox('prefs.inject', t('prefs.inject'))}
+      ${hasChar ? `
+        ${rows ? `<ul class="lp-pref-list" data-role="prefs">${rows}</ul>` : `<div class="lp-note" data-role="prefs">${esc(t('prefs.none'))}</div>`}
+        <div class="lp-row"><input type="text" class="text_pole lp-grow" data-role="pref-new" placeholder="${esc(t('prefs.addPh'))}" aria-label="${esc(t('prefs.add'))}">
+          <button type="button" class="menu_button lp-btn" data-action="pref-add">${esc(t('prefs.add'))}</button></div>` : `<div class="lp-note">${esc(t('prefs.noChar'))}</div>`}`;
 }
 
 // ===== 自訂 API／向量模型：同一種卡片 =====
@@ -3179,12 +3308,83 @@ function onClick(e) {
             s0.diary = { ...(s0.diary ?? {}), style };
             saveSettings();
             setSources(view.old.ids);
-            const n = queueDays(r.days.filter((d) => d.date && d.ai).map((d) => d.date), { style });
+            const dates = r.days.filter((d) => d.date && d.ai).map((d) => d.date);
+            const only = { ...view.old.only };
+            // 已經用別的聊天寫好的日子先跳過，問使用者（不然會被這次讀到的蓋掉）。
+            const conflicts = conflictDays(dates, only);
+            const n = queueDays(dates.filter((d) => !conflicts.includes(d)), { style, only });
             view.diary.show = true;
-            view.diary.msg = n ? t('diary.queued', { n }) : t('diary.allDone');
+            view.diary.conflicts = conflicts;
+            view.diary.replace = { style, only };
+            view.diary.msg = n ? t('diary.queued', { n }) : (conflicts.length ? '' : t('diary.allDone'));
             render();
             return;
         }
+        case 'diary-replace': {
+            const { style, only } = view.diary.replace ?? { style: diaryStyle(), only: {} };
+            // 照這次讀的：沒選「只用哪個」的日子就用這次讀到的全部（不沿用上次選的那個聊天）。
+            const pick = Object.fromEntries(view.diary.conflicts.map((date) => [date, only[date] ?? '']));
+            const n = queueDays(view.diary.conflicts, { style, only: pick, rewrite: true });
+            view.diary.conflicts = [];
+            view.diary.msg = n ? t('diary.queued', { n }) : t('diary.needReload');
+            render();
+            return;
+        }
+        case 'diary-conflicts-ok':
+            view.diary.conflicts = [];
+            render();
+            return;
+        case 'outline-write':
+            queueOutline();
+            view.diary.msg = t('diary.queued', { n: 1 });
+            render();
+            return;
+        case 'outline-edit':
+            view.diary.outlineEdit = true;
+            render();
+            panel.querySelector('[data-role="outline-edit"]')?.focus();
+            return;
+        case 'outline-cancel':
+            view.diary.outlineEdit = false;
+            render();
+            return;
+        case 'outline-save':
+            if (!editOutline(panel.querySelector('[data-role="outline-edit"]')?.value ?? '')) return;
+            view.diary.outlineEdit = false;
+            render();
+            return;
+        case 'outline-delete':
+            deleteOutline();
+            render();
+            return;
+        case 'pref-add': {
+            const input = panel.querySelector('[data-role="pref-new"]');
+            if (addPref(input?.value ?? '')) render();
+            else if (input) input.focus();
+            return;
+        }
+        case 'pref-toggle':
+            togglePref(btn.dataset.id);
+            render();
+            return;
+        case 'pref-edit':
+            view.prefs.editing = btn.dataset.id;
+            render();
+            panel.querySelector('[data-role="pref-edit"]')?.focus();
+            return;
+        case 'pref-cancel':
+            view.prefs.editing = null;
+            render();
+            return;
+        case 'pref-save':
+            if (!editPref(btn.dataset.id, panel.querySelector('[data-role="pref-edit"]')?.value ?? '')) return;
+            view.prefs.editing = null;
+            render();
+            return;
+        case 'pref-delete':
+            removePref(btn.dataset.id);
+            render();
+            return;
         case 'diary-pause':
             pauseDiary();
             render();
@@ -3232,6 +3432,13 @@ function onClick(e) {
         case 'diary-rewrite':
         case 'diary-restyle': {
             const style = btn.dataset.action === 'diary-restyle' ? btn.dataset.style : undefined;
+            // 這天是用別的聊天寫的、這次沒讀到那個聊天：先問，不直接蓋掉。
+            if (conflictDays([btn.dataset.date]).length) {
+                view.diary.conflicts = [btn.dataset.date];
+                view.diary.replace = { style: style ?? diaryStyle(), only: {} };
+                render();
+                return;
+            }
             const n = queueDays([btn.dataset.date], { rewrite: true, ...(style ? { style } : {}) });
             view.diary.msg = n ? t('diary.queued', { n }) : t('diary.needReload');
             render();
@@ -3834,6 +4041,10 @@ function onChange(e) {
         render();
         return;
     }
+    if (el.dataset?.role === 'old-only') {
+        view.old.only[el.dataset.date] = el.value;
+        return;
+    }
     if (el.dataset?.role === 'diary-keep') {
         const k = Number(el.dataset.k);
         if (el.checked) view.diary.keep.add(k);
@@ -3901,6 +4112,10 @@ function onChange(e) {
         if (test && out) out.textContent = cleanForSummary(test.value);
     }
     hooks.onSettingChanged(path, value);
+    if (path.startsWith('diary.')) {
+        const info = panel.querySelector('[data-role="diary-send-info"]');
+        if (info) info.textContent = diarySendInfo();
+    }
     if (el.dataset.rerender !== undefined) {
         render();
     } else if (el.dataset.kind === 'number') {
@@ -4006,6 +4221,11 @@ async function fillPreview() {
     const row = (label, value, cls = '') => `<div class="lp-preview-row${cls}"><span>${esc(label)}</span><span class="lp-preview-num">${esc(value)}</span></div>`;
     const sm = p.parts.summaries;
     const rows = [];
+    if (p.parts.prefs?.count) rows.push(row(t('preview.prefs', { n: p.parts.prefs.count }), `${n(p.tokens.prefs)} tokens`));
+    if (p.parts.diary?.text) {
+        const d = p.parts.diary;
+        rows.push(row(t('preview.diary', { recent: d.recent.length, recalled: d.recalled.length }) + (d.outline ? t('preview.diaryOutline') : ''), `${n(p.tokens.diary)} tokens`));
+    }
     if (sm.recap) rows.push(row(t('preview.recap'), `${n(p.tokens.recap)} tokens`));
     if (sm.volumes) rows.push(row(t('preview.volumes', { n: sm.volumes }), `${n(p.tokens.volumes)} tokens`));
     if (sm.chapters) rows.push(row(t('preview.chapters', { n: sm.chapters }), `${n(p.tokens.chapters)} tokens`));

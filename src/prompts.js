@@ -6,7 +6,7 @@
 import { currentLocale } from './i18n.js';
 import { getSettings, saveSettings } from './settings.js';
 
-export const TEMPLATE_KEYS = ['l1', 'l2', 'l3', 'recap', 'catchup', 'audit', 'diary', 'diaryConcise', 'diaryCompress'];
+export const TEMPLATE_KEYS = ['l1', 'l2', 'l3', 'recap', 'catchup', 'audit', 'diary', 'diaryConcise', 'diaryCompress', 'diaryOutline'];
 
 export const TEMPLATE_VARS = {
     l1: ['{{char}}', '{{user}}', '{{length}}', '{{content}}', '{{rules}}', '{{previous}}', '{{notes}}', '{{format}}'],
@@ -18,6 +18,7 @@ export const TEMPLATE_VARS = {
     diary: ['{{char}}', '{{user}}', '{{date}}', '{{part}}', '{{length}}', '{{max}}', '{{content}}'],
     diaryConcise: ['{{char}}', '{{user}}', '{{date}}', '{{part}}', '{{length}}', '{{max}}', '{{content}}'],
     diaryCompress: ['{{char}}', '{{user}}', '{{date}}', '{{length}}', '{{max}}', '{{points}}', '{{diary}}', '{{style}}'],
+    diaryOutline: ['{{char}}', '{{user}}', '{{length}}', '{{max}}', '{{days}}'],
 };
 
 
@@ -169,6 +170,20 @@ const DEFAULTS = {
 
 只輸出下面格式的 JSON，不要輸出其他文字：
 {"summary":"日記內容"}`,
+        diaryOutline: `你是 {{char}} 和 {{user}} 的戀人手帳的記錄員。
+
+下面是兩人一路以來每一天的重點（照日期排）。請寫一段很短的大綱，讓 {{char}} 一看就知道兩人一路走過什麼：用繁體中文、第三人稱，長度大約 {{length}} 字，最多不要超過 {{max}} 字。
+
+- 照時間順序，分成幾個階段寫（例如「剛認識的時候」「同居以後」），每個階段一兩句，標出大概的日期或月份。
+- 只留真正重要的：關係的變化（稱呼、告白、同居、訂婚…）、重大的事件、還沒解決的事、一直延續的約定。
+- 日常的小事和細節不用寫，之後聊到時會另外找出那天的日記。
+- 只寫下面有的事，不要自己補。
+
+每天的重點：
+{{days}}
+
+只輸出下面格式的 JSON，不要輸出其他文字：
+{"summary":"大綱內容"}`,
     },
     'zh-CN': {
         l1: `你是故事记录员，负责替 {{char}} 和 {{user}} 的故事做记录。
@@ -317,6 +332,20 @@ const DEFAULTS = {
 
 只输出下面格式的 JSON，不要输出其他文字：
 {"summary":"日记内容"}`,
+        diaryOutline: `你是 {{char}} 和 {{user}} 的恋人手帐的记录员。
+
+下面是两人一路以来每一天的重点（照日期排）。请写一段很短的大纲，让 {{char}} 一看就知道两人一路走过什么：用简体中文、第三人称，长度大约 {{length}} 字，最多不要超过 {{max}} 字。
+
+- 照时间顺序，分成几个阶段写（例如「刚认识的时候」「同居以后」），每个阶段一两句，标出大概的日期或月份。
+- 只留真正重要的：关系的变化（称呼、告白、同居、订婚…）、重大的事件、还没解决的事、一直延续的约定。
+- 日常的小事和细节不用写，之后聊到时会另外找出那天的日记。
+- 只写下面有的事，不要自己补。
+
+每天的重点：
+{{days}}
+
+只输出下面格式的 JSON，不要输出其他文字：
+{"summary":"大纲内容"}`,
     },
     en: {
         l1: `You are the story's record keeper for {{char}} and {{user}}.
@@ -460,6 +489,20 @@ Original entry:
 
 Output only JSON in the format below, nothing else:
 {"summary":"diary entry"}`,
+        diaryOutline: `You keep the lovers' journal of {{char}} and {{user}}.
+
+Below are the key points of each day so far, in date order. Write a very short outline so that {{char}} can see at a glance what the two have been through: in English, third person, about {{length}} words, no more than {{max}}.
+
+- In time order, split into a few stages (for example "when they first met", "after moving in together"), one or two sentences each, with the rough date or month.
+- Keep only what really matters: changes in the relationship (names they call each other, confessions, moving in, engagement…), major events, unresolved matters, promises that carry on.
+- Leave out everyday details; the diary of that day will be looked up when it comes up.
+- Only write what is below; do not add anything.
+
+Key points of each day:
+{{days}}
+
+Output only JSON in this format, nothing else:
+{"summary":"the outline"}`,
     },
 };
 

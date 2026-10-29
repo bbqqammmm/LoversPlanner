@@ -5,7 +5,10 @@
 //   { date, parts: [{ part, total, floors, summary, points, time, location, at, by, style, error? }],
 //     compressed: { summary, at, by, ratio, keep, from } | null, use: 'original' | 'compressed' }
 // 寫日記要用到舊聊天的內容（oldchats.dayParts），重新整理後要再讀一次舊聊天；再壓一次只用日記本身。
-// 送給角色的方式是第三階段。
+// 第三階段（v0.13.36）：
+//   好幾個聊天合成一條時間線：每天記著是哪幾個聊天寫的（chats）；同一天有好幾個聊天時可以只用其中一個（only）；
+//   已經用別的聊天寫好的日子不會被蓋掉（conflictDays，要使用者同意才重寫）。
+//   大綱（outline）：整段日記的很短的大綱，送給角色（diarysend.js）。
 
 import { ctx, LOG_PREFIX, MODULE } from './util.js';
 import { getSettings } from './settings.js';
@@ -14,7 +17,9 @@ import { getTemplate } from './prompts.js';
 import { generateText, modelLabel } from './llm.js';
 import { parseJsonLenient } from './json.js';
 import { ApiError } from './api/custom.js';
-import { dayParts } from './oldchats.js';
+import { dayChats, dayParts } from './oldchats.js';
+import { hashText } from './chat.js';
+import { addPrefsFromModel } from './prefs.js';
 import { dropTasks, enqueueTask, queuedTasks } from './summarize.js';
 
 export const TASK = 'diary';
@@ -87,7 +92,7 @@ export function buildDiaryPrompt(date, p, style = diaryStyle()) {
         char, user, date,
         part: p.total > 1 ? t('diary.partLabel', { k: p.part, n: p.total }) : '',
         length, max: Math.round(length * 1.25), content: partContent(p.units),
-    });
+    }) + (getSettings().prefs?.auto ? `\n\n${t('prompt.diaryPrefs', { user, char })}` : '');
     return { prompt, length, floors };
 }
 
@@ -109,8 +114,8 @@ function parseDiary(raw) {
 }
 
 /** 寫一段（隊伍裡跑）。讀不到內容（重新整理過）就記成失敗，請使用者再讀一次舊聊天。 */
-async function writePart(date, partNo, style) {
-    const p = dayParts(date).find((x) => x.part === partNo);
+async function writePart(date, partNo, style, only = '') {
+    const p = dayParts(date, only).find((x) => x.part === partNo);
     const rec = record(true);
     const day = rec.days[date] ?? (rec.days[date] = { date, parts: [], compressed: null, use: 'original' });
     if (!p) {
@@ -129,14 +134,21 @@ async function writePart(date, partNo, style) {
             time: String(v.time ?? ''), location: String(v.location ?? ''),
             at: Date.now(), by: modelLabel(), style,
         };
+        // 你的偏好（v0.13.36）：舊聊天 OOC 裡的長期要求。
+        addPrefsFromModel(v.prefs, 'diary');
         // 改了內容，舊的壓縮版就不對了。
         day.compressed = null;
         day.use = 'original';
+        day.chats = dayChats(date, only);
+        if (only) day.only = only;
+        else delete day.only;
     } catch (e) {
         console.warn(LOG_PREFIX, '寫日記失敗', date, partNo, e);
         day.parts[partNo - 1] = { ...(day.parts[partNo - 1] ?? { part: partNo, total: p.total, floors }), error: e?.message || String(e) };
     }
     saveMeta();
+    // 這批都寫完了（隊伍裡只剩正在跑的這段）、還沒有大綱：順手寫一份（只寫一次；之後日記改了，提醒使用者重寫）。
+    if (queuedTasks(TASK) <= 1 && getSettings().diary?.outline !== false && !rec.outline?.text && listDiary().some((d) => d.original)) queueOutline();
 }
 
 /** 一天寫好了沒有：'done' | 'partial' | 'error' | 'none'。 */
@@ -150,19 +162,39 @@ export function dayState(date) {
 }
 
 /**
+ * 這幾天裡，已經用「別的聊天」寫好日記的日子（照這次讀到的重寫會蓋掉它們）。
+ * only：{ [date]: 只用哪個聊天 }。以前的日記沒記是哪個聊天寫的：段數不一樣才算。
+ */
+export function conflictDays(dates, only = {}) {
+    const days = record(false)?.days ?? {};
+    return dates.filter((date) => {
+        const day = days[date];
+        if (!day?.parts?.some((p) => p?.summary)) return false;
+        const now = dayChats(date, only[date] ?? '');
+        if (Array.isArray(day.chats) && day.chats.length) return day.chats.some((id) => !now.includes(id));
+        const total = day.parts[0]?.total ?? day.parts.length;
+        return dayParts(date, only[date] ?? '').length !== total;
+    });
+}
+
+/**
  * 把這幾天排進隊伍。rewrite：已經寫好的也重寫（例如換寫法）；否則只寫還沒寫的段。
+ * only：{ [date]: 只用哪個聊天 }（沒給就沿用那天上次的選擇）。
  * 回傳排了幾段。
  */
-export function queueDays(dates, { style = diaryStyle(), rewrite = false } = {}) {
+export function queueDays(dates, { style = diaryStyle(), rewrite = false, only = {} } = {}) {
     let n = 0;
     const rec = record(true);
     rec.style = style;
     for (const date of dates) {
-        const parts = dayParts(date);
+        const pick = only[date] ?? rec.days?.[date]?.only ?? '';
+        const parts = dayParts(date, pick);
+        // 選的聊天和上次不一樣：整天重寫（不然會留著另一個聊天寫的段）。
+        const changed = (rec.days?.[date]?.only ?? '') !== pick;
         for (const p of parts) {
             const have = rec.days?.[date]?.parts?.[p.part - 1];
-            if (!rewrite && have?.summary && !have.error && have.total === p.total) continue;
-            if (enqueueTask(() => writePart(date, p.part, style), { label: TASK })) n++;
+            if (!rewrite && !changed && have?.summary && !have.error && have.total === p.total) continue;
+            if (enqueueTask(() => writePart(date, p.part, style, pick), { label: TASK })) n++;
         }
     }
     return n;
@@ -200,6 +232,7 @@ export function listDiary() {
             compressed: d.compressed ?? null, use: d.compressed?.summary && d.use === 'compressed' ? 'compressed' : 'original',
             chars: dayText(d).length, errors: (d.parts ?? []).filter((p) => p?.error).map((p) => p.error),
             style: d.parts?.find((p) => p?.style)?.style ?? '',
+            chats: Array.isArray(d.chats) ? d.chats : [], only: d.only ?? '',
         };
     }).sort((a, b) => (a.date ? (b.date ? a.date.localeCompare(b.date) : -1) : 1));
 }
@@ -287,6 +320,78 @@ export function editDay(date, text) {
         day.compressed = null;
         day.use = 'original';
     }
+    saveMeta();
+    return true;
+}
+
+// ===== 大綱（v0.13.36）：整段日記很短的大綱，送給角色 =====
+
+/** 日記現在的樣子（哪幾天、每段什麼時候寫的）；大綱寫好後日記變了就算舊了。 */
+function outlineBasis() {
+    return hashText(listDiary().filter((d) => d.original).map((d) => `${d.date}:${d.parts.map((p) => p?.at ?? 0).join(',')}`).join('|'));
+}
+
+/** 大綱的目標字數：一天約 12 字，200～800。 */
+export function outlineLength(days = listDiary().filter((d) => d.original).length) {
+    return Math.max(200, Math.min(800, days * 12));
+}
+
+/** 大綱：{ text, at, by, stale, manual } 或 null。 */
+export function diaryOutline() {
+    const o = record(false)?.outline;
+    if (!o?.text) return null;
+    return { ...o, stale: o.basis !== outlineBasis() };
+}
+
+/** 上次寫大綱失敗的原因（沒有就是空字串）。 */
+export function outlineError() {
+    return record(false)?.outline?.error ?? '';
+}
+
+export function buildOutlinePrompt() {
+    const days = listDiary().filter((d) => d.original);
+    const lines = days.map((d) => {
+        const major = d.points.filter((p) => p.level === 'major').map((p) => p.text);
+        const what = major.length ? major.join('；') : dayText(d).replace(/\s+/g, ' ').slice(0, 80);
+        return `${d.date || t('old.noDate')}：${what}`;
+    });
+    const length = outlineLength(days.length);
+    const { char, user } = names();
+    const prompt = fill(getTemplate('diaryOutline'), { char, user, length, max: Math.round(length * 1.25), days: lines.join('\n') });
+    return { prompt, length, days: days.length };
+}
+
+/** 寫大綱（排進隊伍）。 */
+export function queueOutline() {
+    return enqueueTask(async () => {
+        const rec = record(true);
+        const { prompt, length, days } = buildOutlinePrompt();
+        if (!days) return;
+        try {
+            const raw = await generateText(prompt, { maxTokens: Math.max(1024, length * 3), purpose: 'diary' });
+            const v = parseDiary(raw);
+            rec.outline = { text: v.summary.trim(), at: Date.now(), by: modelLabel(), basis: outlineBasis() };
+        } catch (e) {
+            console.warn(LOG_PREFIX, '寫大綱失敗', e);
+            rec.outline = { ...(rec.outline ?? {}), error: e?.message || String(e) };
+        }
+        saveMeta();
+    }, { label: TASK });
+}
+
+export function editOutline(text) {
+    const value = String(text ?? '').trim();
+    const rec = record(false);
+    if (!rec || !value) return false;
+    rec.outline = { text: value, at: Date.now(), by: 'manual', basis: outlineBasis(), manual: true };
+    saveMeta();
+    return true;
+}
+
+export function deleteOutline() {
+    const rec = record(false);
+    if (!rec?.outline) return false;
+    delete rec.outline;
     saveMeta();
     return true;
 }

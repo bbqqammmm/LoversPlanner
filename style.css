@@ -1684,6 +1684,18 @@ html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
 .lp-diary-points ul, .lp-diary-keep { margin: 4px 0 0; padding-left: 1.2em; line-height: 1.6; }
 .lp-diary-keep { list-style: none; padding-left: 0; }
 .lp-diary-edit { width: 100%; min-height: 10em; }
+/* 日記第三階段（v0.13.36）：送給角色、大綱、重疊的日子、你的偏好 */
+.lp-diary-send, .lp-diary-outline { display: flex; flex-direction: column; gap: 6px; }
+.lp-diary-send .lp-row { flex-wrap: wrap; gap: 6px; align-items: center; }
+.lp-diary-send .lp-num { width: 4.5em; }
+.lp-diary-outline .lp-diary-text { max-height: 14em; overflow-y: auto; }
+.lp-diary-overlaps ul { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.lp-diary-overlaps li { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lp-diary-overlaps .lp-select { max-width: 100%; }
+.lp-pref-list { list-style: none; margin: 4px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-pref { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border: 1px solid var(--lp-border); border-radius: 8px; background: var(--lp-card); }
+.lp-pref-text { overflow-wrap: anywhere; }
+.lp-pref-off .lp-pref-text { opacity: 0.55; text-decoration: line-through; }
 
 /* ===== 好幾組 API（v0.13.35） ===== */
 .lp-profiles, .lp-routes { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--lp-border); }

@@ -9,6 +9,31 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.36',
+        new: {
+            'zh-TW': [
+                '📨 日記會送給角色了：最近 3 天（可以改）送全文；更早的平常不送，聊到相關的事才找回那一段；另外有一份很短的大綱每回都送。設定在摘要分頁的「📖 日記」裡。',
+                '🧵 好幾個舊聊天一起整理時，同一天有兩個聊天寫到（像 IF 線），可以選只用哪一個；已經用別的聊天寫好的日子不會被蓋掉，會先問你。',
+                '💬 你的偏好：OOC 裡對角色的長期要求（例如「希望他更主動」）可以記成一張清單，每回提醒角色。可以自己寫，也可以打開自動記下（預設關）。在設定 › 你的偏好。',
+            ],
+            'zh-CN': [
+                '📨 日记会发送给角色了：最近 3 天（可以改）送全文；更早的平常不送，聊到相关的事才找回那一段；另外有一份很短的大纲每回都送。设置在摘要分页的「📖 日记」里。',
+                '🧵 好几个旧聊天一起整理时，同一天有两个聊天写到（像 IF 线），可以选只用哪一个；已经用别的聊天写好的日子不会被盖掉，会先问你。',
+                '💬 你的偏好：OOC 里对角色的长期要求（例如「希望他更主动」）可以记成一张清单，每回提醒角色。可以自己写，也可以打开自动记下（默认关）。在设置 › 你的偏好。',
+            ],
+            en: [
+                '📨 Diaries are now sent to the character: the last 3 days (adjustable) in full; older days only when something related comes up; plus a very short outline every turn. Settings are in "📖 Diary" on the Summaries tab.',
+                '🧵 When several old chats are read together and a day appears in two of them (like an IF line), you can choose which one to use; days already written from another chat are not overwritten without asking.',
+                '💬 Your preferences: lasting OOC requests to the character (e.g. "take more initiative") can be kept as a list the character is reminded of every turn. Write them yourself or turn on picking them up automatically (off by default). In Settings › Your preferences.',
+            ],
+        },
+        fix: {
+            'zh-TW': ['舊聊天整理：新的一天開頭那句話以前會算進前一天，現在算進當天。'],
+            'zh-CN': ['旧聊天整理：新的一天开头那句话以前会算进前一天，现在算进当天。'],
+            en: ['Old chats: the first line of a new day used to be counted in the day before; it now belongs to its own day.'],
+        },
+    },
+    {
         v: '0.13.35',
         new: {
             'zh-TW': ['🔀 可以多存幾組 API，再選每種工作用哪一組（例如單層摘要用便宜的、壓縮和日記再壓一次用細膩的），還能設定「失敗時改用」另一組自動再試一次。在設定 › 模型來源。'],

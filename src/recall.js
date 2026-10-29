@@ -4,6 +4,7 @@
 //   記事：主角的人物卡、手動釘選的一定送；名字有出現的、最近幾層出場或變動過的也送；
 //         有設定向量模型的話，再補上意思最接近的幾條。
 //   回憶：已經被壓縮成章的舊樓層，挑幾層相關的單層摘要一起送（章總結只有大概，細節在單層裡）。
+//   以前的日記（v0.13.36）：最近幾天以外的日記，挑幾段相關的一起送（找法和回憶一樣）。
 // 沒設定向量模型、或向量出錯時，只用關鍵字（名字、地點）。
 
 import { ctx, LOG_PREFIX } from './util.js';
@@ -17,6 +18,7 @@ import { ApiError } from './api/custom.js';
 import { getVectors } from './vectors.js';
 import { errorText } from './errors.js';
 import { cleanForSummary } from './filter.js';
+import { diaryPlan } from './diarysend.js';
 
 /** 拿來比對向量的「最近原文」最多取多少字（取最後面的）。 */
 const QUERY_CHARS = 1500;
@@ -98,6 +100,24 @@ function recentActivity(limit, n) {
     return { cast, touched };
 }
 
+/** 拿來比對的名字：人物、物件（主角除外，他們到處都會出現）。 */
+function entityAliases() {
+    const leads = leadAliases();
+    const roles = leadRoles();
+    const out = new Set();
+    for (const n of getNotes().notes.values()) {
+        if ((n.type === 'character' || n.type === 'item') && !isLead(n, leads, roles)) aliasesOf(n.data.name).forEach((a) => out.add(a));
+    }
+    return out;
+}
+
+/** 一段文字和最近原文共同出現的名字、地點有幾個。 */
+function sharedCount(line, location, entities, text) {
+    const lower = line.toLowerCase();
+    const places = isTracked('location') ? aliasesOf(location) : [];
+    return [...new Set([...entities, ...places])].filter((a) => lower.includes(a) && text.includes(a)).length;
+}
+
 let lastVectorError = { at: 0, text: '' };
 
 function vectorConfig() {
@@ -120,6 +140,7 @@ function withTimeout(promise, ms) {
  *   notes: Map<id, { reason: 'pinned'|'lead'|'mention'|'recent'|'vector', score? }>,
  *   total: 進行中的記事總數（有勾選記錄的類型）,
  *   memories: [{ index, line, reason: 'keyword'|'vector', score, shared }]（依樓層順序）,
+ *   diary: [{ key, date, part, total, line, reason, score, shared }]（以前的日記，依日期順序）,
  *   vector: 'off' | 'ok' | 'error', error: 錯誤訊息,
  * }
  * preview：大視窗預覽用；向量剛出錯時先不重試。
@@ -129,7 +150,7 @@ export async function selectRelevant({ keepFrom, limit = getChat().length, previ
     const r = s.recall ?? {};
     const notes = [...getNotes().notes.values()].filter((n) => n.state !== 'done' && isTracked(n.type));
     const text = scanText(keepFrom, limit).toLowerCase();
-    const out = { filtered: Boolean(r.notes), notes: new Map(), total: notes.length, memories: [], vector: 'off', error: '', fetched: 0 };
+    const out = { filtered: Boolean(r.notes), notes: new Map(), total: notes.length, memories: [], diary: [], vector: 'off', error: '', fetched: 0 };
 
     // ===== 記事：一定送的、名字有出現的、最近的 =====
     const rest = [];
@@ -150,38 +171,38 @@ export async function selectRelevant({ keepFrom, limit = getChat().length, previ
 
     // ===== 回憶：已經壓縮成章的舊樓層 =====
     const candidates = [];
+    let entities = null;
     if (r.memory) {
         const st = structure();
-        const leads = leadAliases();
-        const roles = leadRoles();
-        // 拿來比對的名字：人物、物件（主角除外，他們到處都會出現）和這些舊樓層的地點。
-        const entities = new Set();
-        for (const n of getNotes().notes.values()) {
-            if ((n.type === 'character' || n.type === 'item') && !isLead(n, leads, roles)) aliasesOf(n.data.name).forEach((a) => entities.add(a));
-        }
+        entities = entityAliases();
         for (const i of [...st.covered].sort((a, b) => a - b)) {
             if (i >= limit) continue;
             const e = getEntry(i);
             if (e?.status !== 'ok' || !e.summary) continue;
             const line = sceneLine(e);
-            const lower = line.toLowerCase();
-            const places = isTracked('location') ? aliasesOf(e.location) : [];
-            const shared = [...new Set([...entities, ...places])].filter((a) => lower.includes(a) && text.includes(a)).length;
-            candidates.push({ index: i, line, shared, score: 0, reason: null });
+            candidates.push({ index: i, line, shared: sharedCount(line, e.location, entities, text), score: 0, reason: null });
         }
+    }
+
+    // ===== 以前的日記：最近幾天以外的 =====
+    const diaryTopK = Math.max(0, Math.floor(Number(s.diary?.recallTopK) || 0));
+    const diaryCands = [];
+    if (diaryTopK) {
+        entities ??= entityAliases();
+        for (const u of diaryPlan().older) diaryCands.push({ ...u, shared: sharedCount(u.line, u.location, entities, text) });
     }
 
     // ===== 向量 =====
     const cfg = vectorConfig();
     let sims = null;
-    if (cfg && text.trim() && (rest.length || candidates.length)) {
+    if (cfg && text.trim() && (rest.length || candidates.length || diaryCands.length)) {
         if (preview && Date.now() - lastVectorError.at < PREVIEW_BACKOFF_MS) {
             out.vector = 'error';
             out.error = lastVectorError.text;
         } else {
             try {
                 const query = text.slice(-QUERY_CHARS);
-                const inputs = [query, ...rest.map(noteLine), ...candidates.map((c) => c.line)];
+                const inputs = [query, ...rest.map(noteLine), ...candidates.map((c) => c.line), ...diaryCands.map((c) => c.line)];
                 const { vectors, fetched } = await withTimeout(getVectors(cfg, inputs), VECTOR_TIMEOUT_MS);
                 sims = vectors.slice(1).map((v) => cosine(vectors[0], v));
                 out.fetched = fetched;
@@ -218,6 +239,17 @@ export async function selectRelevant({ keepFrom, limit = getChat().length, previ
             .map((c) => ({ index: c.index, line: c.line, shared: c.shared, score: sims ? c.sim : null, reason: sims && c.sim >= threshold ? 'vector' : 'keyword' }));
         out.memories = picked.sort((a, b) => a.index - b.index);
     }
+
+    if (diaryCands.length) {
+        const offset = rest.length + candidates.length;
+        out.diary = diaryCands
+            .map((c, k) => ({ ...c, sim: sims ? sims[offset + k] : 0 }))
+            .filter((c) => c.shared > 0 || (sims && c.sim >= threshold))
+            .sort((a, b) => (sims ? (b.sim + b.shared * KEYWORD_BONUS) - (a.sim + a.shared * KEYWORD_BONUS) : b.shared - a.shared) || b.date.localeCompare(a.date))
+            .slice(0, diaryTopK)
+            .map(({ key, date, part, total, line, shared, sim }) => ({ key, date, part, total, line, shared, score: sims ? sim : null, reason: sims && sim >= threshold ? 'vector' : 'keyword' }))
+            .sort((a, b) => a.date.localeCompare(b.date) || a.part - b.part);
+    }
     return out;
 }
 
@@ -231,6 +263,7 @@ export async function warmVectors() {
         const e = isAiMessage(chat[i]) ? getEntry(i) : null;
         if (e?.status === 'ok' && e.summary) texts.push(sceneLine(e));
     }
+    if (Number(getSettings().diary?.recallTopK) > 0) texts.push(...diaryPlan().older.map((u) => u.line));
     const { fetched } = await getVectors(cfg, texts);
     return { total: texts.length, fetched };
 }

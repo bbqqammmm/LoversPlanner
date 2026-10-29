@@ -16,10 +16,11 @@ let lastUnits = new Map();
 
 /**
  * 某一天切好的段落：[{ part, total, units }]（每段最多 PART_FLOORS 個 AI 樓層，從使用者發言前切開）。
+ * only：同一天好幾個聊天都寫到時（可能是 IF 線），只用這個聊天的（v0.13.36）；空的＝都用。
  * 沒讀過（或重新整理過）就回傳空陣列。
  */
-export function dayParts(date) {
-    const units = lastUnits.get(date) ?? [];
+export function dayParts(date, only = '') {
+    const units = (lastUnits.get(date) ?? []).filter((u) => !only || u.chat === only);
     const ai = units.filter((u) => u.ai).length;
     if (!ai) return [];
     const total = Math.max(1, Math.ceil(ai / PART_FLOORS));
@@ -42,6 +43,13 @@ export function dayParts(date) {
 
 export function hasLoadedDays() {
     return lastUnits.size > 0;
+}
+
+/** 這一天讀到的內容來自哪幾個聊天（照讀的順序）。only 同 dayParts。 */
+export function dayChats(date, only = '') {
+    const out = [];
+    for (const u of lastUnits.get(date) ?? []) if (u.ai && u.chat && (!only || u.chat === only) && !out.includes(u.chat)) out.push(u.chat);
+    return out;
 }
 
 /** 一段最多幾個 AI 樓層（太長的一天切成幾段寫日記）。 */
@@ -136,6 +144,18 @@ export function analyzeChats(loaded) {
         const removed = new Set(meta.calendar?.removed ?? []);
         const info = { id, ai: 0, firstDate: '', lastDate: '' };
         let cur = '';
+        // 使用者發言先放著，算進下一層 AI 回覆的那一天（v0.13.36：以前算進前一天，新的一天開頭那句會跑到昨天的日記）。
+        let waiting = [];
+        const flush = () => {
+            const d = day(cur);
+            for (const u of waiting) {
+                d.user++;
+                d.rawChars += u.text.length;
+                d.units.push(u);
+                d.sendChars += u.text.length;
+            }
+            waiting = [];
+        };
         for (const m of messages) {
             if (!isAiMessage(m) && !isUserMessage(m)) continue;
             const key = `${m.send_date ?? ''}|${hashText(m.mes ?? '')}`;
@@ -151,16 +171,14 @@ export function analyzeChats(loaded) {
                 if (own || h) cur = own || h;
                 if (!own && h) totals.horae++;
             }
-            const d = day(cur);
             const text = cleanForSummary(m.mes ?? '');
             const raw = text.length;
             if (isUserMessage(m)) {
-                d.user++;
-                d.rawChars += raw;
-                d.units.push({ ai: false, name: m.name ?? '', text });
-                d.sendChars += raw;
+                waiting.push({ ai: false, name: m.name ?? '', text, chat: id });
                 continue;
             }
+            flush();
+            const d = day(cur);
             info.ai++;
             totals.ai++;
             if (cur) {
@@ -182,7 +200,7 @@ export function analyzeChats(loaded) {
             // 寫日記用：有單層摘要（不是粗略補建）就用摘要，沒有就用原文。
             const time = e?.time || (m?.horae_meta ?? m?.extra?.horae_meta)?.timestamp?.story_time || '';
             const summary = e?.status === 'ok' && !e.coarse && e.summary ? String(e.summary) : '';
-            d.units.push({ ai: true, name: m.name ?? '', text, summary, time: String(time) });
+            d.units.push({ ai: true, name: m.name ?? '', text, summary, time: String(time), chat: id });
             d.sendChars += summary ? summary.length : raw;
             if (e?.status === 'ok' && (e.summary || e.coarse)) {
                 d.summarized++;
@@ -199,6 +217,7 @@ export function analyzeChats(loaded) {
                 events.push(plainEvent(ev, date, `${id}#${evKey}`));
             });
         }
+        flush();
         for (const ev of meta.calendar?.manual ?? []) {
             if (EVENT_TYPES.includes(ev?.type) && ev.date) events.push(plainEvent(ev, ev.date, `${id}#${ev.id}`));
         }

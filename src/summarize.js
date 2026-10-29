@@ -19,6 +19,7 @@ import { parseJsonLenient } from './json.js';
 import { cleanForSummary, extractRef, extractTheater } from './filter.js';
 import { calendarOn, cleanEvents, normDate } from './calendar.js';
 import { cleanKeepsakes, memoriesOn } from './memories.js';
+import { addPrefsFromModel } from './prefs.js';
 import {
     chatKey, floorSource, floorStatus, getChat, getEntry, isAiMessage, lastAiIndex, saveChatSoon, setEntry,
 } from './chat.js';
@@ -369,6 +370,7 @@ export function parseL1(raw) {
             date: obj.date ?? '',
             events: obj.events ?? [],
             keepsakes: obj.keepsakes ?? [],
+            prefs: Array.isArray(obj.prefs) ? obj.prefs : [],
             repaired: parsed.repaired,
         };
     }
@@ -462,6 +464,9 @@ async function summarizeFloor(index) {
             // 回覆被截斷、是救回來的：摘要或記事可能不完整，畫面上會提醒。
             ...(parsed.repaired ? { repaired: true } : {}),
         }, prev));
+        // 你的偏好（v0.13.36）：OOC 裡的長期要求（沒打開「自動記下」時不會加）。
+        const added = addPrefsFromModel(parsed.prefs, 'ooc');
+        if (added.length) toast(t('prefs.added', { text: added.map((p) => p.text).join('；') }), 'info');
     } catch (e) {
         console.warn(LOG_PREFIX, `第 ${index} 層摘要失敗`, e);
         if (!stillHere()) return;

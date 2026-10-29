@@ -19,6 +19,8 @@ import { calendarInjection } from './calendar.js';
 import { markSurfaced, nextPinned, pickReminders, remindersText } from './memories.js';
 import { recordSend } from './sent.js';
 import { cleanForSummary } from './filter.js';
+import { diaryPlan } from './diarysend.js';
+import { prefsText } from './prefs.js';
 
 /** 保留原文的 AI 樓層數（規格：最新 2 個）。 */
 export const KEEP_AI = 2;
@@ -105,7 +107,8 @@ const tokenCache = new Map();
  * 注入內容拆成幾塊（大視窗的「送出預覽」用來分別算 token）：
  * { summaries: { floors, chapters, volumes, text, parts: { volumes, chapters, floors } },
  *   memories: { count, text },
- *   notes: { character|item|promise|todo: { count, total, text } } }
+ *   notes: { character|item|promise|todo: { count, total, text } },
+ *   diary: { outline, recalled, recent, text }（以前的日記，v0.13.36）, prefs: { count, text }（你的偏好） }
  * 前情摘要依故事順序排：有效的卷 → 沒進卷（或卷過期）的有效章 → 沒被有效章涵蓋的單層摘要。
  * selection：recall.js 挑出來的記事和回憶；沒給（或沒在挑）就送全部進行中的記事。
  */
@@ -146,7 +149,17 @@ export function injectionParts(hidden, selection = null) {
     const memories = selection?.memories ?? [];
     const calendar = calendarInjection();
     const reminders = selection?.reminders ?? [];
+    const plan = diaryPlan();
+    const recalled = selection?.diary ?? [];
+    const diaryText = [
+        plan.outline ? `${t('inject.diaryOutline')}\n${plan.outline}` : '',
+        recalled.length ? `${t('inject.diaryRecalled')}\n${recalled.map((x) => x.line).join('\n')}` : '',
+        plan.recent.length ? `${t('inject.diaryRecent')}\n${plan.recent.map((x) => x.line).join('\n')}` : '',
+    ].filter(Boolean).join('\n');
+    const prefs = prefsText();
     return {
+        diary: { outline: plan.outline, recalled, recent: plan.recent, text: diaryText },
+        prefs,
         calendar: { text: calendar },
         reminders: { count: reminders.length, text: remindersText(reminders) },
         summaries: {
@@ -167,10 +180,12 @@ export function buildInjection(hidden, selection = null) {
     return textOf(injectionParts(hidden, selection));
 }
 
-function textOf({ summaries, memories, notes, calendar, reminders }) {
+function textOf({ summaries, memories, notes, calendar, reminders, diary, prefs }) {
     const noteText = Object.values(notes).map((n) => n.text).filter(Boolean).join('\n');
-    if (!summaries.text && !memories.text && !noteText && !calendar?.text && !reminders?.text) return '';
+    if (!summaries.text && !memories.text && !noteText && !calendar?.text && !reminders?.text && !diary?.text && !prefs?.text) return '';
     const parts = [t('inject.intro')];
+    if (prefs?.text) parts.push(`${t('inject.prefs', { user: ctx()?.name1 ?? '' })}\n${prefs.text}`);
+    if (diary?.text) parts.push(`${t('inject.diary')}\n${diary.text}`);
     if (summaries.text) parts.push(`${t('inject.summaries')}\n${summaries.text}`);
     if (memories.text) parts.push(`${t('inject.memories')}\n${memories.text}`);
     if (noteText) parts.push(`${t('inject.notes')}\n${noteText}`);
@@ -201,6 +216,8 @@ export async function previewInjection() {
         floors: await count(sp.floors),
         memories: await count(parts.memories.text),
         calendar: await count(parts.calendar.text),
+        diary: await count(parts.diary.text),
+        prefs: await count(parts.prefs.text),
         total: await count(text),
         hiddenRaw: await count(hiddenRaw),
     };
@@ -395,6 +412,7 @@ export async function interceptor(coreChat, contextSize, abort, type) {
             notesSent: selection?.filtered ? selection.notes.size : null,
             notesTotal: selection?.total ?? 0,
             memories: selection?.memories.length ?? 0,
+            diary: selection?.diary?.length ?? 0,
             vector: selection?.vector ?? 'off',
             reminders: reminders.length,
         });

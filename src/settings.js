@@ -128,9 +128,14 @@ export const DEFAULTS = Object.freeze({
     profiles: [],
     routes: { l1: 'inherit', compress: 'inherit', catchup: 'inherit', diary: 'inherit', diaryCompress: 'inherit', other: 'inherit' },
     fallback: '',
-    prompts: { l1: null, l2: null, l3: null, recap: null, catchup: null, audit: null, diary: null, diaryConcise: null, diaryCompress: null },
+    prompts: { l1: null, l2: null, l3: null, recap: null, catchup: null, audit: null, diary: null, diaryConcise: null, diaryCompress: null, diaryOutline: null },
     // 日記（v0.13.34）：style 'natural' 自然（像回憶，預設）| 'concise' 精簡（像紀錄）。
-    diary: { style: 'natural' },
+    // 送給角色（v0.13.36）：send 開關；recentDays 最近幾天送全文；recallTopK 更早的日記聊到相關的事時最多找回幾段；
+    // outline 寫完日記後自動寫一份大綱，也送給角色。
+    diary: { style: 'natural', send: true, recentDays: 3, recallTopK: 2, outline: true },
+    // 你的偏好（v0.13.36，使用者要求，預設關）：auto 摘要、寫日記時讓模型把 OOC 裡對角色的長期要求記下來；
+    // inject 每回提醒角色。清單存在角色卡自己的資料裡（characters[頭像].prefs），換新聊天也在。
+    prefs: { auto: false, inject: true },
     // 每張角色卡自己的資料，key 是角色卡頭像檔名：{ [avatar]: { scope } }
     characters: {},
     // 設定格式的版本，用來做一次性的轉換。

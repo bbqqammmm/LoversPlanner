@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.47',
+        new: {
+            'zh-TW': ['📖 舊聊天整理的「每一天」清單會標出哪些日子已經寫好日記（✅）、寫了一部分（⏳）或失敗（⚠️）；多了「只選還沒寫的」，預估也不再算已經寫好的。'],
+            'zh-CN': ['📖 旧聊天整理的「每一天」清单会标出哪些日子已经写好日记（✅）、写了一部分（⏳）或失败（⚠️）；多了「只选还没写的」，预估也不再算已经写好的。'],
+            en: ['📖 The day list in Old chats now marks days whose diary is written (✅), partly written (⏳) or failed (⚠️); there is an "Only unwritten" button, and the estimate leaves out days already written.'],
+        },
+    },
+    {
         v: '0.13.46',
         new: {
             'zh-TW': ['🐞 錯誤報告：出錯時按「📋 複製錯誤報告」就能貼給 Claude 或作者，不用截圖。只有技術資訊（什麼時候、哪個功能、錯誤碼、模型名稱、回覆多長），不含提示詞、模型寫的內容、聊天內容、網址和 Key。在設定 › 🐞 錯誤報告，摘要失敗的通知、日記失敗的提示上也有。'],

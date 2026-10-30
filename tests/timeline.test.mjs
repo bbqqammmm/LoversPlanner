@@ -91,6 +91,7 @@ await page.evaluate(() => { window.__diaryPrompts.length = 0; });
 await page.click('[data-action="old-pick"][data-id="舊聊天B"]');
 await page.click('[data-action="old-read"]');
 await page.waitForFunction(() => !document.querySelector('[data-role="diary-overlaps"]') && document.querySelector('[data-role="diary-start"]'));
+check('day list says it was written from another chat', (await page.textContent('[data-role="old-days"]')).includes('已用別的聊天寫過'));
 await page.click('[data-action="diary-start"]');
 await idle();
 d = await days();

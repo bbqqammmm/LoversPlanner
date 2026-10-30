@@ -1725,3 +1725,8 @@ html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
 /* 🐞 錯誤報告（v0.13.46） */
 .lp-error-list { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .lp-error-list li { padding: 6px 8px; border: 1px solid var(--lp-border); border-radius: 8px; background: var(--lp-card); overflow-wrap: anywhere; }
+
+/* 舊聊天的每一天：日記寫好了沒（v0.13.47） */
+.lp-diary-state { font-size: 11px; white-space: nowrap; }
+.lp-diary-state[data-state="done"] { background: color-mix(in srgb, var(--lp-ok, #6aa86a) 18%, transparent); }
+.lp-diary-state[data-state="error"] { background: color-mix(in srgb, var(--lp-warn) 22%, transparent); }

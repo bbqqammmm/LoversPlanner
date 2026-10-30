@@ -17,7 +17,7 @@ import { analyzeChats, clearLoadedDays, hasLoadedDays, listOldChats, loadOldChat
 import { diaryPlan } from '../diarysend.js';
 import { addPref, editPref, listPrefs, onPrefsChange, removePref, togglePref } from '../prefs.js';
 import {
-    buildCompressPrompt, compressDay, conflictDays, deleteDay, deleteOutline, diaryOutline, diaryPending, diaryProgress, outlineError, diaryStyle, dropCompressed, editDay, editOutline, listDiary, MIN_SAFE_RATIO, onDiaryChange, pauseDiary, queueDays, queueOutline, RATIOS, setSources, useVersion,
+    buildCompressPrompt, compressDay, conflictDays, deleteDay, dayState, deleteOutline, diaryOutline, diaryPending, diaryProgress, outlineError, diaryStyle, dropCompressed, editDay, editOutline, listDiary, MIN_SAFE_RATIO, onDiaryChange, pauseDiary, queueDays, queueOutline, RATIOS, setSources, useVersion,
 } from '../diary.js';
 import { anniversariesToday, burst, dismissOnThisDay, onThisDay, randomMemory, remindOnThisDay, takePetals } from '../eggs.js';
 import { addMemory, editMemory, listMemories, memoriesOn, nextPinned, onMemoriesChange, removeMemory, surfaceNext } from '../memories.js';
@@ -1316,13 +1316,18 @@ function oldResultHtml(r) {
     if (tt.duplicates) extra.push(t('old.dup', { n: tt.duplicates }));
     if (tt.skipped || tt.side) extra.push(t('old.skipped', { skip: tt.skipped, side: tt.side }));
     const big = r.days.filter((d) => d.parts > 1).length;
+    const otherChat = new Set(conflictDays(r.days.filter((d) => d.date && d.ai).map((d) => d.date), view.old.only));
     const dayRows = r.days.map((d) => {
         const label = d.date ? `${d.date}（${weekdayName(d.date, 'short')}）` : t('old.noDate');
         const parts = [t('old.dayFloors', { n: d.ai }), d.ai ? t('old.dayDone', { ok: d.summarized, todo: d.ai - d.summarized }) : '', d.side ? t('old.daySide', { n: d.side }) : '',
             t('old.dayRaw', { n: d.rawChars.toLocaleString() }), d.diary ? t('old.dayDiary', { n: d.diary.toLocaleString() }) : '', d.parts > 1 ? t('old.dayParts', { n: d.parts }) : ''].filter(Boolean);
         const can = Boolean(d.date && d.ai);
         const on = can && pickedDays(r).has(d.date);
-        const inner = `${can ? `<span class="lp-pick-box" aria-hidden="true">${on ? '✓' : ''}</span>` : ''}<b>${esc(label)}</b> <span class="lp-note">${esc(parts.join('・'))}</span>`;
+        // 這天已經有日記了沒（v0.13.47，使用者要求）。
+        const state = d.date ? dayState(d.date) : 'none';
+        const key = state !== 'none' && otherChat.has(d.date) ? 'other' : state;
+        const badge = state !== 'none' ? ` <span class="lp-badge lp-diary-state" data-state="${key}">${esc(t(`old.diary.${key}`))}</span>` : '';
+        const inner = `${can ? `<span class="lp-pick-box" aria-hidden="true">${on ? '✓' : ''}</span>` : ''}<b>${esc(label)}</b>${badge} <span class="lp-note">${esc(parts.join('・'))}</span>`;
         return `<li class="lp-old-day${d.parts > 1 ? ' lp-old-big' : ''}${r.overlaps.includes(d.date) ? ' lp-old-overlap' : ''}" data-date="${esc(d.date)}">${can
             ? `<button type="button" class="lp-row-head lp-pickable${on ? ' lp-picked' : ''}" data-action="old-day" data-date="${esc(d.date)}" aria-pressed="${on}">${inner}</button>`
             : `<div class="lp-old-day-off">${inner}</div>`}</li>`;
@@ -1381,6 +1386,7 @@ function dayPicker(r) {
         <div class="lp-row">
           <button type="button" class="menu_button lp-btn lp-mini" data-action="old-days-all">${esc(t('old.pickAll'))}</button>
           <button type="button" class="menu_button lp-btn lp-mini" data-action="old-days-none">${esc(t('old.pickNone'))}</button>
+          <button type="button" class="menu_button lp-btn lp-mini" data-action="old-days-unwritten">${esc(t('old.pickUnwritten'))}</button>
         </div>
         <div class="lp-row">
           <select class="text_pole lp-select" data-role="old-from" aria-label="${esc(t('old.from'))}">${opts(o.from || dates[0])}</select>
@@ -1393,7 +1399,10 @@ function dayPicker(r) {
 
 function diaryStartHtml(r) {
     const picked = pickedDays(r);
-    const dated = r.days.filter((d) => d.date && d.ai && picked.has(d.date));
+    // 已經用這次讀的聊天寫好的日子不算（開始寫時也會跳過）；用別的聊天寫的照算，開始時會問要不要重寫。
+    const pickedAll = r.days.filter((d) => d.date && d.ai && picked.has(d.date));
+    const conflicts = new Set(conflictDays(pickedAll.map((d) => d.date), view.old.only));
+    const dated = pickedAll.filter((d) => dayState(d.date) !== 'done' || conflicts.has(d.date));
     const calls = dated.reduce((n, d) => n + d.parts, 0);
     const sumSent = dated.reduce((n, d) => n + d.sendChars, 0);
     const style = diaryStyle();
@@ -1410,6 +1419,7 @@ function diaryStartHtml(r) {
           </select>
         </div>
         <div class="lp-note">${esc(t('diary.estimate', { days: dated.length, calls, chars: sumSent.toLocaleString(), diary: r.totals.diary.toLocaleString() }))}</div>
+        ${pickedAll.length > dated.length ? `<div class="lp-note" data-role="diary-skip-done">${esc(t('diary.skipDone', { n: pickedAll.length - dated.length }))}</div>` : ''}
         ${overlapHtml(r)}
         <div class="lp-note">${esc(t('diary.filterHint'))}</div>
         ${warn}
@@ -3677,6 +3687,16 @@ function onClick(e) {
             const r = view.old.result;
             if (!r) return;
             view.old.days = btn.dataset.action === 'old-days-all' ? new Set(r.days.filter((d) => d.date && d.ai).map((d) => d.date)) : new Set();
+            view.old.daysOpen = true;
+            render();
+            return;
+        }
+        case 'old-days-unwritten': {
+            const r = view.old.result;
+            if (!r) return;
+            const all = r.days.filter((d) => d.date && d.ai).map((d) => d.date);
+            const conflicts = new Set(conflictDays(all, view.old.only));
+            view.old.days = new Set(all.filter((date) => dayState(date) !== 'done' || conflicts.has(date)));
             view.old.daysOpen = true;
             render();
             return;

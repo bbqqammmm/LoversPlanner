@@ -79,6 +79,16 @@ await page.waitForFunction(() => !document.querySelector('[data-role="diary-prog
 const days = await page.evaluate(async () => (await import('/src/diary.js')).listDiary().map((d) => d.date));
 check('only the picked days written', JSON.stringify(days) === '["2025-03-01","2025-03-03"]', JSON.stringify(days));
 
+// v0.13.47：每一天標日記寫好了沒；全選時已寫好的不算進預估；只選還沒寫的
+await page.waitForFunction(() => document.querySelector('[data-action="old-day"][data-date="2025-03-01"]')?.textContent.includes('已寫日記'), null, { timeout: 5000 });
+check('written days marked in the list', (await page.textContent('[data-action="old-day"][data-date="2025-03-03"]')).includes('✅ 已寫日記') && !(await page.textContent('[data-action="old-day"][data-date="2025-03-02"]')).includes('已寫'));
+await page.click('[data-action="old-days-all"]');
+check('all picked: written days left out of the estimate', (await startText()).includes('1 天') && (await page.textContent('[data-role="diary-skip-done"]')).includes('有 2 天已經寫好了'), (await page.textContent('[data-role="diary-start"]')).replace(/\s+/g, ' ').slice(0, 160));
+await page.click('[data-action="old-days-none"]');
+await page.click('[data-action="old-days-unwritten"]');
+check('only unwritten picks the rest', (await page.textContent('[data-role="old-day-pick"]')).includes('勾了 1／3 天') && (await page.$eval('[data-action="old-day"][data-date="2025-03-02"]', (b) => b.getAttribute('aria-pressed'))) === 'true');
+await page.locator('[data-role="old-days"]').screenshot({ path: `${OUT}/diarypick-state.png` });
+
 const missing = await page.evaluate(async () => (await import('/src/i18n.js')).missingKeys());
 check('i18n keys complete', !missing.length, JSON.stringify(missing));
 for (const l of results) console.log(l);

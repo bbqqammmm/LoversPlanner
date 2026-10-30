@@ -17,7 +17,7 @@ import { analyzeChats, clearLoadedDays, hasLoadedDays, listOldChats, loadOldChat
 import { diaryPlan } from '../diarysend.js';
 import { addPref, editPref, listPrefs, onPrefsChange, removePref, togglePref } from '../prefs.js';
 import {
-    buildCompressPrompt, compressDay, conflictDays, deleteDay, deleteOutline, diaryOutline, diaryPending, outlineError, diaryStyle, dropCompressed, editDay, editOutline, listDiary, MIN_SAFE_RATIO, onDiaryChange, pauseDiary, queueDays, queueOutline, RATIOS, setSources, useVersion,
+    buildCompressPrompt, compressDay, conflictDays, deleteDay, deleteOutline, diaryOutline, diaryPending, diaryProgress, outlineError, diaryStyle, dropCompressed, editDay, editOutline, listDiary, MIN_SAFE_RATIO, onDiaryChange, pauseDiary, queueDays, queueOutline, RATIOS, setSources, useVersion,
 } from '../diary.js';
 import { anniversariesToday, burst, dismissOnThisDay, onThisDay, randomMemory, remindOnThisDay, takePetals } from '../eggs.js';
 import { addMemory, editMemory, listMemories, memoriesOn, nextPinned, onMemoriesChange, removeMemory, surfaceNext } from '../memories.js';
@@ -181,7 +181,7 @@ const view = {
     // 紀念日清單（v0.13.32）：正在改哪一條（同一個日子＋名稱的一組）。
     anniv: { editing: null },
     // 📦 舊聊天整理（v0.13.33）：聊天清單、勾了哪些、讀取中、分析結果、訊息。
-    old: { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '', only: {} },
+    old: { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '', only: {}, days: null, from: '', to: '' },
     // 📖 日記（v0.13.34）：展開的日子、正在編輯的、正在設定再壓一次的（比例、要留的重點）、一次壓很多天的設定。
     diary: { open: new Set(), editing: null, compress: null, ratio: MIN_SAFE_RATIO, keep: new Set(), batchMin: 1000, batchRatio: MIN_SAFE_RATIO, msg: '', show: true, conflicts: [], outlineEdit: false },
     prefs: { editing: null },
@@ -357,7 +357,7 @@ let viewChat;
  * 舊聊天清單和讀到的內容、選好的導入檔、日記的提示、備份的訊息等都只屬於原本那個聊天，清掉。
  */
 function resetChatView() {
-    view.old = { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '', only: {} };
+    view.old = { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '', only: {}, days: null, from: '', to: '' };
     clearLoadedDays();
     view.diary = { ...view.diary, open: new Set(), editing: null, compress: null, msg: '', conflicts: [], replace: null, outlineEdit: false };
     view.data = { ...view.data, file: null, bundle: null, fileName: '', confirmWipe: false, confirmReplace: false, message: null };
@@ -1305,7 +1305,12 @@ function oldResultHtml(r) {
         const label = d.date ? `${d.date}（${weekdayName(d.date, 'short')}）` : t('old.noDate');
         const parts = [t('old.dayFloors', { n: d.ai }), d.ai ? t('old.dayDone', { ok: d.summarized, todo: d.ai - d.summarized }) : '', d.side ? t('old.daySide', { n: d.side }) : '',
             t('old.dayRaw', { n: d.rawChars.toLocaleString() }), d.diary ? t('old.dayDiary', { n: d.diary.toLocaleString() }) : '', d.parts > 1 ? t('old.dayParts', { n: d.parts }) : ''].filter(Boolean);
-        return `<li class="lp-old-day${d.parts > 1 ? ' lp-old-big' : ''}${r.overlaps.includes(d.date) ? ' lp-old-overlap' : ''}" data-date="${esc(d.date)}"><b>${esc(label)}</b> <span class="lp-note">${esc(parts.join('・'))}</span></li>`;
+        const can = Boolean(d.date && d.ai);
+        const on = can && pickedDays(r).has(d.date);
+        const inner = `${can ? `<span class="lp-pick-box" aria-hidden="true">${on ? '✓' : ''}</span>` : ''}<b>${esc(label)}</b> <span class="lp-note">${esc(parts.join('・'))}</span>`;
+        return `<li class="lp-old-day${d.parts > 1 ? ' lp-old-big' : ''}${r.overlaps.includes(d.date) ? ' lp-old-overlap' : ''}" data-date="${esc(d.date)}">${can
+            ? `<button type="button" class="lp-row-head lp-pickable${on ? ' lp-picked' : ''}" data-action="old-day" data-date="${esc(d.date)}" aria-pressed="${on}">${inner}</button>`
+            : `<div class="lp-old-day-off">${inner}</div>`}</li>`;
     }).join('');
     const c = r.calendar;
     const cal = c.items.length
@@ -1320,13 +1325,43 @@ function oldResultHtml(r) {
         ${r.overlaps.length ? `<div class="lp-note lp-warn">${esc(t('old.overlaps', { n: r.overlaps.length }))}</div>` : ''}
         ${cal}
         ${diaryStartHtml(r)}
-        <details class="lp-old-days"><summary>${esc(t('old.days', { n: r.days.length }))}</summary><ul>${dayRows}</ul></details>
+        <details class="lp-old-days" data-role="old-days"${view.old.daysOpen ? ' open' : ''}><summary data-action="old-days-toggle">${esc(t('old.days', { n: r.days.length }))}</summary>
+          ${dayPicker(r)}
+          <ul>${dayRows}</ul></details>
       </div>`;
 }
 
 /** 讀完舊聊天之後：選寫法、看預估、開始寫日記。 */
+/** 寫日記要選哪幾天（v0.13.43）：沒選過就是全部。 */
+function pickedDays(r) {
+    return view.old.days ?? new Set(r.days.filter((d) => d.date && d.ai).map((d) => d.date));
+}
+
+/** 「每一天」上面：全選、全不選、從哪天到哪天。 */
+function dayPicker(r) {
+    const dates = r.days.filter((d) => d.date && d.ai).map((d) => d.date);
+    if (!dates.length) return '';
+    const n = pickedDays(r).size;
+    const opts = (cur) => dates.map((x) => `<option value="${esc(x)}"${x === cur ? ' selected' : ''}>${esc(x)}</option>`).join('');
+    const o = view.old;
+    return `<div class="lp-old-pick" data-role="old-day-pick">
+        <div class="lp-note">${esc(t('old.pickHint', { n, total: dates.length }))}</div>
+        <div class="lp-row">
+          <button type="button" class="menu_button lp-btn lp-mini" data-action="old-days-all">${esc(t('old.pickAll'))}</button>
+          <button type="button" class="menu_button lp-btn lp-mini" data-action="old-days-none">${esc(t('old.pickNone'))}</button>
+        </div>
+        <div class="lp-row">
+          <select class="text_pole lp-select" data-role="old-from" aria-label="${esc(t('old.from'))}">${opts(o.from || dates[0])}</select>
+          <span>～</span>
+          <select class="text_pole lp-select" data-role="old-to" aria-label="${esc(t('old.to'))}">${opts(o.to || dates[dates.length - 1])}</select>
+          <button type="button" class="menu_button lp-btn lp-mini" data-action="old-days-range">${esc(t('old.pickRange'))}</button>
+        </div>
+      </div>`;
+}
+
 function diaryStartHtml(r) {
-    const dated = r.days.filter((d) => d.date && d.ai);
+    const picked = pickedDays(r);
+    const dated = r.days.filter((d) => d.date && d.ai && picked.has(d.date));
     const calls = dated.reduce((n, d) => n + d.parts, 0);
     const sumSent = dated.reduce((n, d) => n + d.sendChars, 0);
     const style = diaryStyle();
@@ -1378,8 +1413,14 @@ function diarySection() {
     if (!list.length && !pending) return '';
     const v = view.diary;
     const total = list.reduce((n, d) => n + d.chars, 0);
-    const progress = pending ? `<div class="lp-callout lp-row" role="status" data-role="diary-progress"><span>${esc(t('diary.progress', { n: pending }))}</span><span class="lp-spacer"></span>
-        <button type="button" class="menu_button lp-btn" data-action="diary-pause">${esc(t('diary.pause'))}</button></div>` : '';
+    const pg = diaryProgress();
+    const now = pg.current ? t(pg.current.total > 1 ? 'diary.progressPart' : 'diary.progressDay', { date: pg.current.date, k: pg.current.part, n: pg.current.total }) : t('diary.progressWait');
+    const progress = pending ? `<div class="lp-callout lp-diary-progress" role="status" data-role="diary-progress">
+        <div class="lp-row"><span>${esc(now)}</span><span class="lp-spacer"></span>
+          <button type="button" class="menu_button lp-btn" data-action="diary-pause">${esc(t('diary.pause'))}</button></div>
+        ${pg.total ? `<progress max="${pg.total}" value="${pg.done}" aria-label="${esc(t('diary.progressAria'))}"></progress>
+        <div class="lp-note">${esc(t('diary.progressCount', { done: pg.done, total: pg.total, left: pending }) + (pg.failed ? t('diary.progressFailed', { n: pg.failed }) : ''))}</div>` : `<div class="lp-note">${esc(t('diary.progress', { n: pending }))}</div>`}
+      </div>` : '';
     const loaded = hasLoadedDays();
     const rows = list.map((d) => {
         const open = v.open.has(d.date);
@@ -1570,6 +1611,10 @@ async function readOldChats() {
         // 讀的時候換了聊天：不分析（不然會把別的角色的內容當成這個聊天的舊聊天）。
         if (chatKey() !== chat || o !== view.old) return;
         o.result = analyzeChats(loaded);
+        // 新讀的：預設每一天都選（v0.13.43 起可以只選幾天）。
+        o.days = new Set(o.result.days.filter((d) => d.date && d.ai).map((d) => d.date));
+        o.from = '';
+        o.to = '';
         o.ids = ids;
     } catch (e) {
         o.msg = t('old.fail', { error: errorText(e) });
@@ -3529,6 +3574,44 @@ function onClick(e) {
         case 'old-read':
             if (view.old.picked.size && !view.old.reading) readOldChats();
             return;
+        case 'old-day': {
+            const r = view.old.result;
+            if (!r) return;
+            const set = new Set(pickedDays(r));
+            if (set.has(btn.dataset.date)) set.delete(btn.dataset.date);
+            else set.add(btn.dataset.date);
+            view.old.days = set;
+            view.old.daysOpen = true;
+            render();
+            return;
+        }
+        case 'old-days-all':
+        case 'old-days-none': {
+            const r = view.old.result;
+            if (!r) return;
+            view.old.days = btn.dataset.action === 'old-days-all' ? new Set(r.days.filter((d) => d.date && d.ai).map((d) => d.date)) : new Set();
+            view.old.daysOpen = true;
+            render();
+            return;
+        }
+        case 'old-days-range': {
+            const r = view.old.result;
+            if (!r) return;
+            const dates = r.days.filter((d) => d.date && d.ai).map((d) => d.date);
+            let from = panel.querySelector('[data-role="old-from"]')?.value || dates[0];
+            let to = panel.querySelector('[data-role="old-to"]')?.value || dates[dates.length - 1];
+            if (from > to) [from, to] = [to, from];
+            view.old.days = new Set(dates.filter((x) => x >= from && x <= to));
+            view.old.from = from;
+            view.old.to = to;
+            view.old.daysOpen = true;
+            render();
+            return;
+        }
+        case 'old-days-toggle':
+            // <summary> 自己會開關；記下來，重畫後維持。
+            view.old.daysOpen = !panel.querySelector('[data-role="old-days"]')?.open;
+            return;
         case 'diary-start': {
             const r = view.old.result;
             if (!r) return;
@@ -3537,7 +3620,8 @@ function onClick(e) {
             s0.diary = { ...(s0.diary ?? {}), style };
             saveSettings();
             setSources(view.old.ids);
-            const dates = r.days.filter((d) => d.date && d.ai).map((d) => d.date);
+            const picked = pickedDays(r);
+            const dates = r.days.filter((d) => d.date && d.ai && picked.has(d.date)).map((d) => d.date);
             const only = { ...view.old.only };
             // 已經用別的聊天寫好的日子先跳過，問使用者（不然會被這次讀到的蓋掉）。
             const conflicts = conflictDays(dates, only);

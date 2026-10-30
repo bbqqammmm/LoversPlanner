@@ -119,8 +119,36 @@ function parseDiary(raw) {
     return v;
 }
 
+// ===== 進度（v0.13.43，使用者要求：寫日記時看得到寫到哪） =====
+// 一批＝從隊伍空著開始排的那些段；隊伍還沒寫完又排了新的，算同一批（總數加上去）。
+let batch = { total: 0, done: 0, failed: 0, current: null };
+
+/** 這一批的進度：{ total, done, failed, current: { date, part, total } | null }。 */
+export function diaryProgress() {
+    return { ...batch };
+}
+
+function addToBatch(n) {
+    if (!n) return;
+    if (!queuedTasks(TASK) || batch.done >= batch.total) batch = { total: 0, done: 0, failed: 0, current: null };
+    batch.total += n;
+}
+
 /** 寫一段（隊伍裡跑）。讀不到內容（重新整理過）就記成失敗，請使用者再讀一次舊聊天。 */
 async function writePart(date, partNo, style, only = '') {
+    batch.current = { date, part: partNo, total: dayParts(date, only).length };
+    emit();
+    try {
+        await writePartInner(date, partNo, style, only);
+    } finally {
+        batch.done++;
+        if (dayState(date) === 'error') batch.failed++;
+        batch.current = null;
+        emit();
+    }
+}
+
+async function writePartInner(date, partNo, style, only) {
     const p = dayParts(date, only).find((x) => x.part === partNo);
     const rec = record(true);
     const day = rec.days[date] ?? (rec.days[date] = { date, parts: [], compressed: null, use: 'original' });
@@ -192,6 +220,7 @@ export function queueDays(dates, { style = diaryStyle(), rewrite = false, only =
     let n = 0;
     const rec = record(true);
     rec.style = style;
+    const jobs = [];
     for (const date of dates) {
         const pick = only[date] ?? rec.days?.[date]?.only ?? '';
         const parts = dayParts(date, pick);
@@ -200,14 +229,19 @@ export function queueDays(dates, { style = diaryStyle(), rewrite = false, only =
         for (const p of parts) {
             const have = rec.days?.[date]?.parts?.[p.part - 1];
             if (!rewrite && !changed && have?.summary && !have.error && have.total === p.total) continue;
-            if (enqueueTask(() => writePart(date, p.part, style, pick), { label: TASK })) n++;
+            jobs.push([date, p.part, pick]);
         }
     }
+    // 先算進這一批的總數再排（排第一段時隊伍就開始跑了）。
+    addToBatch(jobs.length);
+    for (const [date, part, pick] of jobs) if (enqueueTask(() => writePart(date, part, style, pick), { label: TASK })) n++;
     return n;
 }
 
 export function pauseDiary() {
     dropTasks(TASK);
+    // 這一批只剩正在寫的那段。
+    batch.total = batch.done + queuedTasks(TASK);
     emit();
 }
 

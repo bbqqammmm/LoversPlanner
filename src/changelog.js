@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.43',
+        new: {
+            'zh-TW': ['📖 寫日記可以只選幾天：「每一天」清單點一下勾選或取消，也可以全選、全不選、選一段日期；寫的時候顯示正在寫哪一天、第幾段，和這一批的進度條。'],
+            'zh-CN': ['📖 写日记可以只选几天：「每一天」清单点一下勾选或取消，也可以全选、全不选、选一段日期；写的时候显示正在写哪一天、第几段，和这一批的进度条。'],
+            en: ['📖 Write diaries for just some days: tap days in the day list to tick them, or pick all, none or a date range; while writing you see which day and part is being written, with a progress bar for the batch.'],
+        },
+    },
+    {
         v: '0.13.42',
         fix: {
             'zh-TW': ['換到別的角色（或別的聊天）後，📦 舊聊天整理列的還是上一個角色的舊聊天，修好了。讀到一半的內容、選好準備導入的檔案也會一起清掉，不會寫進別的聊天。'],

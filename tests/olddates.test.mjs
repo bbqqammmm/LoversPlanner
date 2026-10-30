@@ -1,5 +1,6 @@
 // 🗓️ 舊聊天的日期從標籤或文字讀（v0.13.44，使用者回報：沒摘要過、也沒用 Horae 的聊天，全部「沒有日期」）：
 // 自動找哪個標籤裡常有完整日期（只有月日的用上一個日期的年份）；沒有的話找純文字的「日期：…」；可以改選或不用。
+// v0.13.48：可以勾好幾個；列出沒日期的樓層；開頭沒日期的可以算進第一天；每天寫第幾層；整層小劇場的不寫。
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 const require = createRequire(import.meta.url);
@@ -69,11 +70,54 @@ await page.waitForSelector('[data-role="old-dates"]');
 const res = await page.textContent('[data-role="old-result"]');
 check('result says where dates came from', res.includes('4 層的日期從 <status> 標籤讀到') && res.includes('3 個故事日'), res.replace(/\s+/g, ' ').slice(0, 200));
 await page.locator('[data-role="old-dates"]').screenshot({ path: `${OUT}/olddates.png` });
-await page.selectOption('[data-role="old-date-src"]', 'none');
+await page.uncheck('[data-role="old-date-src"][value="tag:status"]');
 const off = await page.textContent('[data-role="old-result"]');
-check('switching to none: undated again, with help', off.includes('找不到日期') && off.includes('找不到故事日期'), off.replace(/\s+/g, ' ').slice(0, 300));
-await page.selectOption('[data-role="old-date-src"]', 'tag:status');
-check('switch back to the tag', (await page.textContent('[data-action="diary-start"]')).includes('3 天'));
+check('unticking: undated again, with help', off.includes('找不到日期') && off.includes('找不到故事日期'), off.replace(/\s+/g, ' ').slice(0, 300));
+await page.check('[data-role="old-date-src"][value="tag:status"]');
+check('tick the tag again', (await page.textContent('[data-action="diary-start"]')).includes('3 天'));
+
+// 好幾個地方一起用（v0.13.48）：<details> 和 <tableEdit> 各有一部分的日期；開頭幾層沒日期；整層都是小劇場的不寫
+const MIX = [head,
+  msg(false, '（開場）'), msg(true, '開場白，還沒有日期。'),
+  msg(false, '嗯'), msg(true, '開場的第二層。'),
+  msg(false, '早'), msg(true, '<details>2025年3月1日 晴</details>\n第一天早上。'),
+  msg(false, '午'), msg(true, '<tableEdit>日期：2025/03/02</tableEdit>\n第二天中午。'),
+  msg(false, '晚'), msg(true, '<small_theater>番外：如果他們是同學……</small_theater>'),
+  msg(false, '隔天'), msg(true, '<details>2025年3月3日</details>\n第三天。<small_theater>番外小段</small_theater>'),
+];
+const mix = await page.evaluate(async (data) => {
+  const o = await import('/src/oldchats.js');
+  const one = o.analyzeChats([{ id: 'z', data }], { dates: o.withSources(o.detectDates([{ id: 'z', data }]), ['tag:details']) });
+  const both = o.analyzeChats([{ id: 'z', data }], { dates: o.withSources(one.dates, ['tag:details', 'tag:tableEdit']) });
+  const lead = o.analyzeChats([{ id: 'z', data }], { dates: both.dates, leadIn: true });
+  const day3 = o.dayParts('2025-03-03')[0]?.units.map((u) => u.text).join('|');
+  const pick = (r) => ({ days: r.days.map((d) => `${d.date}:${d.ai}`), undated: r.undated.map((u) => `#${u.floor}:${u.text}`), foundBy: r.totals.foundBy, empty: r.totals.empty, leadIn: r.totals.leadIn, ranges: r.days.map((d) => d.ranges) });
+  return { one: pick(one), both: pick(both), lead: pick(lead), day3 };
+}, MIX);
+check('one tag: the other tag\'s day follows the day before', JSON.stringify(mix.one.days) === '["2025-03-01:2","2025-03-03:1",":2"]', JSON.stringify(mix.one));
+check('two tags together', JSON.stringify(mix.both.days) === '["2025-03-01:1","2025-03-02:1","2025-03-03:1",":2"]' && mix.both.foundBy['tag:details'] === 2 && mix.both.foundBy['tag:tableEdit'] === 1, JSON.stringify(mix.both));
+check('undated floors listed with floor number and text', JSON.stringify(mix.both.undated) === '["#1:開場白，還沒有日期。","#3:開場的第二層。"]', JSON.stringify(mix.both.undated));
+check('a floor that is only a side story is left out; <small_theater> stripped', mix.both.empty === 1 && !mix.day3.includes('番外') && mix.day3.includes('第三天'), JSON.stringify({ empty: mix.both.empty, day3: mix.day3 }));
+check('lead-in: opening floors count as the first day', JSON.stringify(mix.lead.days) === '["2025-03-01:3","2025-03-02:1","2025-03-03:1"]' && mix.lead.leadIn === 2 && !mix.lead.undated.length, JSON.stringify(mix.lead));
+check('floor ranges per day', JSON.stringify(mix.lead.ranges[0]) === '[{"chat":"z","from":1,"to":5}]' && JSON.stringify(mix.lead.ranges[1]) === '[{"chat":"z","from":7,"to":7}]', JSON.stringify(mix.lead.ranges));
+
+// 畫面：勾兩個、看沒日期的樓層、算進第一天
+await page.evaluate((data) => { window.__mix = data; }, MIX);
+await page.route('**/api/chats/get', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MIX) }));
+await page.click('[data-action="old-read"]');
+await page.waitForFunction(() => document.querySelector('[data-role="old-undated"]'));
+await page.check('[data-role="old-date-src"][value="tag:tableEdit"]');
+let txt = await page.textContent('[data-role="old-result"]');
+check('UI: both sources ticked and counted', txt.includes('2 層的日期從 <details> 標籤讀到') && txt.includes('1 層的日期從 <tableEdit> 標籤讀到') && (await page.$$('[data-role="old-date-src"]:checked')).length === 2, txt.replace(/\s+/g, ' ').slice(0, 300));
+await page.click('[data-action="old-undated-toggle"]');
+txt = await page.textContent('[data-role="old-undated"]');
+check('UI: undated floors shown', txt.includes('找不到日期的樓層（2）') && txt.includes('#1') && txt.includes('開場白'), txt.replace(/\s+/g, ' ').slice(0, 300));
+await page.click('[data-action="old-days-toggle"]');
+check('UI: day rows show floor numbers', (await page.textContent('[data-date="2025-03-02"] [data-role="old-floors"]')).trim() === '#7');
+await page.locator('[data-role="old-result"]').screenshot({ path: `${OUT}/olddates-mix.png` });
+await page.check('[data-role="old-lead-in"]');
+txt = await page.textContent('[data-role="old-result"]');
+check('UI: lead-in moves them into the first day', txt.includes('2 層在聊天開頭') && (await page.textContent('[data-action="diary-start"]')).includes('3 天') && (await page.textContent('[data-date="2025-03-01"] [data-role="old-floors"]')).trim() === '#1–5', txt.replace(/\s+/g, ' ').slice(0, 300));
 
 const missing = await page.evaluate(async () => (await import('/src/i18n.js')).missingKeys());
 check('i18n keys complete', !missing.length, JSON.stringify(missing));

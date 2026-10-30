@@ -9,6 +9,26 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.48',
+        new: {
+            'zh-TW': [
+                '🗓️ 舊聊天的「日期從哪裡讀」可以勾好幾個了：例如有的樓層日期在 <details>、有的在 <tableEdit>，照順序找，前面讀不到才看下一個。',
+                '🔢 每一天會寫是哪幾層（#12–45）；找不到日期的樓層會列出來（第幾層、開頭幾個字），聊天開頭還沒有日期的幾層可以算進那個聊天的第一天。',
+                '⭐ 名字裡有 theater、小劇場、番外的標籤（例如 <small_theater>）也當成小劇場，不寫進摘要和日記；整層都是小劇場的樓層，日記會整層跳過。',
+            ],
+            'zh-CN': [
+                '🗓️ 旧聊天的「日期从哪里读」可以勾好几个了：例如有的楼层日期在 <details>、有的在 <tableEdit>，照顺序找，前面读不到才看下一个。',
+                '🔢 每一天会写是哪几层（#12–45）；找不到日期的楼层会列出来（第几层、开头几个字），聊天开头还没有日期的几层可以算进那个聊天的第一天。',
+                '⭐ 名字里有 theater、小剧场、番外的标签（例如 <small_theater>）也当成小剧场，不写进摘要和日记；整层都是小剧场的楼层，日记会整层跳过。',
+            ],
+            en: [
+                '🗓️ "Read dates from" in Old chats now takes several places at once (for example <details> on some floors and <tableEdit> on others); they are tried in order.',
+                '🔢 Each day shows which floors it covers (#12–45); floors without a date are listed (floor number and opening words), and undated floors at the start of a chat can count as its first day.',
+                '⭐ Tags with theater, 小劇場 or 番外 in the name (like <small_theater>) count as side stories and stay out of summaries and diaries; floors that are only a side story are skipped by diaries.',
+            ],
+        },
+    },
+    {
         v: '0.13.47',
         new: {
             'zh-TW': ['📖 舊聊天整理的「每一天」清單會標出哪些日子已經寫好日記（✅）、寫了一部分（⏳）或失敗（⚠️）；多了「只選還沒寫的」，預估也不再算已經寫好的。'],

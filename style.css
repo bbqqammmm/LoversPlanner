@@ -1730,3 +1730,12 @@ html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
 .lp-diary-state { font-size: 11px; white-space: nowrap; }
 .lp-diary-state[data-state="done"] { background: color-mix(in srgb, var(--lp-ok, #6aa86a) 18%, transparent); }
 .lp-diary-state[data-state="error"] { background: color-mix(in srgb, var(--lp-warn) 22%, transparent); }
+
+/* 日期從哪裡讀（可以勾好幾個）、找不到日期的樓層（v0.13.48） */
+.lp-old-dates { border: 1px solid var(--lp-border); border-radius: 8px; padding: 6px 10px; margin: 0; min-width: 0; }
+.lp-old-dates legend { padding: 0 4px; }
+.lp-old-date-list { display: flex; flex-direction: column; max-height: 40vh; overflow: auto; }
+.lp-old-date-list .lp-check { overflow-wrap: anywhere; }
+.lp-old-undated ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow: auto; }
+.lp-old-undated li { padding: 4px 6px; border-radius: 6px; overflow-wrap: anywhere; background: color-mix(in srgb, var(--lp-border) 25%, transparent); }
+.lp-old-floors { font-variant-numeric: tabular-nums; }

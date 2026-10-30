@@ -155,15 +155,34 @@ function textDate(text, year) {
     return '';
 }
 
-/** 這一則用 dates（{ mode: 'tag'|'text'|'none', tag }）讀到的日期。 */
-function extraDate(mes, dates, year) {
-    if (dates?.mode === 'tag' && dates.tag) return parseDate(tagInner(mes, dates.tag), year);
-    if (dates?.mode === 'text') return textDate(mes, year);
-    return '';
+// 可以同時用好幾個地方（v0.13.48，使用者要求：例如 <details> 和 <tableEdit> 各自只有一部分樓層有日期）。
+// dates.sources：['tag:details', 'text', …]，照順序找，先讀到的算。舊的 { mode, tag } 也看得懂。
+
+/** dates 用到的地方：['tag:x', 'text']。 */
+export function dateSources(dates) {
+    if (Array.isArray(dates?.sources)) return dates.sources.filter((x) => x === 'text' || (String(x).startsWith('tag:') && x.length > 4));
+    if (dates?.mode === 'tag' && dates.tag) return [`tag:${dates.tag}`];
+    if (dates?.mode === 'text') return ['text'];
+    return [];
+}
+
+/** 換成只用這些地方（mode／tag 留著給舊的程式看：第一個地方）。 */
+export function withSources(dates, sources) {
+    const first = sources[0] ?? '';
+    return { ...dates, sources: [...sources], mode: first ? (first === 'text' ? 'text' : 'tag') : 'none', tag: first.startsWith('tag:') ? first.slice(4) : '' };
+}
+
+/** 這一則讀到的日期和從哪裡讀到的：{ date, source }。 */
+function extraDate(mes, sources, year) {
+    for (const src of sources) {
+        const d = src === 'text' ? textDate(mes, year) : parseDate(tagInner(mes, src.slice(4)), year);
+        if (d) return { date: d, source: src };
+    }
+    return { date: '', source: '' };
 }
 
 /**
- * 找日期在哪裡：{ mode, tag, candidates: [{ tag, hits }], text: 純文字讀得到的則數, sample }。
+ * 找日期在哪裡：{ sources, mode, tag, candidates: [{ tag, hits }], text: 純文字讀得到的則數, sample }。
  * 只看沒有戀人手帳日期、也沒有 Horae 日期的 AI 樓層。
  */
 export function detectDates(loaded) {
@@ -175,7 +194,7 @@ export function detectDates(loaded) {
             pool.push(String(m.mes ?? ''));
         }
     }
-    if (!pool.length) return { mode: 'none', tag: '', candidates: [], text: 0, sample: 0 };
+    if (!pool.length) return { mode: 'none', tag: '', sources: [], candidates: [], text: 0, sample: 0 };
     const step = Math.max(1, Math.floor(pool.length / DATE_SAMPLE));
     const sample = pool.filter((_, i) => i % step === 0).slice(0, DATE_SAMPLE);
     const candidates = scanTags(sample)
@@ -185,12 +204,27 @@ export function detectDates(loaded) {
         .sort((a, b) => b.hits - a.hits);
     const text = sample.filter((m) => textDate(m)).length;
     const min = sample.length * DATE_MIN_RATE;
-    if (candidates[0] && candidates[0].hits >= min && candidates[0].hits >= text) return { mode: 'tag', tag: candidates[0].tag, candidates, text, sample: sample.length };
-    if (text >= min) return { mode: 'text', tag: '', candidates, text, sample: sample.length };
-    return { mode: 'none', tag: '', candidates, text, sample: sample.length };
+    const base = { candidates, text, sample: sample.length };
+    if (candidates[0] && candidates[0].hits >= min && candidates[0].hits >= text) return withSources(base, [`tag:${candidates[0].tag}`]);
+    if (text >= min) return withSources(base, ['text']);
+    return withSources(base, []);
 }
 
 const EVENT_TYPES = ['period', 'intimacy', 'anniversary'];
+
+/** 這天用到哪幾層：[{ chat, from, to }]（每個聊天一筆；樓層號碼和酒館訊息上的 # 一樣，從 0 開始）。 */
+function floorRanges(floors) {
+    const by = new Map();
+    for (const { chat, floor } of floors) {
+        const r = by.get(chat);
+        if (!r) by.set(chat, { chat, from: floor, to: floor });
+        else {
+            r.from = Math.min(r.from, floor);
+            r.to = Math.max(r.to, floor);
+        }
+    }
+    return [...by.values()];
+}
 
 function plainEvent(ev, date, origin) {
     return {
@@ -207,16 +241,20 @@ function plainEvent(ev, date, origin) {
  * 分析讀到的聊天（照勾選的順序，舊的先）。
  * loaded：[{ id, data }]。回傳 { chats, days, totals, calendar, overlaps }。
  * keepDays：false 時不換掉「上次讀到的每一天」（只是來讀行事曆的，不影響寫日記，v0.13.38）。
- * dates：日期從哪裡讀（detectDates 的結果，或使用者選的 { mode, tag }）；沒給就自動找。
+ * dates：日期從哪裡讀（detectDates 的結果，或使用者選的 { sources }）；沒給就自動找。
+ * leadIn：聊天開頭還沒讀到日期的那幾層，算進這個聊天的第一個日期（v0.13.48，使用者選的；預設不算）。
+ * undated 列出找不到日期的樓層（聊天、第幾層、開頭幾個字），讓使用者看是什麼內容。
  */
-export function analyzeChats(loaded, { keepDays = true, dates = detectDates(loaded) } = {}) {
+export function analyzeChats(loaded, { keepDays = true, dates = detectDates(loaded), leadIn = false } = {}) {
+    const sources = dateSources(dates);
     const seen = new Set();
     const days = new Map();
     const day = (date) => {
-        if (!days.has(date)) days.set(date, { date, ai: 0, user: 0, summarized: 0, coarse: 0, side: 0, rawChars: 0, sumChars: 0, chats: new Set(), units: [], sendChars: 0 });
+        if (!days.has(date)) days.set(date, { date, ai: 0, user: 0, summarized: 0, coarse: 0, side: 0, empty: 0, rawChars: 0, sumChars: 0, chats: new Set(), units: [], sendChars: 0, floors: [] });
         return days.get(date);
     };
-    const totals = { ai: 0, summarized: 0, unsummarized: 0, undated: 0, skipped: 0, side: 0, duplicates: 0, horae: 0, found: 0 };
+    const totals = { ai: 0, summarized: 0, unsummarized: 0, undated: 0, skipped: 0, side: 0, empty: 0, duplicates: 0, horae: 0, found: 0, foundBy: {}, leadIn: 0 };
+    const undated = [];
     const events = [];
     const chats = [];
     for (const { id, data } of loaded) {
@@ -225,7 +263,24 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
         const meta = header?.chat_metadata?.[MODULE] ?? {};
         const removed = new Set(meta.calendar?.removed ?? []);
         const info = { id, ai: 0, firstDate: '', lastDate: '' };
-        let cur = '';
+        const dateOf = (m, year) => {
+            const own = normDate(m.extra?.[MODULE]?.date);
+            const h = own ? '' : horaeDate(m);
+            const found = own || h ? { date: '', source: '' } : extraDate(m.mes, sources, year);
+            return { own, h, found };
+        };
+        // 開頭沒日期的算進第一個日期：先找這個聊天第一個讀得到的日期。
+        let first = '';
+        if (leadIn) {
+            for (const m of messages) {
+                if (!isAiMessage(m)) continue;
+                const x = dateOf(m, '');
+                first = x.own || x.h || x.found.date;
+                if (first) break;
+            }
+        }
+        let cur = first;
+        let dated = false;
         // 使用者發言先放著，算進下一層 AI 回覆的那一天（v0.13.36：以前算進前一天，新的一天開頭那句會跑到昨天的日記）。
         let waiting = [];
         const flush = () => {
@@ -238,7 +293,7 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
             }
             waiting = [];
         };
-        for (const m of messages) {
+        for (const [floor, m] of messages.entries()) {
             if (!isAiMessage(m) && !isUserMessage(m)) continue;
             const key = `${m.send_date ?? ''}|${hashText(m.mes ?? '')}`;
             if (seen.has(key)) {
@@ -247,20 +302,26 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
             }
             seen.add(key);
             const e = m.extra?.[MODULE];
+            let lead = false;
             if (isAiMessage(m)) {
-                const own = normDate(e?.date);
-                const h = own ? '' : horaeDate(m);
-                const found = own || h ? '' : extraDate(m.mes, dates, cur.slice(0, 4));
-                if (own || h || found) cur = own || h || found;
+                const { own, h, found } = dateOf(m, cur.slice(0, 4));
+                if (own || h || found.date) {
+                    cur = own || h || found.date;
+                    dated = true;
+                } else lead = Boolean(first && !dated);
                 if (!own && h) totals.horae++;
-                if (found) totals.found++;
+                if (found.date) {
+                    totals.found++;
+                    totals.foundBy[found.source] = (totals.foundBy[found.source] ?? 0) + 1;
+                }
             }
             const text = cleanForSummary(m.mes ?? '');
             const raw = text.length;
             if (isUserMessage(m)) {
-                waiting.push({ ai: false, name: m.name ?? '', text, chat: id });
+                waiting.push({ ai: false, name: m.name ?? '', text, chat: id, floor });
                 continue;
             }
+            if (lead) totals.leadIn++;
             flush();
             const d = day(cur);
             info.ai++;
@@ -268,7 +329,10 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
             if (cur) {
                 if (!info.firstDate || cur < info.firstDate) info.firstDate = cur;
                 if (!info.lastDate || cur > info.lastDate) info.lastDate = cur;
-            } else totals.undated++;
+            } else {
+                totals.undated++;
+                undated.push({ chat: id, floor, text: text.replace(/\s+/g, ' ').trim().slice(0, 80), state: e?.status === 'skip' || e?.status === 'side' ? e.status : !text.trim() && !e?.summary ? 'empty' : '' });
+            }
             if (e?.status === 'skip') {
                 totals.skipped++;
                 continue;
@@ -278,13 +342,20 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
                 d.side++;
                 continue;
             }
+            // 整層都是小劇場、思考過程這些被拿掉的內容（清完是空的）：沒有正劇，不寫進日記（v0.13.48）。
+            const summary = e?.status === 'ok' && !e.coarse && e.summary ? String(e.summary) : '';
+            if (!text.trim() && !summary) {
+                totals.empty++;
+                d.empty++;
+                continue;
+            }
             d.ai++;
             d.rawChars += raw;
             d.chats.add(id);
+            d.floors.push({ chat: id, floor });
             // 寫日記用：有單層摘要（不是粗略補建）就用摘要，沒有就用原文。
             const time = e?.time || (m?.horae_meta ?? m?.extra?.horae_meta)?.timestamp?.story_time || '';
-            const summary = e?.status === 'ok' && !e.coarse && e.summary ? String(e.summary) : '';
-            d.units.push({ ai: true, name: m.name ?? '', text, summary, time: String(time), chat: id });
+            d.units.push({ ai: true, name: m.name ?? '', text, summary, time: String(time), chat: id, floor });
             d.sendChars += summary ? summary.length : raw;
             if (e?.status === 'ok' && (e.summary || e.coarse)) {
                 d.summarized++;
@@ -310,12 +381,12 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
     }
     if (keepDays) lastUnits = new Map([...days.values()].map((d) => [d.date, d.units]));
     const list = [...days.values()]
-        .filter((d) => d.ai || d.side)
+        .filter((d) => d.ai || d.side || d.empty)
         .map((d) => {
             const parts = Math.max(1, Math.ceil(d.ai / PART_FLOORS));
             const per = d.ai ? Math.ceil(d.ai / parts) : 0;
             const diary = d.ai ? parts * Math.max(DIARY_MIN, Math.min(DIARY_MAX, per * DIARY_PER_FLOOR)) : 0;
-            return { date: d.date, ai: d.ai, user: d.user, summarized: d.summarized, coarse: d.coarse, side: d.side, rawChars: d.rawChars, sumChars: d.sumChars, sendChars: d.sendChars, parts, diary, chats: [...d.chats] };
+            return { date: d.date, ai: d.ai, user: d.user, summarized: d.summarized, coarse: d.coarse, side: d.side, empty: d.empty, rawChars: d.rawChars, sumChars: d.sumChars, sendChars: d.sendChars, parts, diary, chats: [...d.chats], ranges: floorRanges(d.floors) };
         })
         .sort((a, b) => (a.date ? (b.date ? a.date.localeCompare(b.date) : -1) : 1));
     // 同一個 origin 只留一筆（帶來帶去的）。
@@ -332,7 +403,9 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
             intimacy: calendar.filter((x) => x.type === 'intimacy').reduce((n, x) => n + (Number(x.count) || 1), 0),
             anniversary: calendar.filter((x) => x.type === 'anniversary').length,
         },
-        dates,
+        dates: withSources(dates, sources),
+        leadIn,
+        undated,
         // 同一天有好幾個聊天都寫到（可能是 IF 線、平行世界）。
         overlaps: list.filter((d) => d.date && d.chats.length > 1).map((d) => d.date),
     };

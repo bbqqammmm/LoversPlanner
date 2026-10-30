@@ -13,7 +13,7 @@ import { getLoadedVersion } from '../update.js';
 import { VERSION } from '../version.js';
 import { ROUTES, usesMain } from '../llm.js';
 import { allChanges, markBadgeSeen, markSeen, seenVersion, unseenChanges } from '../changelog.js';
-import { analyzeChats, clearLoadedDays, hasLoadedDays, listOldChats, loadOldChat } from '../oldchats.js';
+import { analyzeChats, clearLoadedDays, dateSources, hasLoadedDays, listOldChats, loadOldChat, withSources } from '../oldchats.js';
 import { diaryPlan } from '../diarysend.js';
 import { addPref, editPref, listPrefs, onPrefsChange, removePref, togglePref } from '../prefs.js';
 import {
@@ -1311,23 +1311,28 @@ function oldResultHtml(r) {
     lines.push(t('old.summarized', { ok: tt.summarized.toLocaleString(), todo: tt.unsummarized.toLocaleString() }));
     const extra = [];
     if (tt.horae) extra.push(t('old.horae', { n: tt.horae }));
-    if (tt.found) extra.push(t(r.dates.mode === 'tag' ? 'old.foundTag' : 'old.foundText', { n: tt.found, tag: r.dates.tag }));
+    for (const [src, n] of Object.entries(tt.foundBy ?? {})) extra.push(src === 'text' ? t('old.foundText', { n }) : t('old.foundTag', { n, tag: src.slice(4) }));
+    if (tt.leadIn) extra.push(t('old.leadInDone', { n: tt.leadIn }));
     if (tt.undated) extra.push(t('old.undated', { n: tt.undated }));
     if (tt.duplicates) extra.push(t('old.dup', { n: tt.duplicates }));
     if (tt.skipped || tt.side) extra.push(t('old.skipped', { skip: tt.skipped, side: tt.side }));
+    if (tt.empty) extra.push(t('old.empty', { n: tt.empty }));
     const big = r.days.filter((d) => d.parts > 1).length;
     const otherChat = new Set(conflictDays(r.days.filter((d) => d.date && d.ai).map((d) => d.date), view.old.only));
     const dayRows = r.days.map((d) => {
         const label = d.date ? `${d.date}（${weekdayName(d.date, 'short')}）` : t('old.noDate');
         const parts = [t('old.dayFloors', { n: d.ai }), d.ai ? t('old.dayDone', { ok: d.summarized, todo: d.ai - d.summarized }) : '', d.side ? t('old.daySide', { n: d.side }) : '',
-            t('old.dayRaw', { n: d.rawChars.toLocaleString() }), d.diary ? t('old.dayDiary', { n: d.diary.toLocaleString() }) : '', d.parts > 1 ? t('old.dayParts', { n: d.parts }) : ''].filter(Boolean);
+            d.empty ? t('old.dayEmpty', { n: d.empty }) : '', t('old.dayRaw', { n: d.rawChars.toLocaleString() }), d.diary ? t('old.dayDiary', { n: d.diary.toLocaleString() }) : '', d.parts > 1 ? t('old.dayParts', { n: d.parts }) : ''].filter(Boolean);
+        // 這天是哪幾層（v0.13.48）：讀好幾個聊天時寫聊天名稱。
+        const many = r.chats.length > 1;
+        const ranges = (d.ranges ?? []).map((x) => `${many ? `${x.chat} ` : ''}#${x.from}${x.to > x.from ? `–${x.to}` : ''}`).join('、');
         const can = Boolean(d.date && d.ai);
         const on = can && pickedDays(r).has(d.date);
         // 這天已經有日記了沒（v0.13.47，使用者要求）。
         const state = d.date ? dayState(d.date) : 'none';
         const key = state !== 'none' && otherChat.has(d.date) ? 'other' : state;
         const badge = state !== 'none' ? ` <span class="lp-badge lp-diary-state" data-state="${key}">${esc(t(`old.diary.${key}`))}</span>` : '';
-        const inner = `${can ? `<span class="lp-pick-box" aria-hidden="true">${on ? '✓' : ''}</span>` : ''}<b>${esc(label)}</b>${badge} <span class="lp-note">${esc(parts.join('・'))}</span>`;
+        const inner = `${can ? `<span class="lp-pick-box" aria-hidden="true">${on ? '✓' : ''}</span>` : ''}<b>${esc(label)}</b>${badge} <span class="lp-note">${esc(parts.join('・'))}</span>${ranges ? ` <span class="lp-note lp-old-floors" data-role="old-floors">${esc(ranges)}</span>` : ''}`;
         return `<li class="lp-old-day${d.parts > 1 ? ' lp-old-big' : ''}${r.overlaps.includes(d.date) ? ' lp-old-overlap' : ''}" data-date="${esc(d.date)}">${can
             ? `<button type="button" class="lp-row-head lp-pickable${on ? ' lp-picked' : ''}" data-action="old-day" data-date="${esc(d.date)}" aria-pressed="${on}">${inner}</button>`
             : `<div class="lp-old-day-off">${inner}</div>`}</li>`;
@@ -1342,6 +1347,7 @@ function oldResultHtml(r) {
         ${lines.map((x) => `<div>${esc(x)}</div>`).join('')}
         ${extra.length ? `<div class="lp-note">${esc(extra.join('・'))}</div>` : ''}
         ${dateSourceHtml(r)}
+        ${undatedHtml(r)}
         <div class="lp-note">${esc(t('old.diaryTotal', { n: tt.diary.toLocaleString(), raw: tt.raw.toLocaleString() }) + (big ? t('old.big', { n: big }) : ''))}</div>
         ${r.overlaps.length ? `<div class="lp-note lp-warn">${esc(t('old.overlaps', { n: r.overlaps.length }))}</div>` : ''}
         ${cal}
@@ -1352,20 +1358,48 @@ function oldResultHtml(r) {
       </div>`;
 }
 
-/** 日期從哪裡讀（v0.13.44）：自動找到的標籤、其他有日期的標籤、純文字的「日期：…」、不用。有沒日期的樓層或自動找過才顯示。 */
+/**
+ * 日期從哪裡讀（v0.13.44；v0.13.48 起可以勾好幾個，照順序找，先讀到的算）：
+ * 自動找到的標籤、其他有日期的標籤、純文字的「日期：…」。都不勾＝只用戀人手帳和 Horae 的日期。
+ */
 function dateSourceHtml(r) {
-    const d = r.dates ?? { mode: 'none', candidates: [], text: 0 };
+    const d = r.dates ?? { candidates: [], text: 0 };
     if (!r.totals.found && !r.totals.undated && !d.candidates.length) return '';
-    const cur = d.mode === 'tag' ? `tag:${d.tag}` : d.mode;
+    const on = new Set(dateSources(d));
     const opts = [
         ...d.candidates.map((c) => [`tag:${c.tag}`, t('old.dateTag', { tag: c.tag, n: c.hits, total: d.sample })]),
-        ...(d.text || d.mode === 'text' ? [['text', t('old.dateText', { n: d.text, total: d.sample })]] : []),
-        ['none', t('old.dateNone')],
+        ...(d.text || on.has('text') ? [['text', t('old.dateText', { n: d.text, total: d.sample })]] : []),
     ];
-    return `<div class="lp-row lp-old-dates" data-role="old-dates">
-        <label class="lp-label" for="lp-old-date-src">${esc(t('old.dateFrom'))}</label>
-        <select id="lp-old-date-src" class="text_pole lp-select" data-role="old-date-src">${opts.map(([v, label]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>
-      </div>${d.mode === 'none' && r.totals.undated ? `<div class="lp-note lp-warn">${esc(t('old.dateHelp'))}</div>` : ''}`;
+    const rows = opts.map(([v, label]) => `<label class="lp-check"><input type="checkbox" data-role="old-date-src" value="${esc(v)}"${on.has(v) ? ' checked' : ''}> ${esc(label)}</label>`).join('');
+    return `<fieldset class="lp-old-dates" data-role="old-dates">
+        <legend class="lp-label">${esc(t('old.dateFrom'))}</legend>
+        <div class="lp-note">${esc(t('old.dateMulti'))}</div>
+        <div class="lp-old-date-list">${rows}</div>
+        ${on.size ? '' : `<div class="lp-note">${esc(t('old.dateNone'))}</div>`}
+      </fieldset>${!on.size && r.totals.undated ? `<div class="lp-note lp-warn">${esc(t('old.dateHelp'))}</div>` : ''}`;
+}
+
+/** 找不到日期的樓層（v0.13.48，使用者要求：看得到是哪幾層、寫了什麼）；聊天開頭的可以算進第一個日期。 */
+function undatedHtml(r) {
+    const list = r.undated ?? [];
+    if (!list.length && !r.leadIn) return '';
+    const firstOf = new Map(r.chats.map((c) => [c.id, c.firstDate]));
+    const many = r.chats.length > 1;
+    const SHOW = 60;
+    const rows = list.slice(0, SHOW).map((u) => {
+        const state = u.state ? ` <span class="lp-badge">${esc(t(`old.undated.${u.state}`))}</span>` : '';
+        return `<li><b>${esc(`${many ? `${u.chat} ` : ''}#${u.floor}`)}</b>${state} <span class="lp-note">${esc(u.text || '—')}</span></li>`;
+    }).join('');
+    // 這些聊天後面有讀到日期：開頭沒日期的可以算進那一天。
+    const canLead = r.leadIn || list.some((u) => firstOf.get(u.chat));
+    const lead = canLead ? `<label class="lp-check"><input type="checkbox" data-role="old-lead-in"${r.leadIn ? ' checked' : ''}> ${esc(t('old.leadIn'))}</label>` : '';
+    return `<details class="lp-old-undated" data-role="old-undated"${view.old.undatedOpen ? ' open' : ''}>
+        <summary data-action="old-undated-toggle">${esc(t('old.undatedTitle', { n: list.length }))}</summary>
+        <div class="lp-note">${esc(t('old.undatedHint'))}</div>
+        ${lead}
+        ${list.length ? `<ul>${rows}</ul>` : ''}
+        ${list.length > SHOW ? `<div class="lp-note">${esc(t('old.undatedMore', { n: list.length - SHOW }))}</div>` : ''}
+      </details>`;
 }
 
 /** 讀完舊聊天之後：選寫法、看預估、開始寫日記。 */
@@ -3719,6 +3753,9 @@ function onClick(e) {
             // <summary> 自己會開關；記下來，重畫後維持。
             view.old.daysOpen = !panel.querySelector('[data-role="old-days"]')?.open;
             return;
+        case 'old-undated-toggle':
+            view.old.undatedOpen = !panel.querySelector('[data-role="old-undated"]')?.open;
+            return;
         case 'diary-start': {
             const r = view.old.result;
             if (!r) return;
@@ -4571,12 +4608,13 @@ function onChange(e) {
         if (el.checked) view.backup.scope = el.value;
         return;
     }
-    if (el.dataset?.role === 'old-date-src') {
+    if (el.dataset?.role === 'old-date-src' || el.dataset?.role === 'old-lead-in') {
+        // 換了日期從哪裡讀（可以勾好幾個，照清單的順序），或開頭沒日期的要不要算進第一天：重新分析。
         const o = view.old;
         if (!o.loaded || !o.result) return;
-        const v = el.value;
-        const dates = { ...o.result.dates, mode: v.startsWith('tag:') ? 'tag' : v, tag: v.startsWith('tag:') ? v.slice(4) : '' };
-        o.result = analyzeChats(o.loaded, { dates });
+        const sources = [...panel.querySelectorAll('[data-role="old-date-src"]')].filter((x) => x.checked).map((x) => x.value);
+        const leadIn = Boolean(panel.querySelector('[data-role="old-lead-in"]')?.checked);
+        o.result = analyzeChats(o.loaded, { dates: withSources(o.result.dates, sources), leadIn });
         o.days = new Set(o.result.days.filter((d) => d.date && d.ai).map((d) => d.date));
         o.only = {};
         render();

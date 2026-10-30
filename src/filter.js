@@ -12,6 +12,18 @@ const THINKING = ['think', 'thinking', 'thought', 'thoughts', 'reasoning', 'refl
 const STATUS = ['status', 'statusbar', 'status_bar', 'state', '狀態欄', '状态栏', '狀態', '状态'];
 /** 小劇場（番外）：預設不當正劇摘要，但有意義的可以收進回憶錄（filter.theater）。 */
 export const THEATER = ['theater', 'theatre', '小劇場', '小剧场', '番外'];
+/** 名字裡有這些字的標籤也算小劇場（v0.13.48，例如 <small_theater>、<番外篇>）。 */
+const THEATER_RE = /theat(?:er|re)|小劇場|小剧场|番外/i;
+export function isTheaterName(name) {
+    return THEATER_RE.test(String(name ?? ''));
+}
+
+/** 訊息裡出現的標籤名字（不重複）。 */
+function tagNamesIn(text) {
+    const out = new Set();
+    for (const m of String(text ?? '').matchAll(/<\s*([A-Za-z\u3400-\u9fff\uf900-\ufaff][\w\u3400-\u9fff\uf900-\ufaff:-]*)(?:\s[^<>]*)?>/g)) out.add(m[1]);
+    return [...out];
+}
 const HTML_BLOCKS = ['details', 'style', 'script', 'table', 'svg'];
 
 function escapeRe(s) {
@@ -57,8 +69,9 @@ function dropHtml(text, keep = new Set()) {
     return out.replace(/<\/?[a-z][a-z0-9-]*(?:\s[^<>]*)?\/?>/gi, '');
 }
 
-function theaterTags(rules) {
-    return [...THEATER, ...parseTagList(rules.theaterTags)];
+/** 要當小劇場處理的標籤：內建的、使用者加的，和這則訊息裡名字像小劇場的。 */
+function theaterTags(rules, text = '') {
+    return [...new Set([...THEATER, ...parseTagList(rules.theaterTags), ...tagNamesIn(text).filter(isTheaterName)])];
 }
 
 /** 小劇場的內容（「只收進回憶錄」時另外給模型看）。沒有就回傳 ''。 */
@@ -66,7 +79,7 @@ export function extractTheater(text, rules = getSettings().filter) {
     if (!rules || (rules.theater ?? 'keepsake') !== 'keepsake') return '';
     const parts = [];
     const src = String(text ?? '');
-    for (const name of theaterTags(rules)) {
+    for (const name of theaterTags(rules, src)) {
         const n = escapeRe(name);
         for (const m of src.matchAll(new RegExp(`<\\s*${n}(?:\\s[^>]*)?>([\\s\\S]*?)<\\s*\\/\\s*${n}\\s*>`, 'gi'))) parts.push(m[1]);
     }
@@ -121,7 +134,7 @@ export function cleanForSummary(text, rules = getSettings().filter) {
     if (rules.thinking) for (const name of THINKING.filter(kept)) out = dropTag(out, name, { prefilled: true });
     // 小劇場：'story' 當正文一起摘要；'keepsake'（只收進回憶錄）和 'skip' 都從正文拿掉。
     const theaterOff = (rules.theater ?? 'keepsake') !== 'story';
-    for (const name of [...(rules.status ? STATUS : []), ...(theaterOff ? theaterTags(rules) : []), ...parseTagList(rules.tags)].filter(kept)) out = dropTag(out, name);
+    for (const name of [...(rules.status ? STATUS : []), ...(theaterOff ? theaterTags(rules, out) : []), ...parseTagList(rules.tags)].filter(kept)) out = dropTag(out, name);
     // 「參考」的標籤也不當正文（內容另外用 extractRef 抽）。
     for (const name of parseTagList(rules.ref)) out = dropTag(out, name);
     if (rules.html) out = dropHtml(out, keep);
@@ -220,7 +233,7 @@ function guessKind(name, keys, lines, kvLines, count, tokens) {
     const key = name.toLowerCase();
     const has = (set, n = 1) => keys.filter((k) => set.has(k.toLowerCase())).length >= n;
     if (THINKING.includes(key)) return 'thinking';
-    if (THEATER.includes(key)) return 'theater';
+    if (isTheaterName(key)) return 'theater';
     if (has(STYLE_KEYS, 2)) return 'style';
     if (/image|img|pic|draw/.test(key) || has(IMAGE_KEYS, 2)) return 'image';
     if (has(PLAN_KEYS)) return 'thinking';
@@ -233,7 +246,7 @@ function guessKind(name, keys, lines, kvLines, count, tokens) {
 export function tagMode(name, rules = getSettings().filter) {
     const key = name.toLowerCase();
     const has = (list) => parseTagList(list).some((x) => x.toLowerCase() === key);
-    const isTheater = THEATER.includes(key) || parseTagList(rules.theaterTags).some((x) => x.toLowerCase() === key);
+    const isTheater = isTheaterName(key) || parseTagList(rules.theaterTags).some((x) => x.toLowerCase() === key);
     const builtin = THINKING.includes(key) ? 'thinking' : STATUS.includes(key) ? 'status' : isTheater ? 'theater' : HTML_BLOCKS.includes(key) ? 'html' : null;
     if (has(rules.only)) return { mode: 'only', builtin };
     if (has(rules.ref)) return { mode: 'ref', builtin };

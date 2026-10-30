@@ -98,7 +98,7 @@ const DEFAULTS = {
 - 這篇是 {{date}} 的日記。內容開頭可能接著前一天的事、結尾可能已經到隔天：前一天延續過來的寫成「前一晚……」一句帶過；原文說「第二天」「隔天」時，對照上下文判斷是不是就是 {{date}}；真的到了隔天的事寫「隔天早上……」。
 - 照時間順序，每一條 points 都要寫進去；篇幅夠才寫其他的。
 - 用自然的敘述寫，像在回憶這一天：句子之間有連接（因為、後來、於是、直到），讓人讀得出事情怎麼一步步發生。不要一條一條排列。
-- 留住情感：重要的時刻帶一句當時的心情或那句話的分量，可以留一個透露在乎的小動作（例如「捧著她的臉」「笑著不介意」）。只寫原文看得出來的情緒，不要自己加。
+- 留住情感：重要的時刻帶一句當時的心情或那句話的分量，可以留一個透露在乎的小動作（例如「替她把圍巾繫好」「笑著說沒關係」）。只寫原文看得出來的情緒，不要自己加。
 - 不是小說：不描寫景色、衣服，不寫一連串的動作；小事一句帶過。
 - 不要每句都標時間；只在換時段時寫（早上、下午、傍晚、晚上、隔天早上），或原文特別標明的重要時刻。不確定就不寫，不要推測。
 - 親密場面只寫有發生和它的意義（例如第一次、說了什麼重要的話），不寫過程。
@@ -260,7 +260,7 @@ const DEFAULTS = {
 - 这篇是 {{date}} 的日记。内容开头可能接著前一天的事、结尾可能已经到隔天：前一天延续过来的写成「前一晚……」一句带过；原文说「第二天」「隔天」时，对照上下文判断是不是就是 {{date}}；真的到了隔天的事写「隔天早上……」。
 - 照时间顺序，每一条 points 都要写进去；篇幅够才写其他的。
 - 用自然的叙述写，像在回忆这一天：句子之间有连接（因为、后来、于是、直到），让人读得出事情怎么一步步发生。不要一条一条排列。
-- 留住情感：重要的时刻带一句当时的心情或那句话的分量，可以留一个透露在乎的小动作（例如「捧著她的脸」「笑著不介意」）。只写原文看得出来的情绪，不要自己加。
+- 留住情感：重要的时刻带一句当时的心情或那句话的分量，可以留一个透露在乎的小动作（例如「替她把围巾系好」「笑着说没关系」）。只写原文看得出来的情绪，不要自己加。
 - 不是小说：不描写景色、衣服，不写一连串的动作；小事一句带过。
 - 不要每句都标时间；只在换时段时写（早上、下午、傍晚、晚上、隔天早上），或原文特别标明的重要时刻。不确定就不写，不要推测。
 - 亲密场面只写有发生和它的意义（例如第一次、说了什么重要的话），不写过程。
@@ -422,7 +422,7 @@ Step 2, write the summary:
 - This is the entry for {{date}}. The content may start with the end of the previous day and end in the next day: write what carries over from the previous day as one line ("The night before…"); when the text says "the next day", check whether that is {{date}} itself; things that really happen the next day go under "The next morning…".
 - In time order, include every point; write other things only if there is room.
 - Write natural narration, like remembering the day: connect sentences (because, later, so, until) so the reader can follow how things unfolded. Do not write a list.
-- Keep the feelings: give important moments one line about how it felt or how much the words meant, and you may keep one small gesture that shows care (e.g. "cupped her face", "laughed it off"). Only feelings the text shows; do not add your own.
+- Keep the feelings: give important moments one line about how it felt or how much the words meant, and you may keep one small gesture that shows care (e.g. "tied her scarf for her", "smiled and said it was fine"). Only feelings the text shows; do not add your own.
 - Not a novel: no scenery or clothes, no chains of actions; small things in one line.
 - Do not timestamp every sentence; only mark changes of time of day (morning, afternoon, evening, night, the next morning) or moments the text marks as important. If unsure, leave the time out; do not guess.
 - Intimate scenes: only that they happened and what they meant (e.g. a first, important words), not the process.

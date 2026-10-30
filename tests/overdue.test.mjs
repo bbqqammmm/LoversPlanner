@@ -28,7 +28,7 @@ await page.evaluate(async () => {
   s.writeSummary(1, { summary: '早上', date: '2025-12-30' });
   s.writeSummary(3, { summary: '晚上', date: '2025-12-30' });
   window.__chat[1].extra.lovers_planner.ops = [
-    { op: 'add', id: 'p_old', type: 'promise', data: { content: '下午泡溫泉', due: '2025-12-12' } },
+    { op: 'add', id: 'p_old', type: 'promise', data: { content: '週末去看展覽', due: '2025-12-12' } },
     { op: 'add', id: 't_old', type: 'todo', data: { content: '訂民宿', due: '2025-12-01' } },
     { op: 'add', id: 'p_new', type: 'promise', data: { content: '跨年看煙火', due: '2025-12-28' } },
     { op: 'add', id: 'p_none', type: 'promise', data: { content: '以後一起養貓' } },
@@ -50,7 +50,7 @@ const st = await page.evaluate(async () => Object.fromEntries([...(await import(
 check('promise kept, todo done, recent and undated untouched', st.p_old === 'done:kept' && st.t_old === 'done:done' && st.p_new.startsWith('active') && st.p_none.startsWith('active'), JSON.stringify(st));
 check('hint gone, toast shown', !(await page.$('[data-role="overdue"]')) && (await page.evaluate(() => window.__toasts.some((x) => String(x).includes('標好了 2 條')))));
 await page.click('[data-tab="done"]');
-check('they are in the Done tab', (await page.textContent('.lp-body')).includes('下午泡溫泉'));
+check('they are in the Done tab', (await page.textContent('.lp-body')).includes('週末去看展覽'));
 // 「不用」：這次開著時不再提醒
 await page.evaluate(async () => { const n = await import('/src/notes.js'); n.reopenNoteManual('p_old'); });
 await page.click('[data-tab="notes"]');

@@ -39,7 +39,7 @@ await page.evaluate(async () => {
   const ops = {
     1: [{ op: 'add', id: 'p_a', type: 'promise', data: { content: '周末带小雨去海边看日出，在灯塔下向小雨求婚', title: '求婚', with: '小雨' } },
         { op: 'add', id: 't_a', type: 'todo', data: { content: '订海边民宿的房间', title: '订民宿', with: '为小雨' } },
-        { op: 'add', id: 'p_old', type: 'promise', data: { content: '今天休息一天，下午两点陪小雨单纯泡温泉' } },
+        { op: 'add', id: 'p_old', type: 'promise', data: { content: '今天休息一天，下午两点陪小雨看电影' } },
         { op: 'add', id: 't_old', type: 'todo', data: { content: '回家后把枫叶做成标本' } }],
     5: [{ op: 'complete', id: 'p_a', result: 'kept', detail: '沈言在灯塔下单膝跪地求婚，小雨流泪答应。' }],
     7: [{ op: 'complete', id: 'p_old', result: 'kept' }],
@@ -63,7 +63,7 @@ check('opened: content and "with" listed', todo.includes('订海边民宿的房�
 // ===== 4. 已完成分頁 =====
 await page.click('[data-tab="done"]');
 const rows = await page.$$eval('[data-fold-key^="done:"] .lp-note-title', (els) => els.map((e) => e.textContent.trim()));
-check('newest completion first', rows[0] === '今天休息一天，下午两点陪小雨单纯泡温泉' && rows[1] === '求婚', rows.join(' / '));
+check('newest completion first', rows[0] === '今天休息一天，下午两点陪小雨看电影' && rows[1] === '求婚', rows.join(' / '));
 const head = await page.textContent('[data-fold-key="done:p_a"]');
 check('folded: title, date, days ago', head.includes('求婚') && head.includes('✓ 12-12') && head.includes('已過 19 天'), head.replace(/\s+/g, ' '));
 await page.click('[data-fold-key="done:p_a"] .lp-row-head');
@@ -89,7 +89,7 @@ check('fill-titles offered', (await page.textContent('[data-role="titles"]')).in
 await page.evaluate(() => {
   window.__generateRaw = async ({ prompt }) => {
     window.__titlePrompt = prompt;
-    return 'JSON：{"p_old": "单纯泡温泉", "t_old": "做枫叶标本", "nope": "x"}';
+    return 'JSON：{"p_old": "看电影", "t_old": "做枫叶标本", "nope": "x"}';
   };
 });
 await page.click('[data-action="titles-fill"]');
@@ -99,10 +99,10 @@ const after = await page.evaluate(async () => {
   const n = getNotes().notes;
   return { a: n.get('p_old').data.title, b: n.get('t_old').data.title, prompt: window.__titlePrompt };
 });
-check('titles filled', after.a === '单纯泡温泉' && after.b === '做枫叶标本', JSON.stringify(after));
+check('titles filled', after.a === '看电影' && after.b === '做枫叶标本', JSON.stringify(after));
 check('prompt lists ids and contents', after.prompt.includes('[p_old] 今天休息一天') && after.prompt.includes('15 字內'));
 check('bar gone when all have titles', !(await page.$('[data-role="titles"]')));
-check('done tab uses the new title', (await page.textContent('[data-fold-key="done:p_old"]')).includes('单纯泡温泉'));
+check('done tab uses the new title', (await page.textContent('[data-fold-key="done:p_old"]')).includes('看电影'));
 
 const missing = await page.evaluate(async () => (await import('/src/i18n.js')).missingKeys());
 check('i18n keys complete', !missing.length, JSON.stringify(missing));

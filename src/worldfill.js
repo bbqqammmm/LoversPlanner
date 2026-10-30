@@ -133,7 +133,7 @@ export async function fillFromWorld(entries, onProgress = () => {}) {
     try {
         for (let k = 0; k < entries.length; k += WORLD_BATCH) {
             const batch = entries.slice(k, k + WORLD_BATCH);
-            const raw = await generateText(buildWorldPrompt(batch), { maxTokens: Math.max(3000, batch.length * 500), purpose: 'card' });
+            const raw = await generateText(buildWorldPrompt(batch), { maxTokens: Math.max(4000, batch.length * 500), purpose: 'card' });
             const r = fillCharactersFromWorld(parseWorld(raw, batch.map((x) => x.id)));
             sum.added += r.added;
             sum.updated += r.updated;

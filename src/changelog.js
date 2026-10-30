@@ -9,6 +9,19 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.40',
+        new: {
+            'zh-TW': ['📖 日記有寫失敗的日子時，上方可以按「重寫失敗的」一次重寫全部失敗的。'],
+            'zh-CN': ['📖 日记有写失败的日子时，上方可以按「重写失败的」一次重写全部失败的。'],
+            en: ['📖 When some diary days fail, a "Retry the failed ones" button rewrites them all at once.'],
+        },
+        fix: {
+            'zh-TW': ['寫日記時出現「empty_length」：以前給模型的輸出額度太少，會先思考的模型想完就沒額度寫了。現在和壓縮一樣至少 4000（只照實際用的計費），錯誤也改成看得懂的說明。'],
+            'zh-CN': ['写日记时出现「empty_length」：以前给模型的输出额度太少，会先思考的模型想完就没额度写了。现在和压缩一样至少 4000（只照实际用的计费），错误也改成看得懂的说明。'],
+            en: ['"empty_length" when writing diaries: the output budget was too small, so models that think first ran out before writing. It is now at least 4000 like compression (you pay only for what is used), and errors are shown in plain words.'],
+        },
+    },
+    {
         v: '0.13.39',
         new: {
             'zh-TW': ['⏰ 約定／待辦的預定日期過了一個星期以上還沒完成時（常見於從舊聊天帶來的），行事曆／約定分頁上方會提醒，可以一次標成已完成，或先篩出來一條一條看。'],

@@ -17,6 +17,8 @@ window.__saved = 0;
 window.__chatSaves = 0;
 window.__prompts = [];
 const extensionSettings = window.__presetSettings || {};
+// 自動備份會在打開聊天 6 秒後跑，跑完大視窗會重畫，可能撞上別的測試正在點或截圖：測試預設關掉，要測的設 window.__autoBackup = true。
+if (!window.__autoBackup && extensionSettings.lovers_planner) extensionSettings.lovers_planner.backup ??= { auto: false };
 const chatMetadata = {};
 window.__chat = window.__chat || [];
 window.__emit = async (name, ...args) => { for (const f of (window.__events[name] || [])) await f(...args); };

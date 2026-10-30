@@ -75,7 +75,7 @@ export async function tidyCharacter(id) {
     if (!fields.length || busy.has(id)) return { title: noteTitle(note), changed: 0, moved: 0 };
     busy.add(id);
     try {
-        const raw = await generateText(buildPrompt(note, fields), { maxTokens: 2000, purpose: 'tidy' });
+        const raw = await generateText(buildPrompt(note, fields), { maxTokens: 4000, purpose: 'tidy' });
         const res = parseTidy(raw, fields);
         // 整理的途中記事可能又變了：用最新的那條。
         const now = getNotes().notes.get(id);

@@ -1378,12 +1378,24 @@ function diarySection() {
           <div class="lp-note">${esc(t('diary.hint'))}</div>
           ${v.msg ? `<div class="lp-note" role="status" data-role="diary-msg">${esc(v.msg)}</div>` : ''}
           ${conflictHtml()}
+          ${retryHtml(list, loaded, pending)}
           ${list.length ? diarySendHtml() : ''}
           ${list.some((d) => d.original) ? outlineHtml() : ''}
           ${batch}
           <ul class="lp-diary-list">${rows}</ul>
         </div>
       </details>`;
+}
+
+/** 有寫失敗的日子：一次重寫全部失敗的段（v0.13.40）。要先讀過舊聊天。 */
+function retryHtml(list, loaded, pending) {
+    const failed = list.filter((d) => d.state === 'error');
+    if (!failed.length || pending) return '';
+    return `<div class="lp-callout lp-warn" data-role="diary-retry">
+        <div>${esc(t('diary.retryHint', { n: failed.length, error: failed[0].errors[0] ?? '' }))}</div>
+        ${loaded ? `<div class="lp-row"><button type="button" class="menu_button lp-btn lp-primary" data-action="diary-retry">${esc(t('diary.retry', { n: failed.length }))}</button></div>`
+            : `<div class="lp-note">${esc(t('diary.needReloadHint'))}</div>`}
+      </div>`;
 }
 
 /** 日記送給角色（v0.13.36）：開關、最近幾天送全文、更早的最多找回幾段，和現在會送哪幾天。 */
@@ -3502,6 +3514,13 @@ function onClick(e) {
             view.diary.conflicts = conflicts;
             view.diary.replace = { style, only };
             view.diary.msg = n ? t('diary.queued', { n }) : (conflicts.length ? '' : t('diary.allDone'));
+            render();
+            return;
+        }
+        case 'diary-retry': {
+            // 沒加 rewrite：只重寫失敗、還沒寫的段（寫好的不動）。
+            const n = queueDays(listDiary().filter((d) => d.state === 'error').map((d) => d.date));
+            view.diary.msg = n ? t('diary.queued', { n }) : t('diary.needReload');
             render();
             return;
         }

@@ -76,6 +76,7 @@ check('unsummarized floors send the original', p2.includes('原文三號') && p2
 check('natural style prompt with OOC rule', p1.includes('戀人手帳的記錄員') && p1.includes('OOC') && p1.includes('不寫進日記'));
 check('long day prompt says which part', prompts.some((x) => x.includes('（第 1／2 段）')) && prompts.some((x) => x.includes('（第 2／2 段）')));
 check('style saved', await page.evaluate(() => SillyTavern.getContext().extensionSettings.lovers_planner.diary.style) === 'natural');
+check('diary calls get at least 4000 output tokens (thinking models)', await page.evaluate(() => window.__prompts.filter((p) => String(p.prompt).includes('故事裡 ')).every((p) => p.responseLength >= 4000)));
 check('usage recorded as diary', await page.evaluate(async () => (await import('/src/usage.js')).recentUsage?.(1)?.some?.((x) => x.purpose === 'diary') ?? true));
 
 // 畫面：日記區塊
@@ -125,8 +126,19 @@ await page.evaluate(() => { window.__junk = true; });
 await page.click('[data-action="diary-rewrite"][data-date="2025-03-02"]');
 await idle();
 const err = await page.evaluate(async () => (await import('/src/diary.js')).listDiary().find((d) => d.date === '2025-03-02'));
-check('failed part marked', err.state === 'error' && err.errors.length === 1, JSON.stringify(err.errors));
+check('failed part marked', err.state === 'error' && err.errors.length === 1 && !/^[a-z_]+$/.test(err.errors[0]), JSON.stringify(err.errors));
+const oldCode = await page.evaluate(async () => {
+  const day = SillyTavern.getContext().chatMetadata.lovers_planner.diary.days['2025-03-02'];
+  day.parts[0].error = 'empty_length';
+  return (await import('/src/diary.js')).listDiary().find((d) => d.date === '2025-03-02').errors[0];
+});
+check('old error codes shown as readable text', oldCode.includes('思考'), oldCode);
 await page.evaluate(() => { window.__junk = false; });
+await page.waitForSelector('[data-role="diary-retry"]');
+check('retry card for failed days', (await page.textContent('[data-role="diary-retry"]')).includes('有 1 天沒寫成功'));
+await page.click('[data-action="diary-retry"]');
+await idle();
+check('retry rewrites the failed day', (await page.evaluate(async () => (await import('/src/diary.js')).listDiary().find((d) => d.date === '2025-03-02').state)) === 'done' && !(await page.$('[data-role="diary-retry"]')));
 
 // 刪除
 await page.click('[data-action="diary-delete"][data-date="2025-03-02"]');

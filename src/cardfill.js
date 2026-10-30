@@ -79,7 +79,7 @@ export async function fillFromCard() {
     if (!texts.char && !texts.user) throw new ApiError('nocard');
     busy = true;
     try {
-        const raw = await generateText(buildCardPrompt(texts), { maxTokens: 3000, purpose: 'card' });
+        const raw = await generateText(buildCardPrompt(texts), { maxTokens: 4000, purpose: 'card' });
         const fills = parseCard(raw);
         // 沒有那份人設就不填那個人（免得模型自己編）。
         if (!texts.char) fills.char = {};

@@ -37,6 +37,7 @@ await page.route('**/user/files/**', (r) => {
 });
 await page.addInitScript(() => {
   window.__realFiles = true;
+  window.__autoBackup = true;
   window.__chatId = '雨天的約定';
   window.__chat = Array.from({ length: 60 }, (_, i) => ({ name: i % 2 ? '沈言' : '小雨', is_user: !(i % 2), mes: `第${i}則`, send_date: `d${i}`, extra: {} }));
   window.__toasts = [];

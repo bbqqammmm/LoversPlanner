@@ -17,6 +17,7 @@ import { getTemplate } from './prompts.js';
 import { generateText, modelLabel } from './llm.js';
 import { parseJsonLenient } from './json.js';
 import { ApiError } from './api/custom.js';
+import { errorText } from './errors.js';
 import { dayChats, dayParts } from './oldchats.js';
 import { hashText } from './chat.js';
 import { addPrefsFromModel } from './prefs.js';
@@ -26,6 +27,11 @@ export const TASK = 'diary';
 /** 再壓一次可以選的比例；低於 MIN_SAFE_RATIO 會提醒（測試：壓到一半以下，中等的事大多會不見）。 */
 export const RATIOS = [0.7, 0.5, 0.3];
 export const MIN_SAFE_RATIO = 0.5;
+/**
+ * 寫日記、再壓一次、大綱給模型的輸出額度至少多少（v0.13.40，使用者回報 empty_length）：
+ * 以前只給 1024，會先「思考」的模型把額度花在思考上就空了（自動加倍兩次也才 4096）。和壓縮、前情提要一樣至少 4000，只照實際用的計費。
+ */
+const MIN_OUTPUT = 4000;
 
 const listeners = new Set();
 export function onDiaryChange(fn) {
@@ -125,7 +131,7 @@ async function writePart(date, partNo, style, only = '') {
     }
     const { prompt, length, floors } = buildDiaryPrompt(date, p, style);
     try {
-        const raw = await generateText(prompt, { maxTokens: Math.max(1024, length * 3), purpose: 'diary' });
+        const raw = await generateText(prompt, { maxTokens: Math.max(MIN_OUTPUT, length * 3), purpose: 'diary' });
         const v = parseDiary(raw);
         day.parts.length = p.total;
         day.parts[partNo - 1] = {
@@ -144,7 +150,7 @@ async function writePart(date, partNo, style, only = '') {
         else delete day.only;
     } catch (e) {
         console.warn(LOG_PREFIX, '寫日記失敗', date, partNo, e);
-        day.parts[partNo - 1] = { ...(day.parts[partNo - 1] ?? { part: partNo, total: p.total, floors }), error: e?.message || String(e) };
+        day.parts[partNo - 1] = { ...(day.parts[partNo - 1] ?? { part: partNo, total: p.total, floors }), error: errorText(e) };
     }
     saveMeta();
     // 這批都寫完了（隊伍裡只剩正在跑的這段）、還沒有大綱：順手寫一份（只寫一次；之後日記改了，提醒使用者重寫）。
@@ -221,6 +227,11 @@ export function dayText(day, which = day?.use) {
     return (day?.parts ?? []).filter((p) => p?.summary).map((p) => p.summary).join('\n');
 }
 
+/** 以前存的是錯誤代碼（例如 empty_length），顯示時換成看得懂的說明（v0.13.40）。 */
+function readableError(x) {
+    return /^[a-z_]+$/.test(String(x)) ? t(`err.${x}`, { detail: '' }) : x;
+}
+
 /** 全部的日記，照日期排：[{ date, state, parts, points, original, compressed, use, chars }]。 */
 export function listDiary() {
     const days = record(false)?.days ?? {};
@@ -230,7 +241,7 @@ export function listDiary() {
         return {
             date: d.date, state: dayState(d.date), parts: d.parts ?? [], points, original,
             compressed: d.compressed ?? null, use: d.compressed?.summary && d.use === 'compressed' ? 'compressed' : 'original',
-            chars: dayText(d).length, errors: (d.parts ?? []).filter((p) => p?.error).map((p) => p.error),
+            chars: dayText(d).length, errors: (d.parts ?? []).filter((p) => p?.error).map((p) => readableError(p.error)),
             style: d.parts?.find((p) => p?.style)?.style ?? '',
             chats: Array.isArray(d.chats) ? d.chats : [], only: d.only ?? '',
         };
@@ -267,14 +278,14 @@ export function compressDay(date, opts = {}) {
         if (!day) return;
         const { prompt, length, from, kept } = buildCompressPrompt(date, opts);
         try {
-            const raw = await generateText(prompt, { maxTokens: Math.max(1024, length * 3), purpose: 'diaryCompress' });
+            const raw = await generateText(prompt, { maxTokens: Math.max(MIN_OUTPUT, length * 3), purpose: 'diaryCompress' });
             const v = parseDiary(raw);
             day.compressed = { summary: v.summary.trim(), at: Date.now(), by: modelLabel(), ratio: opts.ratio ?? MIN_SAFE_RATIO, keep: kept.map((p) => p.text), from };
             day.use = 'compressed';
             day.compressError = '';
         } catch (e) {
             console.warn(LOG_PREFIX, '再壓一次失敗', date, e);
-            day.compressError = e?.message || String(e);
+            day.compressError = errorText(e);
         }
         saveMeta();
     }, { label: TASK });
@@ -368,12 +379,12 @@ export function queueOutline() {
         const { prompt, length, days } = buildOutlinePrompt();
         if (!days) return;
         try {
-            const raw = await generateText(prompt, { maxTokens: Math.max(1024, length * 3), purpose: 'diary' });
+            const raw = await generateText(prompt, { maxTokens: Math.max(MIN_OUTPUT, length * 3), purpose: 'diary' });
             const v = parseDiary(raw);
             rec.outline = { text: v.summary.trim(), at: Date.now(), by: modelLabel(), basis: outlineBasis() };
         } catch (e) {
             console.warn(LOG_PREFIX, '寫大綱失敗', e);
-            rec.outline = { ...(rec.outline ?? {}), error: e?.message || String(e) };
+            rec.outline = { ...(rec.outline ?? {}), error: errorText(e) };
         }
         saveMeta();
     }, { label: TASK });

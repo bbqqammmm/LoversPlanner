@@ -65,7 +65,8 @@ import {
 } from '../scope.js';
 
 // 「行事曆／約定」：行事曆和約定、待辦合成一個分頁（v0.12.9，使用者要求），分頁的 key 沿用 notes。
-const TABS = ['summary', 'characters', 'items', 'notes', 'memories', 'done', 'settings'];
+// diary：📖 日記（v0.13.44 從摘要分頁搬出來，使用者要求）：舊聊天整理＋日記。
+const TABS = ['summary', 'characters', 'items', 'notes', 'memories', 'diary', 'done', 'settings'];
 
 /** 每個分頁放哪些記事類型（記事分頁＝約定＋待辦）。 */
 const TAB_TYPES = { characters: ['character'], items: ['item'], notes: ['promise', 'todo'] };
@@ -357,7 +358,7 @@ let viewChat;
  * 舊聊天清單和讀到的內容、選好的導入檔、日記的提示、備份的訊息等都只屬於原本那個聊天，清掉。
  */
 function resetChatView() {
-    view.old = { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '', only: {}, days: null, from: '', to: '' };
+    view.old = { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '', only: {}, days: null, from: '', to: '', loaded: null };
     clearLoadedDays();
     view.diary = { ...view.diary, open: new Set(), editing: null, compress: null, msg: '', conflicts: [], replace: null, outlineEdit: false };
     view.data = { ...view.data, file: null, bundle: null, fileName: '', confirmWipe: false, confirmReplace: false, message: null };
@@ -536,6 +537,7 @@ function renderTab() {
             // 月曆在最上面，下面是約定、待辦。
             return `${calendarOn() ? renderCalendarTab() : ''}${renderNotesTab(TAB_TYPES.notes.filter(isTracked))}`;
         case 'memories': return renderMemoriesTab();
+        case 'diary': return renderDiaryTab();
         case 'done': return renderDoneTab();
         case 'settings': return renderSettings();
         default: return '';
@@ -853,8 +855,6 @@ function renderSummaryTab() {
       <div class="lp-summary">
         ${preview}
         ${recapCard()}
-        ${oldChatsCard()}
-        ${diarySection()}
         ${searchBox('summary')}
         <div class="lp-row lp-sum-toolbar">
           <div class="lp-chips">${chips}</div>
@@ -1255,6 +1255,17 @@ function renderCheck() {
 
 // ===== 摘要分頁：📦 舊聊天整理（v0.13.33，日記第一階段） =====
 
+/** 📖 日記分頁（v0.13.44）：上面讀舊聊天、寫成日記，下面是寫好的日記。 */
+function renderDiaryTab() {
+    if (!isActive()) return '';
+    const diary = diarySection();
+    return `<div class="lp-diary-tab">
+        <div class="lp-note">${esc(t('diaryTab.intro'))}</div>
+        ${oldChatsCard()}
+        ${diary || `<div class="lp-wip">${esc(t('diaryTab.empty'))}</div>`}
+      </div>`;
+}
+
 function oldChatsCard() {
     const o = view.old;
     if (!o.open) {
@@ -1292,11 +1303,13 @@ function oldChatsCard() {
 function oldResultHtml(r) {
     const tt = r.totals;
     const dated = r.days.filter((d) => d.date);
-    const range = dated.length ? `${dated[0].date} ～ ${dated[dated.length - 1].date}` : '';
+    // 沒有日期時不寫空的括號。
+    const range = dated.length ? (currentLocale().startsWith('zh') ? `（${dated[0].date} ～ ${dated[dated.length - 1].date}）` : ` (${dated[0].date} – ${dated[dated.length - 1].date})`) : '';
     const lines = [t('old.summary', { chats: r.chats.length, ai: tt.ai.toLocaleString(), days: tt.days, range })];
     lines.push(t('old.summarized', { ok: tt.summarized.toLocaleString(), todo: tt.unsummarized.toLocaleString() }));
     const extra = [];
     if (tt.horae) extra.push(t('old.horae', { n: tt.horae }));
+    if (tt.found) extra.push(t(r.dates.mode === 'tag' ? 'old.foundTag' : 'old.foundText', { n: tt.found, tag: r.dates.tag }));
     if (tt.undated) extra.push(t('old.undated', { n: tt.undated }));
     if (tt.duplicates) extra.push(t('old.dup', { n: tt.duplicates }));
     if (tt.skipped || tt.side) extra.push(t('old.skipped', { skip: tt.skipped, side: tt.side }));
@@ -1321,6 +1334,7 @@ function oldResultHtml(r) {
       <div class="lp-old-result" data-role="old-result">
         ${lines.map((x) => `<div>${esc(x)}</div>`).join('')}
         ${extra.length ? `<div class="lp-note">${esc(extra.join('・'))}</div>` : ''}
+        ${dateSourceHtml(r)}
         <div class="lp-note">${esc(t('old.diaryTotal', { n: tt.diary.toLocaleString(), raw: tt.raw.toLocaleString() }) + (big ? t('old.big', { n: big }) : ''))}</div>
         ${r.overlaps.length ? `<div class="lp-note lp-warn">${esc(t('old.overlaps', { n: r.overlaps.length }))}</div>` : ''}
         ${cal}
@@ -1329,6 +1343,22 @@ function oldResultHtml(r) {
           ${dayPicker(r)}
           <ul>${dayRows}</ul></details>
       </div>`;
+}
+
+/** 日期從哪裡讀（v0.13.44）：自動找到的標籤、其他有日期的標籤、純文字的「日期：…」、不用。有沒日期的樓層或自動找過才顯示。 */
+function dateSourceHtml(r) {
+    const d = r.dates ?? { mode: 'none', candidates: [], text: 0 };
+    if (!r.totals.found && !r.totals.undated && !d.candidates.length) return '';
+    const cur = d.mode === 'tag' ? `tag:${d.tag}` : d.mode;
+    const opts = [
+        ...d.candidates.map((c) => [`tag:${c.tag}`, t('old.dateTag', { tag: c.tag, n: c.hits, total: d.sample })]),
+        ...(d.text || d.mode === 'text' ? [['text', t('old.dateText', { n: d.text, total: d.sample })]] : []),
+        ['none', t('old.dateNone')],
+    ];
+    return `<div class="lp-row lp-old-dates" data-role="old-dates">
+        <label class="lp-label" for="lp-old-date-src">${esc(t('old.dateFrom'))}</label>
+        <select id="lp-old-date-src" class="text_pole lp-select" data-role="old-date-src">${opts.map(([v, label]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>
+      </div>${d.mode === 'none' && r.totals.undated ? `<div class="lp-note lp-warn">${esc(t('old.dateHelp'))}</div>` : ''}`;
 }
 
 /** 讀完舊聊天之後：選寫法、看預估、開始寫日記。 */
@@ -1611,6 +1641,8 @@ async function readOldChats() {
         // 讀的時候換了聊天：不分析（不然會把別的角色的內容當成這個聊天的舊聊天）。
         if (chatKey() !== chat || o !== view.old) return;
         o.result = analyzeChats(loaded);
+        // 留著讀到的檔案：換「日期從哪裡讀」時要重新分析（換聊天時清掉）。
+        o.loaded = loaded;
         // 新讀的：預設每一天都選（v0.13.43 起可以只選幾天）。
         o.days = new Set(o.result.days.filter((d) => d.date && d.ai).map((d) => d.date));
         o.from = '';
@@ -1988,9 +2020,9 @@ function renderTree(states) {
 
 let summaryRefreshTimer = null;
 function canAutoRefresh() {
-    if (!isPanelOpen() || !(view.check.open || ['summary', 'notes', 'done', 'memories'].includes(view.tab))) return false;
-    // 正在填表單（記事、章／卷總結、回憶）時不重畫，免得打到一半的字不見。
-    if (view.notes.editing || view.notes.adding || view.sum.editing || view.mem.editing || view.mem.adding) return false;
+    if (!isPanelOpen() || !(view.check.open || ['summary', 'notes', 'done', 'memories', 'diary'].includes(view.tab))) return false;
+    // 正在填表單（記事、章／卷總結、回憶、日記、大綱）時不重畫，免得打到一半的字不見。
+    if (view.notes.editing || view.notes.adding || view.sum.editing || view.mem.editing || view.mem.adding || view.diary.editing || view.diary.outlineEdit) return false;
     // 其他輸入框（例如月曆的「新增」）正在打字時也不重畫（搜尋框重畫時會自己保留，不算）。
     const active = document.activeElement;
     if (active && panel?.contains(active) && active.matches('input:not([type=checkbox]):not([type=radio]), textarea') && !active.dataset.search && active.value) return false;
@@ -4454,6 +4486,17 @@ function onChange(e) {
     }
     if (el.dataset?.role === 'bundle-scope') {
         if (el.checked) view.backup.scope = el.value;
+        return;
+    }
+    if (el.dataset?.role === 'old-date-src') {
+        const o = view.old;
+        if (!o.loaded || !o.result) return;
+        const v = el.value;
+        const dates = { ...o.result.dates, mode: v.startsWith('tag:') ? 'tag' : v, tag: v.startsWith('tag:') ? v.slice(4) : '' };
+        o.result = analyzeChats(o.loaded, { dates });
+        o.days = new Set(o.result.days.filter((d) => d.date && d.ai).map((d) => d.date));
+        o.only = {};
+        render();
         return;
     }
     if (el.dataset?.role === 'old-only') {

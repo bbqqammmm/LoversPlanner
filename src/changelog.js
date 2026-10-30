@@ -9,6 +9,23 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.44',
+        new: {
+            'zh-TW': [
+                '📖 日記有自己的分頁了：📦 舊聊天整理和日記都從摘要分頁搬過去。',
+                '🗓️ 舊聊天沒有戀人手帳或 Horae 的日期時，會自動從狀態欄這類標籤（或純文字的「日期：…」）讀故事日期；讀結果裡會寫從哪裡讀的，可以改選別的標籤。',
+            ],
+            'zh-CN': [
+                '📖 日记有自己的分页了：📦 旧聊天整理和日记都从摘要分页搬过去。',
+                '🗓️ 旧聊天没有恋人手帐或 Horae 的日期时，会自动从状态栏这类标签（或纯文本的「日期：…」）读故事日期；读结果里会写从哪里读的，可以改选别的标签。',
+            ],
+            en: [
+                '📖 Diaries have their own tab now: Old chats and the diary moved there from the Summaries tab.',
+                '🗓️ Old chats without Lover\'s Planner or Horae dates now get their story dates from a status-bar tag (or plain "Date: …" lines) automatically; the result says where they came from, and you can pick another tag.',
+            ],
+        },
+    },
+    {
         v: '0.13.43',
         new: {
             'zh-TW': ['📖 寫日記可以只選幾天：「每一天」清單點一下勾選或取消，也可以全選、全不選、選一段日期；寫的時候顯示正在寫哪一天、第幾段，和這一批的進度條。'],

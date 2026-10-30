@@ -9,7 +9,7 @@ import { ctx, MODULE } from './util.js';
 import { hashText, isAiMessage, isUserMessage } from './chat.js';
 import { normDate } from './calendar.js';
 import { characterKey } from './scope.js';
-import { cleanForSummary } from './filter.js';
+import { cleanForSummary, scanTags } from './filter.js';
 
 /** 上次分析的每一天的內容（寫日記用，不存檔；重新整理後要再讀一次）。 */
 let lastUnits = new Map();
@@ -115,6 +115,81 @@ function horaeDate(m) {
     return x ? normDate(`${x[1]}-${x[2].padStart(2, '0')}-${x[3].padStart(2, '0')}`) : '';
 }
 
+// ===== 從標籤或文字找日期（v0.13.44，使用者回報：沒摘要過、也沒用 Horae 的聊天，493 層全部「沒有日期」） =====
+// 很多卡會在狀態欄（例如 <status>…日期：2025年10月21日…</status>）或純文字的「日期：…」寫故事日期。
+// 自動：先抽樣沒有日期的 AI 樓層，找哪個標籤裡最常讀得到完整的日期；沒有的話試試純文字的「日期：…」那一行。
+// 只有「月日」沒有年的，用上一個日期的年份。使用者可以改用別的標籤，或不用。
+
+const FULL_DATE = /(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/;
+const MONTH_DAY = /(\d{1,2})\s*月\s*(\d{1,2})\s*[日號号]/;
+const WHEN_LINE = /^\s*[-*•·]?\s*[【\[]?\s*(?:時間|时间|日期|時段|时段|日子|time|date|datetime)\s*[】\]]?\s*[:：]/i;
+/** 抽樣幾則來找日期在哪裡；讀到完整日期的比例至少多少才採用。 */
+const DATE_SAMPLE = 400;
+const DATE_MIN_RATE = 0.3;
+
+const pad = (x) => String(x).padStart(2, '0');
+
+function parseDate(text, year = '') {
+    const s = String(text ?? '');
+    const m = s.match(FULL_DATE);
+    if (m) return normDate(`${m[1]}-${pad(m[2])}-${pad(m[3])}`);
+    const x = year ? s.match(MONTH_DAY) : null;
+    return x ? normDate(`${year}-${pad(x[1])}-${pad(x[2])}`) : '';
+}
+
+function tagInner(text, tag) {
+    const esc = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const m = String(text ?? '').match(new RegExp(`<\\s*${esc}(?:\\s[^<>]*)?>([\\s\\S]*?)<\\s*\\/\\s*${esc}\\s*>`, 'i'));
+    return m ? m[1] : '';
+}
+
+/** 純文字的「日期：…」「時間：…」那一行（只看前後各 12 行）。 */
+function textDate(text, year) {
+    const lines = String(text ?? '').split(/\r?\n/);
+    const near = lines.length > 24 ? [...lines.slice(0, 12), ...lines.slice(-12)] : lines;
+    for (const line of near) {
+        if (line.length > 120 || !WHEN_LINE.test(line)) continue;
+        const d = parseDate(line, year);
+        if (d) return d;
+    }
+    return '';
+}
+
+/** 這一則用 dates（{ mode: 'tag'|'text'|'none', tag }）讀到的日期。 */
+function extraDate(mes, dates, year) {
+    if (dates?.mode === 'tag' && dates.tag) return parseDate(tagInner(mes, dates.tag), year);
+    if (dates?.mode === 'text') return textDate(mes, year);
+    return '';
+}
+
+/**
+ * 找日期在哪裡：{ mode, tag, candidates: [{ tag, hits }], text: 純文字讀得到的則數, sample }。
+ * 只看沒有戀人手帳日期、也沒有 Horae 日期的 AI 樓層。
+ */
+export function detectDates(loaded) {
+    const pool = [];
+    for (const { data } of loaded) {
+        const header = data[0] && !('mes' in data[0]) ? data[0] : null;
+        for (const m of header ? data.slice(1) : data) {
+            if (!isAiMessage(m) || normDate(m.extra?.[MODULE]?.date) || horaeDate(m)) continue;
+            pool.push(String(m.mes ?? ''));
+        }
+    }
+    if (!pool.length) return { mode: 'none', tag: '', candidates: [], text: 0, sample: 0 };
+    const step = Math.max(1, Math.floor(pool.length / DATE_SAMPLE));
+    const sample = pool.filter((_, i) => i % step === 0).slice(0, DATE_SAMPLE);
+    const candidates = scanTags(sample)
+        .filter((x) => x.dated)
+        .map((x) => ({ tag: x.name, hits: sample.filter((m) => parseDate(tagInner(m, x.name))).length }))
+        .filter((x) => x.hits)
+        .sort((a, b) => b.hits - a.hits);
+    const text = sample.filter((m) => textDate(m)).length;
+    const min = sample.length * DATE_MIN_RATE;
+    if (candidates[0] && candidates[0].hits >= min && candidates[0].hits >= text) return { mode: 'tag', tag: candidates[0].tag, candidates, text, sample: sample.length };
+    if (text >= min) return { mode: 'text', tag: '', candidates, text, sample: sample.length };
+    return { mode: 'none', tag: '', candidates, text, sample: sample.length };
+}
+
 const EVENT_TYPES = ['period', 'intimacy', 'anniversary'];
 
 function plainEvent(ev, date, origin) {
@@ -132,15 +207,16 @@ function plainEvent(ev, date, origin) {
  * 分析讀到的聊天（照勾選的順序，舊的先）。
  * loaded：[{ id, data }]。回傳 { chats, days, totals, calendar, overlaps }。
  * keepDays：false 時不換掉「上次讀到的每一天」（只是來讀行事曆的，不影響寫日記，v0.13.38）。
+ * dates：日期從哪裡讀（detectDates 的結果，或使用者選的 { mode, tag }）；沒給就自動找。
  */
-export function analyzeChats(loaded, { keepDays = true } = {}) {
+export function analyzeChats(loaded, { keepDays = true, dates = detectDates(loaded) } = {}) {
     const seen = new Set();
     const days = new Map();
     const day = (date) => {
         if (!days.has(date)) days.set(date, { date, ai: 0, user: 0, summarized: 0, coarse: 0, side: 0, rawChars: 0, sumChars: 0, chats: new Set(), units: [], sendChars: 0 });
         return days.get(date);
     };
-    const totals = { ai: 0, summarized: 0, unsummarized: 0, undated: 0, skipped: 0, side: 0, duplicates: 0, horae: 0 };
+    const totals = { ai: 0, summarized: 0, unsummarized: 0, undated: 0, skipped: 0, side: 0, duplicates: 0, horae: 0, found: 0 };
     const events = [];
     const chats = [];
     for (const { id, data } of loaded) {
@@ -174,8 +250,10 @@ export function analyzeChats(loaded, { keepDays = true } = {}) {
             if (isAiMessage(m)) {
                 const own = normDate(e?.date);
                 const h = own ? '' : horaeDate(m);
-                if (own || h) cur = own || h;
+                const found = own || h ? '' : extraDate(m.mes, dates, cur.slice(0, 4));
+                if (own || h || found) cur = own || h || found;
                 if (!own && h) totals.horae++;
+                if (found) totals.found++;
             }
             const text = cleanForSummary(m.mes ?? '');
             const raw = text.length;
@@ -254,6 +332,7 @@ export function analyzeChats(loaded, { keepDays = true } = {}) {
             intimacy: calendar.filter((x) => x.type === 'intimacy').reduce((n, x) => n + (Number(x.count) || 1), 0),
             anniversary: calendar.filter((x) => x.type === 'anniversary').length,
         },
+        dates,
         // 同一天有好幾個聊天都寫到（可能是 IF 線、平行世界）。
         overlaps: list.filter((d) => d.date && d.chats.length > 1).map((d) => d.date),
     };

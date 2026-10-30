@@ -59,7 +59,9 @@ await page.addInitScript(() => {
 await page.goto(URL);
 await page.waitForFunction(() => Boolean(globalThis.loversPlannerInterceptor));
 await page.evaluate(() => { document.getElementById('extensionsMenu').style.display = ''; document.getElementById('lp_wand_entry').click(); });
+await page.click('[data-tab="diary"]');
 await page.waitForSelector('[data-action="old-open"]');
+await page.click('[data-tab="diary"]');
 await page.click('[data-action="old-open"]');
 await page.waitForSelector('[data-action="old-pick"]');
 const ids = await page.$$eval('[data-action="old-pick"]', (els) => els.map((e) => e.dataset.id));

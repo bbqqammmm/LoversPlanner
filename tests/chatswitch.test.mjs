@@ -38,6 +38,7 @@ await page.addInitScript(() => {
 await page.goto(URL);
 await page.waitForFunction(() => Boolean(globalThis.loversPlannerInterceptor));
 await page.evaluate(() => { document.getElementById('extensionsMenu').style.display = ''; document.getElementById('lp_wand_entry').click(); });
+await page.click('[data-tab="diary"]');
 await page.click('[data-action="old-open"]');
 await page.click('[data-action="old-pick"]');
 await page.click('[data-action="old-read"]');
@@ -54,6 +55,7 @@ await page.evaluate(async () => {
 });
 await page.waitForSelector('[data-action="old-open"]');
 check('old-chat card closed and cleared', !(await page.$('[data-role="diary-start"]')) && !(await page.evaluate(async () => (await import('/src/oldchats.js')).hasLoadedDays())));
+await page.click('[data-tab="diary"]');
 await page.click('[data-action="old-open"]');
 await page.waitForSelector('[data-action="old-pick"]');
 const list = await page.textContent('[data-role="oldchats"]');

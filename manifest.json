@@ -6,7 +6,7 @@
   "js": "index.js",
   "css": "style.css",
   "author": "bbqqammmm",
-  "version": "0.13.43",
+  "version": "0.13.44",
   "homePage": "https://github.com/bbqqammmm/LoversPlanner",
   "generate_interceptor": "loversPlannerInterceptor"
 }

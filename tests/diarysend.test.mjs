@@ -88,7 +88,7 @@ const receipt = await page.evaluate(async () => {
 check('receipt lists recalled diary parts', receipt.includes('📖 找回的日記（1 段）') && receipt.includes('燈塔') && receipt.includes('日記 1 段'), receipt.slice(0, 300));
 
 // 日記區塊：送給角色的設定和說明
-await page.click('[data-tab="summary"]');
+await page.click('[data-tab="diary"]');
 await page.waitForSelector('[data-role="diary-send"]');
 let info = await page.textContent('[data-role="diary-send-info"]');
 check('diary card explains what is sent', info.includes('2025-05-10') && info.includes('2025-05-08～2025-05-09') && info.includes('最多找回 2 段'), info);

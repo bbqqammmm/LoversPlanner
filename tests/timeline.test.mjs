@@ -62,6 +62,7 @@ await page.evaluate(() => {
 const idle = () => page.evaluate(async () => { for (let i = 0; i < 400; i++) { if ((await import('/src/diary.js')).diaryPending() === 0 && !(await import('/src/summarize.js')).pendingCount({ tasks: true })) return; await new Promise((r) => setTimeout(r, 50)); } throw new Error('timed out'); });
 const days = () => page.evaluate(async () => Object.fromEntries((await import('/src/diary.js')).listDiary().map((d) => [d.date, { text: d.original, chats: d.chats, only: d.only }])));
 
+await page.click('[data-tab="diary"]');
 await page.click('[data-action="old-open"]');
 await page.click('[data-action="old-pick"][data-id="舊聊天A"]');
 await page.click('[data-action="old-pick"][data-id="舊聊天B"]');

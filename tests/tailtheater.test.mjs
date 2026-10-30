@@ -1,6 +1,7 @@
 // 🥚 文末附的彩蛋小劇場（v0.13.49，使用者回報：正文後面附一段「💭 某某的內心小劇場」，整層被當成小劇場，正文沒寫進日記）：
 // 摘要和日記只拿掉文末那段（一行短標題到結尾）；對話裡提到小劇場、開頭就是番外的不動；
 // 以前被整層標成 ⭐ 小劇場的：舊聊天整理照寫正文（可以關掉），現在的聊天在「重新檢查」裡建議改回照常摘要。
+// v0.13.50：只是提到番外（OOC 聊番外）的也算正文；舊聊天整理逐層列出 ⭐ 的樓層，可以勾選。
 import { createRequire } from 'node:module';
 import { execSync } from 'node:child_process';
 const require = createRequire(import.meta.url);
@@ -66,6 +67,55 @@ const old = await page.evaluate(async ({ withTail, allSide }) => {
 }, { withTail: WITH_TAIL, allSide: ALL_SIDE });
 check('old chats: the story of such a floor goes into the diary', old.on.ai === 1 && old.on.side === 1 && old.on.n === 1 && old.text.includes('便利店') && !old.text.includes('內心小劇場'), JSON.stringify(old));
 check('old chats: can be left out', old.off.ai === 0 && old.off.side === 2, JSON.stringify(old.off));
+
+// 3b. 只是提到番外（v0.13.50，使用者回報：整整幾天都沒寫進日記）：OOC 聊番外的那層是正文；要求寫的番外才是番外
+const v = await page.evaluate(async (body) => {
+  const x = await import('/src/filter.js');
+  return {
+    ooc: x.sideStoryVerdict('（OOC：剛剛的番外好好笑，下次再玩小劇場？）「走吧。」', body),
+    ask: x.sideStoryVerdict('請生成一個番外小劇場：兩個人變成同學。', body),
+    title: x.sideStoryVerdict('', `# 【番外】雨夜\n${body}`),
+    sentence: x.sideStoryVerdict('', `番外要開始的時候，我其實很緊張——\n${body}`),
+    inner: x.sideStoryVerdict('', `${body.slice(0, 60)}\n💭 沈言的內心小劇場\n${body}`),
+  };
+}, BODY);
+check('verdict: mentions are story, requests and titles are extras', !v.ooc && v.ask && v.title && !v.sentence && !v.inner, JSON.stringify(v));
+const DAYS = [{ chat_metadata: {} }];
+const side = (k, user, ai, date) => {
+  DAYS.push({ name: '小雨', is_user: true, mes: user, send_date: `s${k}u`, extra: {} });
+  DAYS.push({ name: '沈言', is_user: false, mes: ai, send_date: `s${k}`, extra: { lovers_planner: { status: 'side', summary: '小劇場', date } } });
+};
+side(1, '（OOC：剛剛的番外好好笑）好啦，我們回家吧。', BODY, '2025-07-01');
+side(2, '請生成一個番外小劇場：兩個人變成同學。', `# 番外：同學\n${BODY}`, '2025-07-01');
+side(3, '（OOC：番外好可愛）晚安。', `${BODY}\n睡前。`, '2025-07-02');
+const sides = await page.evaluate(async (data) => {
+  const o = await import('/src/oldchats.js');
+  const r = o.analyzeChats([{ id: 'y', data }]);
+  const flip = o.analyzeChats([{ id: 'y', data }], { sideChoice: { 'y#3': true, 'y#5': false } });
+  return { list: r.sides.map((x) => `${x.floor}:${x.why}:${x.on}`), days: r.days.map((d) => `${d.date}:${d.ai}`), flip: flip.days.map((d) => `${d.date}:${d.ai}`) };
+}, DAYS);
+check('old chats: mentions written, the requested extra not', JSON.stringify(sides.list) === '["1:mention:true","3::false","5:mention:true"]' && JSON.stringify(sides.days) === '["2025-07-01:1","2025-07-02:1"]', JSON.stringify(sides));
+check('old chats: each floor can be changed', JSON.stringify(sides.flip) === '["2025-07-01:2","2025-07-02:0"]', JSON.stringify(sides.flip));
+
+// 畫面：逐層的清單
+await page.route('**/api/characters/chats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ file_id: '舊的', file_size: '1KB', chat_items: 6, last_mes: '2026-10-02' }]) }));
+await page.route('**/api/chats/get', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(DAYS) }));
+await page.evaluate(() => { document.getElementById('extensionsMenu').style.display = ''; document.getElementById('lp_wand_entry').click(); });
+await page.click('[data-tab="diary"]');
+await page.click('[data-action="old-open"]');
+await page.click('[data-action="old-pick"][data-id="舊的"]');
+await page.click('[data-action="old-read"]');
+await page.waitForSelector('[data-role="old-sides"]');
+await page.click('[data-action="old-sides-toggle"]');
+let sideTxt = await page.textContent('[data-role="old-sides"]');
+check('UI: side-scene floors listed with suggestions', sideTxt.includes('⭐ 小劇場的樓層（3 層，2 層寫進日記）') && sideTxt.includes('只是提到番外') && (await page.isChecked('[data-key="舊的#1"]')) && !(await page.isChecked('[data-key="舊的#3"]')), sideTxt.replace(/\s+/g, ' ').slice(0, 200));
+await page.locator('[data-role="old-sides"]').screenshot({ path: `${OUT}/old-sides.png` });
+await page.uncheck('[data-key="舊的#5"]');
+sideTxt = await page.textContent('[data-role="old-sides"]');
+check('UI: unticking leaves that day out', sideTxt.includes('1 層寫進日記') && (await page.textContent('[data-action="diary-start"]')).includes('1 天'), sideTxt.replace(/\s+/g, ' ').slice(0, 120));
+await page.click('[data-action="old-sides"][data-set="all"]');
+check('UI: tick all', (await page.textContent('[data-role="old-sides"]')).includes('3 層寫進日記'));
+await page.click('[data-action="close"]');
 
 // 4. 現在的聊天：重新檢查會列出來，建議改回照常摘要
 await page.evaluate(async () => {

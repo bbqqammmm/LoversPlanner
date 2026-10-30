@@ -137,7 +137,9 @@ check('lists them with text', card.includes('發現 3 層') && card.includes('#2
 check('shows where a later word appears', (await page.textContent('[data-extra="29"] [data-role="extra-around"]')).includes('IF線：如果沒有遇見'));
 check('long text expandable', await page.isVisible('[data-extra="29"] .lp-tag-full summary'));
 await page.screenshot({ path: `${OUT}/extras.png` });
-check('defaults to side scene', (await page.inputValue('[data-role="extra-choice"][data-index="25"]')) === 'side');
+check('defaults to side scene', (await page.inputValue('[data-role="extra-choice"][data-index="25"]')) === 'side' && (await page.inputValue('[data-role="extra-choice"][data-index="23"]')) === 'side');
+// v0.13.50：正文後段才出現一行「IF線：…」、使用者也沒要求番外：建議照常摘要，標「看起來只是提到」。
+check('a later mention defaults to summarize as usual', (await page.inputValue('[data-role="extra-choice"][data-index="29"]')) === 'keep' && (await page.textContent('[data-extra="29"]')).includes('看起來只是提到'));
 await page.selectOption('[data-role="extra-choice"][data-index="23"]', 'skip');
 await page.selectOption('[data-role="extra-choice"][data-index="29"]', 'keep');
 check('button shows counts', (await page.textContent('[data-action="extras-go"]')).includes('跳過 1 層、小劇場 1 層、照常 1 層'));

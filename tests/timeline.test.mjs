@@ -11,6 +11,12 @@ const URL = `http://127.0.0.1:${process.env.PORT ?? 8765}/tests/harness.html`;
 const results = [];
 const errors = [];
 const check = (name, ok, extra = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${name}${extra ? ' — ' + extra : ''}`);
+// 截圖時大視窗剛好自動重畫（元素被換掉）：等一下再截一次。
+async function shot(selector, path) {
+  for (let k = 0; k < 3; k++) {
+    try { return await page.locator(selector).screenshot({ path }); } catch (e) { if (k === 2) throw e; await page.waitForTimeout(300); }
+  }
+}
 
 const lp = (date, summary) => ({ lovers_planner: { v: 2, status: 'ok', summary, date, ops: [], at: 1, hash: 'x' } });
 const chatFile = (tag, days) => {
@@ -70,7 +76,7 @@ await page.click('[data-action="old-read"]');
 await page.waitForSelector('[data-role="diary-overlaps"]');
 const ov = await page.textContent('[data-role="diary-overlaps"]');
 check('overlap day listed with both chats', ov.includes('2025-04-01') && ov.includes('只用 舊聊天A') && ov.includes('只用 舊聊天B') && ov.includes('都用'), ov.replace(/\s+/g, ' '));
-await page.locator('[data-role="diary-overlaps"]').screenshot({ path: `${OUT}/timeline-overlap.png` });
+await shot('[data-role="diary-overlaps"]', `${OUT}/timeline-overlap.png`);
 await page.selectOption('[data-role="old-only"][data-date="2025-04-01"]', '舊聊天B');
 await page.click('[data-action="diary-start"]');
 await idle();
@@ -98,7 +104,7 @@ d = await days();
 check('day written from another chat is not overwritten', d['2025-04-01'].text === 'B的2025-04-01' && !(await page.evaluate(() => window.__diaryPrompts.length)), JSON.stringify(d['2025-04-01']));
 const cf = await page.textContent('[data-role="diary-conflicts"]');
 check('user is told and asked', cf.includes('有 1 天已經有用別的聊天寫的日記（2025-04-01）') && cf.includes('照這次讀的重寫'), cf.replace(/\s+/g, ' '));
-await page.locator('[data-role="diary-conflicts"]').screenshot({ path: `${OUT}/timeline-conflict.png` });
+await shot('[data-role="diary-conflicts"]', `${OUT}/timeline-conflict.png`);
 // 單天的「重寫」也要先問
 await page.click('[data-action="diary-conflicts-ok"]');
 await page.click('[data-action="diary-rewrite"][data-date="2025-04-01"]');

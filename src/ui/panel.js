@@ -1317,7 +1317,7 @@ function oldResultHtml(r) {
     if (tt.duplicates) extra.push(t('old.dup', { n: tt.duplicates }));
     if (tt.skipped || tt.side) extra.push(t('old.skipped', { skip: tt.skipped, side: tt.side }));
     if (tt.empty) extra.push(t('old.empty', { n: tt.empty }));
-    if (tt.sideBody && r.sideBody) extra.push(t('old.sideBody', { n: tt.sideBody }));
+    if (tt.sideBody) extra.push(t('old.sideBody', { n: tt.sideBody }));
     const big = r.days.filter((d) => d.parts > 1).length;
     const otherChat = new Set(conflictDays(r.days.filter((d) => d.date && d.ai).map((d) => d.date), view.old.only));
     const dayRows = r.days.map((d) => {
@@ -1349,7 +1349,7 @@ function oldResultHtml(r) {
         ${extra.length ? `<div class="lp-note">${esc(extra.join('・'))}</div>` : ''}
         ${dateSourceHtml(r)}
         ${undatedHtml(r)}
-        ${r.totals.sideBody ? `<label class="lp-check"><input type="checkbox" data-role="old-side-body"${r.sideBody ? ' checked' : ''}> ${esc(t('old.sideBodyToggle', { n: r.totals.sideBody }))}</label>` : ''}
+        ${sidesHtml(r)}
         <div class="lp-note">${esc(t('old.diaryTotal', { n: tt.diary.toLocaleString(), raw: tt.raw.toLocaleString() }) + (big ? t('old.big', { n: big }) : ''))}</div>
         ${r.overlaps.length ? `<div class="lp-note lp-warn">${esc(t('old.overlaps', { n: r.overlaps.length }))}</div>` : ''}
         ${cal}
@@ -1379,6 +1379,44 @@ function dateSourceHtml(r) {
         <div class="lp-old-date-list">${rows}</div>
         ${on.size ? '' : `<div class="lp-note">${esc(t('old.dateNone'))}</div>`}
       </fieldset>${!on.size && r.totals.undated ? `<div class="lp-note lp-warn">${esc(t('old.dateHelp'))}</div>` : ''}`;
+}
+
+/**
+ * ⭐ 小劇場的樓層（v0.13.50，使用者回報：整整幾天都沒寫進日記）：以前「番外」的提醒只要提到番外就整層標成小劇場。
+ * 逐層列出來（日期、第幾層、開頭幾個字），勾起來的寫進日記；預設勾「看起來是正文」的（文末附小劇場、只是提到番外）。
+ */
+function sidesHtml(r) {
+    const list = r.sides ?? [];
+    if (!list.length) return '';
+    const many = r.chats.length > 1;
+    const on = list.filter((x) => x.on).length;
+    const rows = list.map((x) => {
+        const label = `${x.date || t('old.noDate')} ${many ? `${x.chat} ` : ''}#${x.floor}`;
+        const why = x.why ? ` <span class="lp-badge">${esc(t(`old.side.why.${x.why}`))}</span>` : '';
+        return `<li><label class="lp-check"><input type="checkbox" data-role="old-side" data-key="${esc(x.key)}"${x.on ? ' checked' : ''}${x.text ? '' : ' disabled'}>
+          <span><b>${esc(label)}</b>${why} <span class="lp-note">${esc(x.text || '—')}</span></span></label></li>`;
+    }).join('');
+    return `<details class="lp-old-sides" data-role="old-sides"${view.old.sidesOpen ? ' open' : ''}>
+        <summary data-action="old-sides-toggle">${esc(t('old.side.title', { n: list.length, on }))}</summary>
+        <div class="lp-note">${esc(t('old.side.hint'))}</div>
+        <div class="lp-row">
+          <button type="button" class="menu_button lp-btn lp-mini" data-action="old-sides" data-set="suggest">${esc(t('old.side.suggest'))}</button>
+          <button type="button" class="menu_button lp-btn lp-mini" data-action="old-sides" data-set="all">${esc(t('old.side.all'))}</button>
+          <button type="button" class="menu_button lp-btn lp-mini" data-action="old-sides" data-set="none">${esc(t('old.side.none'))}</button>
+        </div>
+        <ul>${rows}</ul>
+      </details>`;
+}
+
+/** 改了哪些 ⭐ 小劇場寫進日記：重新分析，勾好的日子留著，新多出來的日子也勾上。 */
+function reanalyzeSides() {
+    const o = view.old;
+    if (!o.loaded || !o.result) return;
+    const before = new Set(o.result.days.filter((d) => d.date && d.ai).map((d) => d.date));
+    o.result = analyzeChats(o.loaded, { dates: o.result.dates, leadIn: o.result.leadIn, sideChoice: o.sideChoice ?? {} });
+    const now = o.result.days.filter((d) => d.date && d.ai).map((d) => d.date);
+    const picked = o.days ?? before;
+    o.days = new Set(now.filter((date) => picked.has(date) || !before.has(date)));
 }
 
 /** 找不到日期的樓層（v0.13.48，使用者要求：看得到是哪幾層、寫了什麼）；聊天開頭的可以算進第一個日期。 */
@@ -1697,6 +1735,7 @@ async function readOldChats() {
         o.from = '';
         o.to = '';
         o.ids = ids;
+        o.sideChoice = {};
     } catch (e) {
         o.msg = t('old.fail', { error: errorText(e) });
         logError('oldchats', e);
@@ -1794,7 +1833,7 @@ function extrasCard(cu) {
         const opts = ['skip', 'side', 'keep'].map((c) => `<option value="${c}"${choice(x.index) === c ? ' selected' : ''}>${esc(t(`extras.${c}`))}</option>`).join('');
         const head = x.excerpt.slice(0, 150);
         return `<li class="lp-extra-row" data-extra="${x.index}">
-          <div class="lp-row"><b>#${x.index}</b><span class="lp-badge">${esc(x.sideBody ? t('extras.sideBody') : t('extras.word', { word: x.word }))}</span>${x.chapter ? `<span class="lp-badge lp-st-stale">${esc(t('extras.inChapter', { n: x.chapter }))}</span>` : ''}<span class="lp-spacer"></span>
+          <div class="lp-row"><b>#${x.index}</b><span class="lp-badge">${esc(x.sideBody ? t('extras.sideBody') : t('extras.word', { word: x.word }))}</span>${!x.sideBody && x.suggest === 'keep' ? `<span class="lp-badge" data-role="extra-mention">${esc(t('extras.mention'))}</span>` : ''}${x.chapter ? `<span class="lp-badge lp-st-stale">${esc(t('extras.inChapter', { n: x.chapter }))}</span>` : ''}<span class="lp-spacer"></span>
             <select class="text_pole lp-select" data-role="extra-choice" data-index="${x.index}" aria-label="${esc(t('extras.choice', { n: x.index }))}">${opts}</select></div>
           ${x.user ? `<div class="lp-note lp-extra-user">${esc(t('extras.user', { text: x.user }))}</div>` : ''}
           <div class="lp-extra-text">${esc(head)}${x.excerpt.length > head.length ? '…' : ''}</div>
@@ -3757,6 +3796,18 @@ function onClick(e) {
             // <summary> 自己會開關；記下來，重畫後維持。
             view.old.daysOpen = !panel.querySelector('[data-role="old-days"]')?.open;
             return;
+        case 'old-sides-toggle':
+            view.old.sidesOpen = !panel.querySelector('[data-role="old-sides"]')?.open;
+            return;
+        case 'old-sides': {
+            const o = view.old;
+            if (!o.result) return;
+            const set = btn.dataset.set;
+            o.sideChoice = set === 'suggest' ? {} : Object.fromEntries((o.result.sides ?? []).map((x) => [x.key, set === 'all']));
+            reanalyzeSides();
+            render();
+            return;
+        }
         case 'old-undated-toggle':
             view.old.undatedOpen = !panel.querySelector('[data-role="old-undated"]')?.open;
             return;
@@ -4614,16 +4665,21 @@ function onChange(e) {
         if (el.checked) view.backup.scope = el.value;
         return;
     }
-    if (['old-date-src', 'old-lead-in', 'old-side-body'].includes(el.dataset?.role)) {
+    if (['old-date-src', 'old-lead-in'].includes(el.dataset?.role)) {
         // 換了日期從哪裡讀（可以勾好幾個，照清單的順序），或開頭沒日期的要不要算進第一天：重新分析。
         const o = view.old;
         if (!o.loaded || !o.result) return;
         const sources = [...panel.querySelectorAll('[data-role="old-date-src"]')].filter((x) => x.checked).map((x) => x.value);
         const leadIn = Boolean(panel.querySelector('[data-role="old-lead-in"]')?.checked);
-        const sideBody = panel.querySelector('[data-role="old-side-body"]')?.checked ?? o.result.sideBody;
-        o.result = analyzeChats(o.loaded, { dates: withSources(o.result.dates, sources), leadIn, sideBody });
+        o.result = analyzeChats(o.loaded, { dates: withSources(o.result.dates, sources), leadIn, sideChoice: o.sideChoice ?? {} });
         o.days = new Set(o.result.days.filter((d) => d.date && d.ai).map((d) => d.date));
         o.only = {};
+        render();
+        return;
+    }
+    if (el.dataset?.role === 'old-side') {
+        view.old.sideChoice = { ...(view.old.sideChoice ?? {}), [el.dataset.key]: el.checked };
+        reanalyzeSides();
         render();
         return;
     }

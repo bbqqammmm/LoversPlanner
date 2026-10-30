@@ -23,7 +23,7 @@ import {
 } from './summarize.js';
 import { refreshDigestMeta, saveChapter, setCoarseRedo, structure } from './compress.js';
 import { estimateTokens } from './hide.js';
-import { cleanForSummary, extractRef, extractTheater, scanTags, storyBesideTheater, tagMode } from './filter.js';
+import { cleanForSummary, extractRef, extractTheater, scanTags, sideStoryVerdict, storyBesideTheater, tagMode } from './filter.js';
 import { calendarOn, cleanEvents, normDate } from './calendar.js';
 import { cleanKeepsakes, memoriesOn } from './memories.js';
 
@@ -170,7 +170,7 @@ export function findExtrasAll() {
 }
 
 /**
- * 整層標成 ⭐ 小劇場、其實是正文後面附小劇場的樓層（v0.13.49，使用者回報：以前「番外」的提醒看到文末的
+ * 整層標成 ⭐ 小劇場、其實是正文的樓層：正文後面附小劇場（v0.13.49）、只是提到番外（v0.13.50）（v0.13.49，使用者回報：以前「番外」的提醒看到文末的
  * 「內心小劇場」標題就整層標成小劇場，正文沒摘要、也沒寫進日記）。建議改回照常摘要（文末的小劇場照樣拿掉）。
  * 重新檢查時決定過的（sideChecked）不再列。
  */
@@ -181,8 +181,11 @@ function sideWithStory() {
     for (const i of aiIndices()) {
         if (floorStatus(i) !== 'side' || checked[chat[i]?.send_date ?? `#${i}`]) continue;
         const body = cleanForSummary(chat[i]?.mes ?? '');
-        if (!storyBesideTheater(chat[i]?.mes ?? '', body)) continue;
-        out.push({ index: i, word: '', sideBody: true, suggest: 'keep', user: '', excerpt: body.slice(0, 600), around: '' });
+        if (!body.trim()) continue;
+        const user = floorSource(i).users.map((u) => cleanForSummary(u.mes)).join('\n').trim();
+        // 文末附小劇場，或只是提到番外（v0.13.50）：建議改回照常摘要。
+        if (!storyBesideTheater(chat[i]?.mes ?? '', body) && sideStoryVerdict(user, body)) continue;
+        out.push({ index: i, word: '', sideBody: true, suggest: 'keep', user: user.slice(0, 150), excerpt: body.slice(0, 600), around: '' });
     }
     return out;
 }
@@ -205,7 +208,9 @@ function scanExtras(indices) {
         // 字眼出現在回覆後面（標題行）：另外附上那附近的文字。
         const pos = ai.search(re);
         const around = pos > 150 ? ai.slice(Math.max(0, pos - 60), pos + 90) : '';
-        out.push({ index: i, word: hit[0], user: user.slice(0, 150), excerpt: ai.slice(0, 600), around });
+        // 建議（v0.13.50）：使用者要求寫番外、或回覆開頭有番外標題 → ⭐ 小劇場；只是提到（OOC 聊番外）→ 照常摘要。
+        const suggest = sideStoryVerdict(user, ai) ? 'side' : 'keep';
+        out.push({ index: i, word: hit[0], user: user.slice(0, 150), excerpt: ai.slice(0, 600), around, suggest });
     }
     return out;
 }

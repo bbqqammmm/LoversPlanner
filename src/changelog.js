@@ -9,6 +9,23 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.50',
+        fix: {
+            'zh-TW': [
+                '⭐ 只是「提到」番外的樓層（例如 OOC 聊剛剛的番外、提議之後玩小劇場）不再被當成整層番外：補建前的「番外」提醒現在會分辨，你要求寫的番外、開頭有番外標題的才預設 ⭐ 小劇場，其他的預設照常摘要，並標「看起來只是提到」。',
+                '📖 舊聊天整理會逐層列出 ⭐ 小劇場的樓層（日期、第幾層、開頭幾個字），勾起來的寫進日記；預設勾看起來是正文的。以前因為這樣整天沒寫的日子，現在可以補寫了。現在的聊天也可以到「設定 › 資料管理 › 檢查所有樓層」改回來。',
+            ],
+            'zh-CN': [
+                '⭐ 只是「提到」番外的楼层（例如 OOC 聊刚刚的番外、提议之后玩小剧场）不再被当成整层番外：补建前的「番外」提醒现在会分辨，你要求写的番外、开头有番外标题的才缺省 ⭐ 小剧场，其他的缺省照常摘要，并标「看起来只是提到」。',
+                '📖 旧聊天整理会逐层列出 ⭐ 小剧场的楼层（日期、第几层、开头几个字），勾起来的写进日记；缺省勾看起来是正文的。以前因为这样整天没写的日子，现在可以补写了。现在的聊天也可以到「设置 › 资料管理 › 检查所有楼层」改回来。',
+            ],
+            en: [
+                '⭐ Floors that only mention an extra (like chatting about the last extra in OOC, or suggesting a side scene for later) are no longer treated as whole extras: the catch-up prompt now defaults to ⭐ side scene only for extras you asked for or that open with an extra title, and to summarizing as usual for the rest, marked "Looks like a mere mention".',
+                '📖 Old chats now lists every ⭐ side-scene floor (date, floor number, opening words); ticked ones go into diaries, and the ones that look like story are ticked by default, so days skipped because of this can be written now. For the current chat, use "Settings › Data › Check all floors".',
+            ],
+        },
+    },
+    {
         v: '0.13.49',
         fix: {
             'zh-TW': [

@@ -1739,3 +1739,6 @@ html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
 .lp-old-undated ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow: auto; }
 .lp-old-undated li { padding: 4px 6px; border-radius: 6px; overflow-wrap: anywhere; background: color-mix(in srgb, var(--lp-border) 25%, transparent); }
 .lp-old-floors { font-variant-numeric: tabular-nums; }
+.lp-old-sides ul { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; max-height: 40vh; overflow: auto; }
+.lp-old-sides .lp-check { align-items: flex-start; overflow-wrap: anywhere; }
+.lp-old-sides .lp-check input { margin-top: 2px; }

@@ -9,7 +9,7 @@ import { ctx, MODULE } from './util.js';
 import { hashText, isAiMessage, isUserMessage } from './chat.js';
 import { normDate } from './calendar.js';
 import { characterKey } from './scope.js';
-import { cleanForSummary, scanTags, storyBesideTheater } from './filter.js';
+import { cleanForSummary, scanTags, sideStoryVerdict, storyBesideTheater } from './filter.js';
 
 /** 上次分析的每一天的內容（寫日記用，不存檔；重新整理後要再讀一次）。 */
 let lastUnits = new Map();
@@ -243,10 +243,12 @@ function plainEvent(ev, date, origin) {
  * keepDays：false 時不換掉「上次讀到的每一天」（只是來讀行事曆的，不影響寫日記，v0.13.38）。
  * dates：日期從哪裡讀（detectDates 的結果，或使用者選的 { sources }）；沒給就自動找。
  * leadIn：聊天開頭還沒讀到日期的那幾層，算進這個聊天的第一個日期（v0.13.48，使用者選的；預設不算）。
- * sideBody：標成 ⭐ 小劇場、但其實是正文夾著小劇場（標籤或文末彩蛋）的樓層，日記照寫正文（v0.13.49，預設寫）。
+ * sideBody：標成 ⭐ 小劇場、但其實是正文的樓層，日記照寫（v0.13.49，預設寫）：正文夾著小劇場（標籤或文末彩蛋），
+ *   或只是提到番外（OOC 聊番外、提議玩小劇場，v0.13.50）。false＝⭐ 的一律不寫。
+ * sideChoice：使用者逐層選的 { 'chat#floor': true/false }，蓋過建議。sides 列出每一層 ⭐ 小劇場和建議。
  * undated 列出找不到日期的樓層（聊天、第幾層、開頭幾個字），讓使用者看是什麼內容。
  */
-export function analyzeChats(loaded, { keepDays = true, dates = detectDates(loaded), leadIn = false, sideBody = true } = {}) {
+export function analyzeChats(loaded, { keepDays = true, dates = detectDates(loaded), leadIn = false, sideBody = true, sideChoice = {} } = {}) {
     const sources = dateSources(dates);
     const seen = new Set();
     const days = new Map();
@@ -256,6 +258,7 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
     };
     const totals = { ai: 0, summarized: 0, unsummarized: 0, undated: 0, skipped: 0, side: 0, empty: 0, sideBody: 0, duplicates: 0, horae: 0, found: 0, foundBy: {}, leadIn: 0 };
     const undated = [];
+    const sides = [];
     const events = [];
     const chats = [];
     for (const { id, data } of loaded) {
@@ -323,6 +326,7 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
                 continue;
             }
             if (lead) totals.leadIn++;
+            const userText = waiting.map((u) => u.text).join('\n');
             flush();
             const d = day(cur);
             info.ai++;
@@ -338,18 +342,19 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
                 totals.skipped++;
                 continue;
             }
-            // 以前補建時「番外」的提醒會把文末附小劇場的整層標成 ⭐ 小劇場：前面的正文照寫。
-            if (e?.status === 'side' && storyBesideTheater(m.mes, text)) {
-                totals.sideBody++;
-                if (!sideBody) {
+            // ⭐ 小劇場：以前補建時「番外」的提醒只要提到番外就整層標掉（預設 ⭐）。
+            // 其實是正文的（文末附小劇場、只是提到番外）建議照寫；使用者可以逐層改。
+            if (e?.status === 'side') {
+                const key = `${id}#${floor}`;
+                const why = !text.trim() ? '' : storyBesideTheater(m.mes, text) ? 'tail' : !sideStoryVerdict(userText, text) ? 'mention' : '';
+                const on = Boolean(sideBody && text.trim() && (sideChoice[key] ?? Boolean(why)));
+                sides.push({ key, chat: id, floor, date: cur, text: text.replace(/\s+/g, ' ').trim().slice(0, 80), why, on });
+                if (!on) {
                     totals.side++;
                     d.side++;
                     continue;
                 }
-            } else if (e?.status === 'side') {
-                totals.side++;
-                d.side++;
-                continue;
+                totals.sideBody++;
             }
             // 整層都是小劇場、思考過程這些被拿掉的內容（清完是空的）：沒有正劇，不寫進日記（v0.13.48）。
             const summary = e?.status === 'ok' && !e.coarse && e.summary ? String(e.summary) : '';
@@ -415,6 +420,7 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
         dates: withSources(dates, sources),
         leadIn,
         sideBody,
+        sides,
         undated,
         // 同一天有好幾個聊天都寫到（可能是 IF 線、平行世界）。
         overlaps: list.filter((d) => d.date && d.chats.length > 1).map((d) => d.date),

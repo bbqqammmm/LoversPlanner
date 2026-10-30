@@ -29,6 +29,9 @@ export const TAIL_BODY_MIN = 200;
 
 /** 文末的小劇場最多佔整層多少（再多就是整層番外，交給「番外」的提醒問使用者）。 */
 const TAIL_MAX_SHARE = 0.5;
+/** 「內心小劇場」「腦內小劇場」這種角色心裡的旁白不會是整層番外，可以佔多一點（v0.13.50：短的一層，旁白比正文長）。 */
+const INNER = /(?:內心|内心|腦內|脑内|心裡|心里|心內|心内)\s*小\s*(?:劇場|剧场|劇场|剧場)/;
+const INNER_MAX_SHARE = 0.8;
 
 /** 這一行像不像小劇場的標題（💭 某某的內心小劇場、【彩蛋】、—— 番外 ——）。 */
 function tailHeading(line) {
@@ -49,12 +52,48 @@ export function splitTailTheater(text) {
     const src = String(text ?? '');
     let pos = 0;
     for (const line of src.split('\n')) {
-        if (pos >= TAIL_BODY_MIN && src.length - pos <= src.length * TAIL_MAX_SHARE && tailHeading(line.trim()) && src.slice(0, pos).trim().length >= TAIL_BODY_MIN) {
+        const head = line.trim();
+        const share = INNER.test(head) ? INNER_MAX_SHARE : TAIL_MAX_SHARE;
+        if (pos >= TAIL_BODY_MIN && src.length - pos <= src.length * share && tailHeading(head) && src.slice(0, pos).trim().length >= TAIL_BODY_MIN) {
             return { body: src.slice(0, pos).trim(), tail: src.slice(pos).trim(), heading: line.trim() };
         }
         pos += line.length + 1;
     }
     return { body: src, tail: '', heading: '' };
+}
+
+// ===== 這一層是不是番外（v0.13.50，使用者回報：整整幾天都沒寫進日記） =====
+// 補建前的「番外」提醒只要使用者的話或回覆開頭提到番外、小劇場，就整層列出來，而且預設 ⭐ 小劇場。
+// 但 OOC 聊起之前的番外（「剛剛的番外好好笑」）、提議之後玩小劇場，那一層其實是正文。
+// 用使用者的真實聊天紀錄（本機）對過：真的番外幾乎都是「使用者要求寫番外」或「回覆開頭有一行番外標題」。
+
+const SIDE_WORD = /番外|小劇場|小剧场|IF\s*(?:線|线|世界)|平行世界|特別篇|特别篇/i;
+const SIDE_REQUEST = new RegExp(`(?:生成|來玩|来玩|玩一下|建立|撰寫|撰写|寫一|写一|寫個|写个|來個|来个|來一|来一|開始|开始|進入|进入|做一)[^。！？!?\\n]{0,30}(?:${SIDE_WORD.source})`, 'i');
+
+/** 回覆從開頭看多少字找番外標題。 */
+const SIDE_HEAD = 400;
+
+/** 一行像不像番外的標題（# 番外：…、【番外】…、🐺 番外小劇場 🐺）：不是句子、OOC 括號、狀態欄欄位。 */
+function sideTitle(line) {
+    if (!SIDE_WORD.test(line) || INNER.test(line)) return false;
+    // 開頭就是【番外…】或「番外：」「IF線·」：一定是標題（後面可以直接接正文）。
+    if (new RegExp(`^[\\s#*>~✦]*(?:[【\\[〔《]\\s*(?:${SIDE_WORD.source})|(?:${SIDE_WORD.source})\\s*[：:·・｜|])`, 'i').test(line)) return true;
+    if (line.length > 40) return false;
+    const bare = line.replace(/[\s*_~✦✧★☆♡❤︎·・—\-]+$/u, '');
+    // 有逗號的是句子（「寫番外的時候，我……」），標題不會有。
+    if (/^[「『“"‘'（(]/.test(line) || /[。！？!?…，,]$/.test(bare) || /[，,]/.test(line)) return false;
+    const kv = line.match(/^[^:：]{1,16}[:：]/);
+    return !(kv && !SIDE_WORD.test(kv[0]));
+}
+
+/**
+ * 這一層像不像整層番外：user 是這一層前面使用者的話，ai 是回覆（都先用 cleanForSummary 清過）。
+ * 回覆前 400 字有一行番外標題，或使用者要求寫番外 → true；只是提到 → false（建議照常摘要）。
+ */
+export function sideStoryVerdict(user, ai) {
+    const lines = String(ai ?? '').slice(0, SIDE_HEAD).split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.some(sideTitle)) return true;
+    return SIDE_REQUEST.test(String(user ?? ''));
 }
 
 /**

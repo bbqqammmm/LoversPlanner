@@ -19,11 +19,11 @@ import {
 } from './chat.js';
 import { formatNotesForPrompt, normalizeModelOps, replay } from './notes.js';
 import {
-    cancelQueue, enqueue, enqueueCoarse, isActive, parseL1, pendingCount, previousDate, setAfterSummaryHook, setCoarseHandler, sideFloor, skipFloor,
+    cancelQueue, enqueue, enqueueCoarse, isActive, parseL1, pendingCount, previousDate, setAfterSummaryHook, setCoarseHandler, sideFloor, skipFloor, unsideFloor,
 } from './summarize.js';
 import { refreshDigestMeta, saveChapter, setCoarseRedo, structure } from './compress.js';
 import { estimateTokens } from './hide.js';
-import { cleanForSummary, extractRef, extractTheater, scanTags, tagMode } from './filter.js';
+import { cleanForSummary, extractRef, extractTheater, scanTags, storyBesideTheater, tagMode } from './filter.js';
 import { calendarOn, cleanEvents, normDate } from './calendar.js';
 import { cleanKeepsakes, memoriesOn } from './memories.js';
 
@@ -164,9 +164,27 @@ export function findExtras(from, to) {
  * 每一項多一個 chapter：已經在第幾章裡（跳過後那一章要重新壓縮）。
  */
 export function findExtrasAll() {
-    const list = scanExtras(aiIndices().filter((i) => !['skip', 'side'].includes(floorStatus(i))));
+    const list = [...scanExtras(aiIndices().filter((i) => !['skip', 'side'].includes(floorStatus(i)))), ...sideWithStory()].sort((a, b) => a.index - b.index);
     const st = structure();
     return list.map((x) => ({ ...x, chapter: st.chapters.find((c) => c.indices.includes(x.index))?.number ?? null }));
+}
+
+/**
+ * 整層標成 ⭐ 小劇場、其實是正文後面附小劇場的樓層（v0.13.49，使用者回報：以前「番外」的提醒看到文末的
+ * 「內心小劇場」標題就整層標成小劇場，正文沒摘要、也沒寫進日記）。建議改回照常摘要（文末的小劇場照樣拿掉）。
+ * 重新檢查時決定過的（sideChecked）不再列。
+ */
+function sideWithStory() {
+    const chat = getChat();
+    const checked = chatRecord(false)?.sideChecked ?? {};
+    const out = [];
+    for (const i of aiIndices()) {
+        if (floorStatus(i) !== 'side' || checked[chat[i]?.send_date ?? `#${i}`]) continue;
+        const body = cleanForSummary(chat[i]?.mes ?? '');
+        if (!storyBesideTheater(chat[i]?.mes ?? '', body)) continue;
+        out.push({ index: i, word: '', sideBody: true, suggest: 'keep', user: '', excerpt: body.slice(0, 600), around: '' });
+    }
+    return out;
 }
 
 function scanExtras(indices) {
@@ -231,7 +249,19 @@ export function applyExtras(choices) {
         const i = Number(k);
         if (!chat[i]) continue;
         const c = ['keep', 'side'].includes(choice) ? choice : 'skip';
-        extras[chat[i].send_date ?? `#${i}`] = c;
+        const id = chat[i].send_date ?? `#${i}`;
+        extras[id] = c;
+        // 本來就是 ⭐ 小劇場的：記下來，重新檢查時不再問；改回照常的要重新摘要（v0.13.49）。
+        if (floorStatus(i) === 'side') {
+            rec.sideChecked = { ...(rec.sideChecked ?? {}), [id]: true };
+            if (c === 'side') continue;
+            if (c === 'keep') {
+                unsideFloor(i);
+                if (getEntry(i)?.status !== 'ok') enqueue(i);
+                skipped++;
+                continue;
+            }
+        }
         if (c === 'keep') continue;
         if (c === 'side') sideFloor(i);
         else skipFloor(i);

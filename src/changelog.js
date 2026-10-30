@@ -9,6 +9,23 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.49',
+        fix: {
+            'zh-TW': [
+                '🥚 正文後面附的彩蛋小劇場（一行短標題接一段，像「💭 某某的內心小劇場」）：以前整層會被當成小劇場，正文沒摘要、也沒寫進日記；現在只拿掉文末那一段（收進回憶錄的材料），正文照常。可以在「設定 › 摘要時跳過的內容」關掉。',
+                '🔁 以前已經被整層標成 ⭐ 小劇場的：舊聊天整理寫日記時會照寫正文（可以取消勾選）；現在的聊天到「設定 › 資料管理 › 重新檢查番外」，會列出來並建議改回照常摘要。',
+            ],
+            'zh-CN': [
+                '🥚 正文后面附的彩蛋小剧场（一行短标题接一段，像「💭 某某的内心小剧场」）：以前整层会被当成小剧场，正文没摘要、也没写进日记；现在只拿掉文末那一段（收进回忆录的材料），正文照常。可以在「设置 › 摘要时跳过的内容」关掉。',
+                '🔁 以前已经被整层标成 ⭐ 小剧场的：旧聊天整理写日记时会照写正文（可以取消勾选）；现在的聊天到「设置 › 资料管理 › 重新检查番外」，会列出来并建议改回照常摘要。',
+            ],
+            en: [
+                '🥚 A bonus side scene after the story (a short heading followed by a passage, like "💭 his inner theater") used to make the whole floor a side scene, so the story was neither summarized nor put in diaries. Now only that last part is removed (it still feeds keepsakes) and the story is handled as usual. You can turn this off in "Settings › Content skipped when summarizing".',
+                '🔁 Floors already marked ⭐ side scene this way: diaries from Old chats now use their story text (you can untick it); for the current chat, "Settings › Data › Re-check for extras" lists them and suggests summarizing them as usual.',
+            ],
+        },
+    },
+    {
         v: '0.13.48',
         new: {
             'zh-TW': [
@@ -24,7 +41,7 @@ export const CHANGES = [
             en: [
                 '🗓️ "Read dates from" in Old chats now takes several places at once (for example <details> on some floors and <tableEdit> on others); they are tried in order.',
                 '🔢 Each day shows which floors it covers (#12–45); floors without a date are listed (floor number and opening words), and undated floors at the start of a chat can count as its first day.',
-                '⭐ Tags with theater, 小劇場 or 番外 in the name (like <small_theater>) count as side stories and stay out of summaries and diaries; floors that are only a side story are skipped by diaries.',
+                '⭐ Tags with theater, 小劇場 or 番外 in the name (like <small_theater>) count as side scenes and stay out of summaries and diaries; floors that are only a side story are skipped by diaries.',
             ],
         },
     },

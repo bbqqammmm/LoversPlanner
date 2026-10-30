@@ -1317,6 +1317,7 @@ function oldResultHtml(r) {
     if (tt.duplicates) extra.push(t('old.dup', { n: tt.duplicates }));
     if (tt.skipped || tt.side) extra.push(t('old.skipped', { skip: tt.skipped, side: tt.side }));
     if (tt.empty) extra.push(t('old.empty', { n: tt.empty }));
+    if (tt.sideBody && r.sideBody) extra.push(t('old.sideBody', { n: tt.sideBody }));
     const big = r.days.filter((d) => d.parts > 1).length;
     const otherChat = new Set(conflictDays(r.days.filter((d) => d.date && d.ai).map((d) => d.date), view.old.only));
     const dayRows = r.days.map((d) => {
@@ -1348,6 +1349,7 @@ function oldResultHtml(r) {
         ${extra.length ? `<div class="lp-note">${esc(extra.join('・'))}</div>` : ''}
         ${dateSourceHtml(r)}
         ${undatedHtml(r)}
+        ${r.totals.sideBody ? `<label class="lp-check"><input type="checkbox" data-role="old-side-body"${r.sideBody ? ' checked' : ''}> ${esc(t('old.sideBodyToggle', { n: r.totals.sideBody }))}</label>` : ''}
         <div class="lp-note">${esc(t('old.diaryTotal', { n: tt.diary.toLocaleString(), raw: tt.raw.toLocaleString() }) + (big ? t('old.big', { n: big }) : ''))}</div>
         ${r.overlaps.length ? `<div class="lp-note lp-warn">${esc(t('old.overlaps', { n: r.overlaps.length }))}</div>` : ''}
         ${cal}
@@ -1783,7 +1785,8 @@ function extrasCard(cu) {
         return `<div class="lp-callout lp-row" data-role="extras"><span>${esc(t('extras.rescanNone'))}</span><span class="lp-spacer"></span>
           <button type="button" class="menu_button lp-btn" data-action="extras-close">${esc(t('extras.close'))}</button></div>`;
     }
-    const choice = (i) => view.extras.choice.get(i) ?? 'side';
+    const suggest = new Map(list.map((x) => [x.index, x.suggest ?? 'side']));
+    const choice = (i) => view.extras.choice.get(i) ?? suggest.get(i) ?? 'side';
     const skips = list.filter((x) => choice(x.index) === 'skip').length;
     const sides = list.filter((x) => choice(x.index) === 'side').length;
     const counts = { skip: skips, side: sides, keep: list.length - skips - sides };
@@ -1791,7 +1794,7 @@ function extrasCard(cu) {
         const opts = ['skip', 'side', 'keep'].map((c) => `<option value="${c}"${choice(x.index) === c ? ' selected' : ''}>${esc(t(`extras.${c}`))}</option>`).join('');
         const head = x.excerpt.slice(0, 150);
         return `<li class="lp-extra-row" data-extra="${x.index}">
-          <div class="lp-row"><b>#${x.index}</b><span class="lp-badge">${esc(t('extras.word', { word: x.word }))}</span>${x.chapter ? `<span class="lp-badge lp-st-stale">${esc(t('extras.inChapter', { n: x.chapter }))}</span>` : ''}<span class="lp-spacer"></span>
+          <div class="lp-row"><b>#${x.index}</b><span class="lp-badge">${esc(x.sideBody ? t('extras.sideBody') : t('extras.word', { word: x.word }))}</span>${x.chapter ? `<span class="lp-badge lp-st-stale">${esc(t('extras.inChapter', { n: x.chapter }))}</span>` : ''}<span class="lp-spacer"></span>
             <select class="text_pole lp-select" data-role="extra-choice" data-index="${x.index}" aria-label="${esc(t('extras.choice', { n: x.index }))}">${opts}</select></div>
           ${x.user ? `<div class="lp-note lp-extra-user">${esc(t('extras.user', { text: x.user }))}</div>` : ''}
           <div class="lp-extra-text">${esc(head)}${x.excerpt.length > head.length ? '…' : ''}</div>
@@ -3023,6 +3026,7 @@ function renderSettings() {
         <label class="lp-label" for="lp-theater">${esc(t('set.filter.theater'))}</label>
         ${select('filter.theater', 'lp-theater', ['keepsake', 'story', 'skip'].map((x) => [x, t(`set.filter.theater.${x}`)]), true)}
       </div>
+      ${s.filter.theater === 'story' ? '' : checkbox('filter.tailTheater', t('set.filter.tailTheater'))}
       ${tagScanner()}
       <label class="lp-field" for="lp-filter-tags"><span class="lp-label">${esc(t('set.filter.tags'))}</span>
         ${textInput('filter.tags', 'lp-filter-tags', t('set.filter.tags.ph'))}</label>
@@ -4386,8 +4390,10 @@ function onClick(e) {
             render();
             return;
         case 'extras-apply': {
-            const choices = Object.fromEntries(view.extras.list.map((x) => [x.index, view.extras.choice.get(x.index) ?? 'side']));
-            const chapters = new Set(view.extras.list.filter((x) => choices[x.index] !== 'keep' && x.chapter).map((x) => x.chapter)).size;
+            const choices = Object.fromEntries(view.extras.list.map((x) => [x.index, view.extras.choice.get(x.index) ?? x.suggest ?? 'side']));
+            // 章裡的內容有變的（本來是 ⭐ 小劇場的，改成別的才算）。
+            const changed = (x) => (x.sideBody ? choices[x.index] !== 'side' : choices[x.index] !== 'keep');
+            const chapters = new Set(view.extras.list.filter((x) => changed(x) && x.chapter).map((x) => x.chapter)).size;
             const n = applyExtras(choices);
             view.extras = { key: null, list: [], choice: new Map(), rescan: false };
             toast(t(chapters ? 'extras.appliedStale' : 'extras.applied', { n, chapters }), 'success');
@@ -4452,7 +4458,7 @@ function onClick(e) {
             render();
             return;
         case 'extras-go': {
-            const choices = Object.fromEntries(view.extras.list.map((x) => [x.index, view.extras.choice.get(x.index) ?? 'side']));
+            const choices = Object.fromEntries(view.extras.list.map((x) => [x.index, view.extras.choice.get(x.index) ?? x.suggest ?? 'side']));
             view.extras = { key: null, list: [], choice: new Map() };
             decideExtras(choices);
             render();
@@ -4608,13 +4614,14 @@ function onChange(e) {
         if (el.checked) view.backup.scope = el.value;
         return;
     }
-    if (el.dataset?.role === 'old-date-src' || el.dataset?.role === 'old-lead-in') {
+    if (['old-date-src', 'old-lead-in', 'old-side-body'].includes(el.dataset?.role)) {
         // 換了日期從哪裡讀（可以勾好幾個，照清單的順序），或開頭沒日期的要不要算進第一天：重新分析。
         const o = view.old;
         if (!o.loaded || !o.result) return;
         const sources = [...panel.querySelectorAll('[data-role="old-date-src"]')].filter((x) => x.checked).map((x) => x.value);
         const leadIn = Boolean(panel.querySelector('[data-role="old-lead-in"]')?.checked);
-        o.result = analyzeChats(o.loaded, { dates: withSources(o.result.dates, sources), leadIn });
+        const sideBody = panel.querySelector('[data-role="old-side-body"]')?.checked ?? o.result.sideBody;
+        o.result = analyzeChats(o.loaded, { dates: withSources(o.result.dates, sources), leadIn, sideBody });
         o.days = new Set(o.result.days.filter((d) => d.date && d.ai).map((d) => d.date));
         o.only = {};
         render();

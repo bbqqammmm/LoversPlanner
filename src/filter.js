@@ -18,6 +18,56 @@ export function isTheaterName(name) {
     return THEATER_RE.test(String(name ?? ''));
 }
 
+// 文末附的彩蛋小劇場（v0.13.49，使用者回報：正文後面附一段「💭 某某的內心小劇場」，整層被當成小劇場，正文沒寫進日記）。
+// 很多卡不用標籤，而是在正文後面用一行短標題接一段小劇場（HTML 卡片拿掉標籤後就是一行字）。
+// 前面有夠長的正文、後面出現一行短標題（拿掉符號後最多 TAIL_HEAD_MAX 字，裡面有小劇場、番外、彩蛋）：從那一行到結尾都算小劇場。
+// 那一段超過整層一半的不算（是整層番外，照原本的「番外」提醒問使用者）；狀態欄的欄位、句子、「番外完」也不算。
+const TAIL_WORD = /小劇場|小剧场|番外|彩蛋|theat(?:er|re)/i;
+const TAIL_HEAD_MAX = 16;
+/** 標題行之前至少要有多少字的正文（不然整層都是小劇場，照原本的方式處理）。 */
+export const TAIL_BODY_MIN = 200;
+
+/** 文末的小劇場最多佔整層多少（再多就是整層番外，交給「番外」的提醒問使用者）。 */
+const TAIL_MAX_SHARE = 0.5;
+
+/** 這一行像不像小劇場的標題（💭 某某的內心小劇場、【彩蛋】、—— 番外 ——）。 */
+function tailHeading(line) {
+    if (!TAIL_WORD.test(line) || line.length > 40) return false;
+    // 對話、句子（「去看小劇場吧。」「番外寫完了。」）不是標題。
+    const bare = line.replace(/[\s*_~✦✧★☆♡❤︎·・—\-]+$/u, '');
+    if (/^[「『“"‘']/.test(line) || /[。！？!?…，,：:]$/.test(bare)) return false;
+    // 狀態欄的「time: 番外時間線」「mood: …(番外)」：冒號前面不是小劇場的字。
+    const kv = line.match(/^[^:：]{1,16}[:：]/);
+    if (kv && !TAIL_WORD.test(kv[0])) return false;
+    // 番外的結尾（✦ 番外完 ✦、〔番外·完〕、—— 番外結束 ——）。
+    if (/完|結束|结束|終|终|\bend\b/i.test(line)) return false;
+    return line.replace(/[\s\p{P}\p{S}\d]/gu, '').length <= TAIL_HEAD_MAX;
+}
+
+/** 拆成正文和文末的小劇場：{ body, tail, heading }；沒有就 tail 是 ''。text 要先拿掉 HTML。 */
+export function splitTailTheater(text) {
+    const src = String(text ?? '');
+    let pos = 0;
+    for (const line of src.split('\n')) {
+        if (pos >= TAIL_BODY_MIN && src.length - pos <= src.length * TAIL_MAX_SHARE && tailHeading(line.trim()) && src.slice(0, pos).trim().length >= TAIL_BODY_MIN) {
+            return { body: src.slice(0, pos).trim(), tail: src.slice(pos).trim(), heading: line.trim() };
+        }
+        pos += line.length + 1;
+    }
+    return { body: src, tail: '', heading: '' };
+}
+
+/**
+ * 正文裡夾著小劇場（標籤或文末的彩蛋），拿掉之後還有夠長的正文（v0.13.49）。
+ * 用來找以前被整層標成 ⭐ 小劇場、其實是正文的樓層。text：cleanForSummary 的結果（沒給就算一次）。
+ */
+export function storyBesideTheater(mes, text, rules = getSettings().filter) {
+    if (!rules || (rules.theater ?? 'keepsake') === 'story') return false;
+    const body = text ?? cleanForSummary(mes, rules);
+    if (body.trim().length < TAIL_BODY_MIN) return false;
+    return cleanForSummary(mes ?? '', { ...rules, theater: 'story' }).length > body.length;
+}
+
 /** 訊息裡出現的標籤名字（不重複）。 */
 function tagNamesIn(text) {
     const out = new Set();
@@ -83,6 +133,11 @@ export function extractTheater(text, rules = getSettings().filter) {
         const n = escapeRe(name);
         for (const m of src.matchAll(new RegExp(`<\\s*${n}(?:\\s[^>]*)?>([\\s\\S]*?)<\\s*\\/\\s*${n}\\s*>`, 'gi'))) parts.push(m[1]);
     }
+    // 文末的彩蛋小劇場（沒有標籤的）也一起。
+    if (rules.tailTheater !== false) {
+        const { tail } = splitTailTheater(cleanForSummary(src, { ...rules, theater: 'story' }));
+        if (tail) parts.push(tail);
+    }
     return parts.map((x) => dropHtml(x).replace(/\n{3,}/g, '\n\n').trim()).filter(Boolean).join('\n\n');
 }
 
@@ -138,7 +193,10 @@ export function cleanForSummary(text, rules = getSettings().filter) {
     // 「參考」的標籤也不當正文（內容另外用 extractRef 抽）。
     for (const name of parseTagList(rules.ref)) out = dropTag(out, name);
     if (rules.html) out = dropHtml(out, keep);
-    return out.replace(/\n{3,}/g, '\n\n').trim();
+    out = out.replace(/\n{3,}/g, '\n\n').trim();
+    // 文末的彩蛋小劇場：和小劇場標籤一樣，不當正文。
+    if (theaterOff && rules.tailTheater !== false) out = splitTailTheater(out).body;
+    return out;
 }
 
 // ===== 掃描訊息裡的標籤，讓使用者逐一選「讀／不讀／只讀」 =====

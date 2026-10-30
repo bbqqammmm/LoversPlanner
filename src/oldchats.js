@@ -9,7 +9,7 @@ import { ctx, MODULE } from './util.js';
 import { hashText, isAiMessage, isUserMessage } from './chat.js';
 import { normDate } from './calendar.js';
 import { characterKey } from './scope.js';
-import { cleanForSummary, scanTags } from './filter.js';
+import { cleanForSummary, scanTags, storyBesideTheater } from './filter.js';
 
 /** 上次分析的每一天的內容（寫日記用，不存檔；重新整理後要再讀一次）。 */
 let lastUnits = new Map();
@@ -243,9 +243,10 @@ function plainEvent(ev, date, origin) {
  * keepDays：false 時不換掉「上次讀到的每一天」（只是來讀行事曆的，不影響寫日記，v0.13.38）。
  * dates：日期從哪裡讀（detectDates 的結果，或使用者選的 { sources }）；沒給就自動找。
  * leadIn：聊天開頭還沒讀到日期的那幾層，算進這個聊天的第一個日期（v0.13.48，使用者選的；預設不算）。
+ * sideBody：標成 ⭐ 小劇場、但其實是正文夾著小劇場（標籤或文末彩蛋）的樓層，日記照寫正文（v0.13.49，預設寫）。
  * undated 列出找不到日期的樓層（聊天、第幾層、開頭幾個字），讓使用者看是什麼內容。
  */
-export function analyzeChats(loaded, { keepDays = true, dates = detectDates(loaded), leadIn = false } = {}) {
+export function analyzeChats(loaded, { keepDays = true, dates = detectDates(loaded), leadIn = false, sideBody = true } = {}) {
     const sources = dateSources(dates);
     const seen = new Set();
     const days = new Map();
@@ -253,7 +254,7 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
         if (!days.has(date)) days.set(date, { date, ai: 0, user: 0, summarized: 0, coarse: 0, side: 0, empty: 0, rawChars: 0, sumChars: 0, chats: new Set(), units: [], sendChars: 0, floors: [] });
         return days.get(date);
     };
-    const totals = { ai: 0, summarized: 0, unsummarized: 0, undated: 0, skipped: 0, side: 0, empty: 0, duplicates: 0, horae: 0, found: 0, foundBy: {}, leadIn: 0 };
+    const totals = { ai: 0, summarized: 0, unsummarized: 0, undated: 0, skipped: 0, side: 0, empty: 0, sideBody: 0, duplicates: 0, horae: 0, found: 0, foundBy: {}, leadIn: 0 };
     const undated = [];
     const events = [];
     const chats = [];
@@ -337,7 +338,15 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
                 totals.skipped++;
                 continue;
             }
-            if (e?.status === 'side') {
+            // 以前補建時「番外」的提醒會把文末附小劇場的整層標成 ⭐ 小劇場：前面的正文照寫。
+            if (e?.status === 'side' && storyBesideTheater(m.mes, text)) {
+                totals.sideBody++;
+                if (!sideBody) {
+                    totals.side++;
+                    d.side++;
+                    continue;
+                }
+            } else if (e?.status === 'side') {
                 totals.side++;
                 d.side++;
                 continue;
@@ -405,6 +414,7 @@ export function analyzeChats(loaded, { keepDays = true, dates = detectDates(load
         },
         dates: withSources(dates, sources),
         leadIn,
+        sideBody,
         undated,
         // 同一天有好幾個聊天都寫到（可能是 IF 線、平行世界）。
         overlaps: list.filter((d) => d.date && d.chats.length > 1).map((d) => d.date),

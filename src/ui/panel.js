@@ -32,6 +32,7 @@ import {
     getRecap, importFrom, lastCarry, onCarryChange, otherSnapshots, restoreRecapRaw, setSummarySource, undoCarry,
 } from '../carry.js';
 import { errorText } from '../errors.js';
+import { buildReport, clearErrors, copyReport, listErrors, logError, onErrorsChange } from '../errlog.js';
 import { cardFillBusy, fillFromCard } from '../cardfill.js';
 import { tidyBusy } from '../tidy.js';
 import { applyTheme, THEMES } from '../theme.js';
@@ -1031,6 +1032,7 @@ async function carryCalendar() {
         toast(n ? t('cal.carryDone', { n, period: r.calendar.period, intimacy: r.calendar.intimacy, anniversary: r.calendar.anniversary }) : t('cal.carryNone'), n ? 'success' : 'info');
     } catch (e) {
         v.carryMsg = t('cal.carryFail', { error: errorText(e) });
+        logError('calendarCarry', e);
     }
     v.carryBusy = false;
     if (isPanelOpen()) render();
@@ -1491,8 +1493,9 @@ function retryHtml(list, loaded, pending) {
     if (!failed.length || pending) return '';
     return `<div class="lp-callout lp-warn" data-role="diary-retry">
         <div>${esc(t('diary.retryHint', { n: failed.length, error: failed[0].errors[0] ?? '' }))}</div>
-        ${loaded ? `<div class="lp-row"><button type="button" class="menu_button lp-btn lp-primary" data-action="diary-retry">${esc(t('diary.retry', { n: failed.length }))}</button></div>`
-            : `<div class="lp-note">${esc(t('diary.needReloadHint'))}</div>`}
+        <div class="lp-row">${loaded ? `<button type="button" class="menu_button lp-btn lp-primary" data-action="diary-retry">${esc(t('diary.retry', { n: failed.length }))}</button>` : ''}
+          <button type="button" class="menu_button lp-btn" data-action="copy-report">${esc(t('report.copy'))}</button></div>
+        ${loaded ? '' : `<div class="lp-note">${esc(t('diary.needReloadHint'))}</div>`}
       </div>`;
 }
 
@@ -1650,6 +1653,7 @@ async function readOldChats() {
         o.ids = ids;
     } catch (e) {
         o.msg = t('old.fail', { error: errorText(e) });
+        logError('oldchats', e);
     }
     o.reading = '';
     if (isPanelOpen()) render();
@@ -2041,6 +2045,7 @@ onCarryChange(scheduleRefresh);
 onDiaryChange(scheduleRefresh);
 onPrefsChange(scheduleRefresh);
 onBackupChange(scheduleRefresh);
+onErrorsChange(() => { if (isPanelOpen() && view.tab === 'settings' && view.openSections.has('errors') && canAutoRefresh()) render(); });
 onCalendarChange(scheduleRefresh);
 onMemoriesChange(scheduleRefresh);
 onTitleProgress(() => { if (isPanelOpen() && ['notes', 'done'].includes(view.tab)) render(); });
@@ -2455,6 +2460,7 @@ async function exportBundle() {
         if (r.failed.length) v.bundleMsg += ` ${t('bundle.failed', { n: r.failed.length, list: r.failed.slice(0, 3).map((x) => x.chat || x.character).join('、') })}`;
     } catch (e) {
         v.bundleMsg = t('bundle.fail', { error: errorText(e) });
+        logError('bundle', e);
     }
     v.bundling = '';
     if (isPanelOpen()) render();
@@ -3097,9 +3103,58 @@ function renderSettings() {
       ${section('recall', t('sec.recall'), t(r.vector.enabled ? 'sec.recall.hint.vector' : 'sec.recall.hint'), recall)}
       ${section('inject', t('sec.inject'), t('sec.inject.hint'), inject)}
       ${section('usage', t('sec.usage'), t('sec.usage.hint'), renderUsageSection())}
+      ${section('errors', t('sec.errors'), t('sec.errors.hint', { n: listErrors().length }), renderErrorsSection())}
       ${section('data', t('sec.data'), t('sec.data.hint'), renderDataSection())}
       ${section('advanced', t('sec.advanced'), t('sec.advanced.hint'), advanced)}
     </div>`;
+}
+
+// ===== 🐞 錯誤報告（v0.13.46） =====
+
+/** t() 找不到這個 key 時用 fallback。 */
+function label(key, fallback) {
+    const v = t(key);
+    return v === key ? fallback : v;
+}
+
+function errorWhere(where) {
+    return label(`usage.p.${where}`, label(`report.where.${where}`, where));
+}
+
+function renderErrorsSection() {
+    const list = listErrors();
+    const rows = list.slice(0, 10).map((e) => {
+        const info = [errorWhere(e.where), label(`usage.err.${e.code}`, e.code), e.status ? `HTTP ${e.status}` : '', e.model ?? '', e.cut === 'yes' ? t('report.cut') : ''].filter(Boolean).join('・');
+        return `<li><span class="lp-note">${esc(new Date(e.at).toLocaleString())}</span> ${esc(info)}${e.detail ? `<div class="lp-note">${esc(e.detail)}</div>` : ''}</li>`;
+    }).join('');
+    const text = view.report;
+    return `
+      <div class="lp-note">${esc(t('report.desc'))}</div>
+      ${rows ? `<ul class="lp-error-list" data-role="error-list">${rows}</ul>` : `<div class="lp-note" data-role="error-list">${esc(t('report.none'))}</div>`}
+      <div class="lp-row">
+        <button type="button" class="menu_button lp-btn lp-primary" data-action="copy-report">${esc(t('report.copy'))}</button>
+        ${list.length ? `<button type="button" class="menu_button lp-btn lp-danger" data-action="clear-errors">${esc(t('report.clear'))}</button>` : ''}
+      </div>
+      ${text ? `<div class="lp-note">${esc(t('report.manual'))}</div><textarea class="text_pole lp-sum-editor" data-role="report-text" readonly rows="8">${esc(text)}</textarea>` : ''}`;
+}
+
+/** 複製錯誤報告；剪貼簿不能用（有些手機的 webview）就打開設定頁顯示文字讓使用者自己選取。 */
+function copyErrorReport() {
+    const text = buildReport();
+    copyReport(text).then((ok) => {
+        if (ok) {
+            view.report = '';
+            toast(t('report.copied'), 'success');
+            return;
+        }
+        view.report = text;
+        view.tab = 'settings';
+        view.openSections.add('errors');
+        if (isPanelOpen()) {
+            render();
+            panel.querySelector('[data-role="report-text"]')?.select();
+        }
+    });
 }
 
 // ===== 💬 你的偏好（v0.13.36） =====
@@ -3824,6 +3879,14 @@ function onClick(e) {
             render();
             return;
         }
+        case 'copy-report':
+            copyErrorReport();
+            return;
+        case 'clear-errors':
+            clearErrors();
+            view.report = '';
+            render();
+            return;
         case 'overdue-ask':
             view.notes.overdueConfirm = true;
             render();
@@ -4140,7 +4203,7 @@ function onClick(e) {
             render();
             restoreBackup(btn.dataset.slot)
                 .then((r) => { view.backup.msg = t('backup.restored', r); })
-                .catch((e) => { view.backup.msg = t('backup.restoreFail', { error: errorText(e) }); })
+                .catch((e) => { view.backup.msg = t('backup.restoreFail', { error: errorText(e) }); logError('restore', e); })
                 .finally(() => { view.backup.busy = false; if (isPanelOpen()) render(); });
             return;
         case 'backup-dismiss':

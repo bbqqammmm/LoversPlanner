@@ -1721,3 +1721,7 @@ html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
 .lp-old-day-off { opacity: 0.6; padding: 2px 6px; }
 .lp-diary-progress { display: flex; flex-direction: column; gap: 6px; }
 .lp-diary-progress progress { width: 100%; height: 10px; accent-color: var(--lp-accent, #d98c8c); }
+
+/* 🐞 錯誤報告（v0.13.46） */
+.lp-error-list { list-style: none; margin: 6px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-error-list li { padding: 6px 8px; border: 1px solid var(--lp-border); border-radius: 8px; background: var(--lp-card); overflow-wrap: anywhere; }

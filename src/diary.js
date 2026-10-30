@@ -22,6 +22,7 @@ import { dayChats, dayParts } from './oldchats.js';
 import { hashText } from './chat.js';
 import { addPrefsFromModel } from './prefs.js';
 import { dropTasks, enqueueTask, queuedTasks } from './summarize.js';
+import { noteError } from './errlog.js';
 
 export const TASK = 'diary';
 /** 再壓一次可以選的比例；低於 MIN_SAFE_RATIO 會提醒（測試：壓到一半以下，中等的事大多會不見）。 */
@@ -131,7 +132,12 @@ export function parseDiary(raw) {
     if (saved) return saved;
     const head = text.replace(/\s+/g, ' ').trim().slice(0, 80);
     const refused = REFUSAL.test(text.slice(0, 300)) && !text.includes('"summary"');
-    throw new ApiError('parse', [t('diary.parseFail'), head ? t('diary.parseSaid', { text: head }) : '', refused ? t('diary.parseRefused') : ''].filter(Boolean).join(' '));
+    const err = new ApiError('parse', [t('diary.parseFail'), head ? t('diary.parseSaid', { text: head }) : '', refused ? t('diary.parseRefused') : ''].filter(Boolean).join(' '));
+    // 錯誤報告用（不含內容）：回覆多長、有沒有被截斷、像不像拒絕。
+    err.replyLength = text.length;
+    err.cut = cutOff;
+    if (refused) err.refused = true;
+    throw err;
 }
 
 const REFUSAL = /sorry|can['’]t|cannot|unable to|I won['’]t|抱歉|對不起|对不起|無法|无法|不能(?:協助|协助|幫|帮|提供|寫|写)|拒絕|拒绝/i;
@@ -231,6 +237,7 @@ async function writePartInner(date, partNo, style, only) {
         if (only) day.only = only;
         else delete day.only;
     } catch (e) {
+        noteError('diary', e, { model: modelLabel() });
         console.warn(LOG_PREFIX, '寫日記失敗', date, partNo, e);
         day.parts[partNo - 1] = { ...(day.parts[partNo - 1] ?? { part: partNo, total: p.total, floors }), error: errorText(e) };
     }
@@ -372,6 +379,7 @@ export function compressDay(date, opts = {}) {
             day.use = 'compressed';
             day.compressError = '';
         } catch (e) {
+            noteError('diaryCompress', e, { model: modelLabel() });
             console.warn(LOG_PREFIX, '再壓一次失敗', date, e);
             day.compressError = errorText(e);
         }
@@ -471,6 +479,7 @@ export function queueOutline() {
             const v = parseDiary(raw);
             rec.outline = { text: v.summary.trim(), at: Date.now(), by: modelLabel(), basis: outlineBasis() };
         } catch (e) {
+            noteError('outline', e, { model: modelLabel() });
             console.warn(LOG_PREFIX, '寫大綱失敗', e);
             rec.outline = { ...(rec.outline ?? {}), error: errorText(e) };
         }

@@ -19,6 +19,7 @@ import { characterKey } from './scope.js';
 import { chatKey, getChat, hashText, isAiMessage } from './chat.js';
 import { buildBackup, importBackup, parseBackup } from './backup.js';
 import { isActive, onSummaryChange } from './summarize.js';
+import { logError } from './errlog.js';
 
 const OPEN_DELAY_MS = 6000;
 const FLOOR_DELAY_MS = 20000;
@@ -226,6 +227,7 @@ export async function backupNow(reason = 'manual') {
         return entry;
     } catch (e) {
         console.warn(LOG_PREFIX, '備份失敗', e);
+        logError('backup', e);
         lastError = e?.message || String(e);
         return null;
     } finally {

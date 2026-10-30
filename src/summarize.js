@@ -6,7 +6,7 @@
 //   'manual' 手動：只在按「立即摘要」時。
 // 走主 API 時，等酒館這一輪生成結束才開始，避免和正常生成搶同一條連線。
 
-import { ctx, hasCharacterChat, isGroupChat, LOG_PREFIX, toast } from './util.js';
+import { ctx, hasCharacterChat, isGroupChat, LOG_PREFIX, toast, toastActions } from './util.js';
 import { getSettings, isTracked, trackedNoteTypes } from './settings.js';
 import { currentLocale, t } from './i18n.js';
 import { getTemplate } from './prompts.js';
@@ -23,6 +23,7 @@ import { addPrefsFromModel } from './prefs.js';
 import {
     chatKey, floorSource, floorStatus, getChat, getEntry, isAiMessage, lastAiIndex, saveChatSoon, setEntry,
 } from './chat.js';
+import { copyReport, noteError } from './errlog.js';
 
 /** 主 API 正在生成時，超過這麼久沒收到結束事件就當作已經結束（避免卡住）。 */
 const MAIN_BUSY_TIMEOUT_MS = 3 * 60 * 1000;
@@ -376,7 +377,11 @@ export function parseL1(raw) {
     }
     // 救不回來：錯誤訊息附上頭尾，方便看出是在哪裡斷掉的。
     const detail = text.length > 200 ? `${text.slice(0, 100)} … ${text.slice(-80)}` : text;
-    throw new ApiError('parse', detail);
+    const err = new ApiError('parse', detail);
+    // 錯誤報告用（不含內容）：回覆多長、結尾有沒有收好。
+    err.replyLength = text.length;
+    err.cut = !/}\s*(?:```)?\s*$/.test(text);
+    throw err;
 }
 
 /** 時間、地點、出場人物：整理成固定格式。 */
@@ -430,6 +435,14 @@ export function restoreVersion(index, k) {
     return true;
 }
 
+/** 摘要失敗的通知，附「複製錯誤報告」（v0.13.46，可以直接貼給別人看）。 */
+function failToast(index, message) {
+    toastActions(t('toast.summaryFailed', { n: index, error: message }), [{
+        label: t('report.copy'),
+        run: () => copyReport().then((ok) => toast(t(ok ? 'report.copied' : 'report.copyFail'), ok ? 'success' : 'warning')),
+    }], { type: 'error' });
+}
+
 async function summarizeFloor(index) {
     const chatId = chatKey();
     const msg = getChat()[index];
@@ -468,6 +481,7 @@ async function summarizeFloor(index) {
         const added = addPrefsFromModel(parsed.prefs, 'ooc');
         if (added.length) toast(t('prefs.added', { text: added.map((p) => p.text).join('；') }), 'info');
     } catch (e) {
+        noteError('l1', e, { model: modelLabel() });
         console.warn(LOG_PREFIX, `第 ${index} 層摘要失敗`, e);
         if (!stillHere()) return;
         const message = errorText(e);
@@ -478,7 +492,7 @@ async function summarizeFloor(index) {
             time: previous?.time ?? '', location: previous?.location ?? '',
             characters: previous?.characters ?? [], summary: previous?.summary ?? '',
         }, previous));
-        toast(t('toast.summaryFailed', { n: index, error: message }), 'error');
+        failToast(index, message);
     }
     saveChatSoon();
 }
@@ -517,11 +531,12 @@ async function readSideFloor(index) {
             : [];
         setEntry(index, { v: 2, status: 'side', summary: parsed.summary, ops, keepsakes, hash, at: Date.now(), by: modelLabel(), prev: base() });
     } catch (e) {
+        noteError('side', e, { model: modelLabel() });
         console.warn(LOG_PREFIX, `第 ${index} 層小劇場讀取失敗`, e);
         if (!stillHere()) return;
         const message = errorText(e);
         setEntry(index, { v: 2, status: 'side', error: message, summary: '', ops: [], keepsakes: [], hash, at: Date.now(), prev: base() });
-        toast(t('toast.summaryFailed', { n: index, error: message }), 'error');
+        failToast(index, message);
     }
     saveChatSoon();
 }

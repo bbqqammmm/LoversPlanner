@@ -22,6 +22,7 @@ import { initSent } from './src/sent.js';
 import { initEggs } from './src/eggs.js';
 import { initAutoBackup } from './src/autobackup.js';
 import { initBundle } from './src/bundle.js';
+import { initErrorLog } from './src/errlog.js';
 
 function onSettingChanged(path) {
     if (path === 'language') relabelEntries();
@@ -44,6 +45,8 @@ async function start() {
     }
 
     initSettings();
+    // 戀人手帳自己的程式錯誤也記進錯誤報告（v0.13.46）。
+    initErrorLog();
     applyTheme();
     setPanelHooks({ onSettingChanged });
     mountWandEntry();

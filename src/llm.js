@@ -5,6 +5,7 @@ import { getSettings } from './settings.js';
 import { t } from './i18n.js';
 import { recordUsage, roughTokens } from './usage.js';
 import { ApiError, chatCompletion } from './api/custom.js';
+import { logError } from './errlog.js';
 
 /** 回覆是空的、或只有服務商自己的通知時，自動重試幾次（間隔）。 */
 const EMPTY_RETRY_MS = [2000, 6000];
@@ -160,6 +161,8 @@ async function generateOnce(prompt, { maxTokens = 512, purpose = 'other', target
         if (!(e instanceof ApiError && ['need_custom', 'no_main', 'need_url'].includes(e.code))) {
             recordUsage({ purpose, model, input: usage?.input ?? sentGuess, output: usage?.output ?? roughTokens(text), est: !usage, ms: Date.now() - started, ok: false, error: e?.code ?? e?.message ?? String(e) });
         }
+        // 錯誤報告（v0.13.46）：每次失敗都記（加倍額度、改用另一組再試的也記，看得出試了幾次）。
+        logError(purpose, e, { model, maxTokens, ms: Date.now() - started });
         throw e;
     }
 }

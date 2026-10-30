@@ -12,6 +12,7 @@ import { parseJsonLenient } from './json.js';
 import { ApiError } from './api/custom.js';
 import { charFieldRules } from './l1rules.js';
 import { fillCharactersFromWorld, getNotes } from './notes.js';
+import { noteError } from './errlog.js';
 
 /** 一次送幾條給模型。 */
 export const WORLD_BATCH = 8;
@@ -142,6 +143,7 @@ export async function fillFromWorld(entries, onProgress = () => {}) {
         }
         return sum;
     } catch (e) {
+        noteError('world', e);
         console.warn(LOG_PREFIX, '從世界書填寫失敗', e);
         e.partial = sum;
         throw e;

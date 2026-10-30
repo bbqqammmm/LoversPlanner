@@ -22,6 +22,7 @@ import { sceneLine } from './lines.js';
 import { enqueueCompress, floorState, isActive, previousDate, setAfterSummaryHook, setCompressHandler } from './summarize.js';
 import { normDate } from './calendar.js';
 import { computeHidden } from './hide.js';
+import { noteError } from './errlog.js';
 
 function record(create) {
     const meta = ctx()?.chatMetadata;
@@ -451,6 +452,7 @@ async function compressChapter(indices, existing = null) {
         upsert('chapters', { ...base, ...(place ? { location: place, placeBy: 'model' } : { placeBy: undefined }), summary, status: 'ok', at: Date.now() });
         return true;
     } catch (e) {
+        noteError('compress', e);
         console.warn(LOG_PREFIX, '壓縮成章失敗', e);
         if (existing) upsert('chapters', { ...existing, status: 'fail', error: errorText(e), at: Date.now() });
         else toast(t('compress.failed', { error: errorText(e) }), 'error');
@@ -474,6 +476,7 @@ async function compressVolume(children, existing = null, level = existing?.level
         upsert('volumes', { ...base, ...(place ? { location: place, placeBy: 'model' } : { placeBy: undefined }), summary, status: 'ok', at: Date.now() });
         return true;
     } catch (e) {
+        noteError('compress', e);
         console.warn(LOG_PREFIX, `壓縮成 L${level} 失敗`, e);
         if (existing) upsert('volumes', { ...existing, status: 'fail', error: errorText(e), at: Date.now() });
         else toast(t('compress.failed', { error: errorText(e) }), 'error');

@@ -12,6 +12,7 @@ import { getNotes, noteTitle, updateNoteManual } from './notes.js';
 import { charFields } from './settings.js';
 import { estimateTokens } from './hide.js';
 import { addMemory, listMemories } from './memories.js';
+import { noteError } from './errlog.js';
 
 /** 每個欄位超過多少 token 算太長（中文大約 1.2 字一個 token：狀態、衣著、備註約 40 字）。 */
 export const FIELD_LIMITS = { status: 35, outfit: 35, note: 35, appearance: 55, history: 100 };
@@ -93,6 +94,7 @@ export async function tidyCharacter(id) {
         }
         return { title: noteTitle(now), changed: changed.length, moved };
     } catch (e) {
+        noteError('tidy', e);
         console.warn(LOG_PREFIX, '整理人物失敗', e);
         throw e;
     } finally {

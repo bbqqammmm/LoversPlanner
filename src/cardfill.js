@@ -10,6 +10,7 @@ import { parseJsonLenient } from './json.js';
 import { ApiError } from './api/custom.js';
 import { charFieldRules } from './l1rules.js';
 import { fillFromCardManual } from './notes.js';
+import { noteError } from './errlog.js';
 
 /** 每份人設最多送多少字（太長的角色卡截斷，免得一次花太多）。 */
 const MAX_CARD = 8000;
@@ -86,6 +87,7 @@ export async function fillFromCard() {
         if (!texts.user) fills.user = {};
         return fillFromCardManual(fills);
     } catch (e) {
+        noteError('card', e);
         console.warn(LOG_PREFIX, '從人設填寫失敗', e);
         throw e;
     } finally {

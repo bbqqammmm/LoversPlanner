@@ -33,6 +33,7 @@ export function withoutSecrets(settings) {
     delete out.characters;
     delete out.usage;
     delete out.backupIndex;
+    delete out.errors;
     for (const path of SECRET_PATHS) {
         let obj = out;
         for (const k of path.slice(0, -1)) obj = obj?.[k];
@@ -191,12 +192,13 @@ export function importBackup(data, { mode = 'merge', settings = false } = {}) {
 /** 導入設定：不會蓋掉現在的 API 金鑰、角色卡的資料、調用紀錄和備份索引。 */
 export function applySettings(settings) {
     const cur = getSettings();
-    const keep = { custom: cur.custom?.key, vector: cur.recall?.vector?.key, characters: cur.characters, usage: cur.usage, backupIndex: cur.backupIndex,
+    const keep = { custom: cur.custom?.key, vector: cur.recall?.vector?.key, characters: cur.characters, usage: cur.usage, backupIndex: cur.backupIndex, errors: cur.errors,
         profiles: new Map((cur.profiles ?? []).map((p) => [p.id, p.key])) };
     const next = clone(settings);
     delete next.characters;
     delete next.usage;
     delete next.backupIndex;
+    delete next.errors;
     Object.assign(cur, next);
     if (cur.custom) cur.custom.key = keep.custom ?? '';
     if (cur.recall?.vector) cur.recall.vector.key = keep.vector ?? '';
@@ -205,6 +207,7 @@ export function applySettings(settings) {
     cur.characters = keep.characters;
     cur.usage = keep.usage;
     cur.backupIndex = keep.backupIndex ?? {};
+    cur.errors = keep.errors ?? [];
     saveSettings();
 }
 

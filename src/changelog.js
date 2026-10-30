@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.46',
+        new: {
+            'zh-TW': ['🐞 錯誤報告：出錯時按「📋 複製錯誤報告」就能貼給 Claude 或作者，不用截圖。只有技術資訊（什麼時候、哪個功能、錯誤碼、模型名稱、回覆多長），不含提示詞、模型寫的內容、聊天內容、網址和 Key。在設定 › 🐞 錯誤報告，摘要失敗的通知、日記失敗的提示上也有。'],
+            'zh-CN': ['🐞 错误报告：出错时按「📋 复制错误报告」就能贴给 Claude 或作者，不用截图。只有技术信息（什么时候、哪个功能、错误码、模型名称、回复多长），不含提示词、模型写的内容、聊天内容、网址和 Key。在设置 › 🐞 错误报告，摘要失败的通知、日记失败的提示上也有。'],
+            en: ['🐞 Error report: when something fails, press "📋 Copy error report" and paste it to Claude or the author instead of a screenshot. It has only technical details (when, which feature, error code, model, reply length) and never prompts, generated text, chat content, URLs or keys. In Settings › 🐞 Error report, and on summary-failure notices and diary failures.'],
+        },
+    },
+    {
         v: '0.13.45',
         fix: {
             'zh-TW': ['寫日記出現「看不懂模型的回覆」：被截斷、或日記裡用了半形引號的回覆，現在大多救得回來；寫到一半被截斷的會自動加倍額度重寫一次。還是失敗時，錯誤會附上模型回了什麼，像是拒絕寫的也會提示。'],

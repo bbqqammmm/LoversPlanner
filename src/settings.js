@@ -141,6 +141,8 @@ export const DEFAULTS = Object.freeze({
     // keep 每個聊天留幾份；alarm 摘要突然少很多時跳警報。backupIndex 是各聊天的備份清單（autobackup.js）。
     backup: { auto: true, everyDays: 1, everyFloors: 50, keep: 7, alarm: true },
     backupIndex: {},
+    // 錯誤報告（v0.13.46）：最近的錯誤（errlog.js），只有技術資訊，不含內容。
+    errors: [],
     // 每張角色卡自己的資料，key 是角色卡頭像檔名：{ [avatar]: { scope } }
     characters: {},
     // 設定格式的版本，用來做一次性的轉換。

@@ -23,6 +23,7 @@ import { condenseRecap, getRecap } from './carry.js';
 import { aliasesOf } from './recall.js';
 import { estimateTokens } from './hide.js';
 import { longFields, tidyCharacter } from './tidy.js';
+import { noteError } from './errlog.js';
 
 /** 一層最多列幾個「時間／地點空白」的樓層（其他的只算數量）。 */
 const MAX_LISTED = 12;
@@ -260,6 +261,7 @@ export async function auditFloors(indices, onProgress = () => {}) {
             try {
                 audits.set(i, { ...(await auditOne(i)), hash, entryAt, at: Date.now() });
             } catch (e) {
+                noteError('check', e);
                 console.warn(LOG_PREFIX, `抽查第 ${i} 層失敗`, e);
                 audits.set(i, { ok: null, problems: [], error: errorText(e), hash, entryAt, at: Date.now() });
             }

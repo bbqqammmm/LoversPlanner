@@ -7,6 +7,7 @@ import { generateText } from './llm.js';
 import { parseJsonLenient } from './json.js';
 import { ApiError } from './api/custom.js';
 import { notesWithoutTitle, setTitlesManual } from './notes.js';
+import { noteError } from './errlog.js';
 
 /** 一次送幾條。 */
 export const TITLE_BATCH = 40;
@@ -62,6 +63,7 @@ export async function fillTitles() {
         }
         update({ busy: false });
     } catch (e) {
+        noteError('titles', e);
         console.warn(LOG_PREFIX, '補標題失敗', e);
         update({ busy: false, error: e });
     }

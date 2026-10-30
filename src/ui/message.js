@@ -103,8 +103,8 @@ export function versionsHtml(index, { panel = false } = {}) {
     return `<details class="lp-versions" data-role="versions"><summary>${esc(t('ver.title', { n: list.length }))}</summary><ul class="lp-ver-list">${rows}</ul></details>`;
 }
 
-const why = (reason, score) => {
-    const label = ['pinnedMemory', 'random'].includes(reason) ? t(`sent.why.${reason}`) : t(`preview.why.${reason}`);
+const why = (reason, score, term = '') => {
+    const label = ['pinnedMemory', 'random'].includes(reason) ? t(`sent.why.${reason}`) : t(`preview.why.${reason}`, { term });
     return `<span class="lp-why${reason === 'vector' ? ' lp-why-vec' : ''}">${esc(typeof score === 'number' ? `${label} ${score}%` : label)}</span>`;
 };
 
@@ -123,19 +123,19 @@ export function sentHtml(index) {
     if (!r.filtered) html += `<div class="lp-sent-sec">${esc(t('sent.notesAll', { n: r.notesTotal }))}</div>`;
     else if (r.notes.length) {
         html += `<div class="lp-sent-sec">${esc(t('sent.notes', { sent: r.notesSent, skip: Math.max(0, r.notesTotal - r.notesSent) }))}</div>`;
-        html += list(r.notes.map((n) => `<li>${n.type && n.type !== 'character' ? `${esc(t(`type.${n.type}`))}：` : ''}${esc(n.title)} ${why(n.reason, n.score)}</li>`));
+        html += list(r.notes.map((n) => `<li>${n.type && n.type !== 'character' ? `${esc(t(`type.${n.type}`))}：` : ''}${esc(n.title)} ${why(n.reason, n.score, n.term)}</li>`));
     }
     if (r.floors.length) {
         html += `<div class="lp-sent-sec">${esc(t('sent.floors', { n: r.floors.length }))}</div>`;
         html += list(r.floors.map((f) => {
             const i = floorOf(f);
             const at = i === null ? `<span class="lp-note">${esc(t('sent.floorGone'))}</span>` : `<button type="button" class="lp-link" data-lp-act="sent-jump" data-floor="${i}">#${i}</button>`;
-            return `<li>${at} ${esc(f.line)} ${why(f.reason, f.score)}</li>`;
+            return `<li>${at} ${esc(f.line)} ${why(f.reason, f.score, f.term)}</li>`;
         }));
     }
     if (diary.length) {
         html += `<div class="lp-sent-sec">${esc(t('sent.diary', { n: diary.length }))}</div>`;
-        html += list(diary.map((d) => `<li>${esc(d.line)} ${why(d.reason, d.score)}</li>`));
+        html += list(diary.map((d) => `<li>${esc(d.line)} ${why(d.reason, d.score, d.term)}</li>`));
     }
     if (r.reminders.length) {
         html += `<div class="lp-sent-sec">${esc(t('sent.reminders', { n: r.reminders.length }))}</div>`;

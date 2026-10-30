@@ -9,6 +9,20 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.51',
+        fix: {
+            'zh-TW': [
+                '🔍 找回舊樓層、以前的日記和記事時，會特別看你最新說的那句話：向量另外拿那句話單獨比一次（以前混在 AI 的長回覆裡，短短的一句幾乎沒影響）；那句話裡比較少見的詞（例如「萬聖節」）在回憶或日記裡也有，就算相關；提到節日或日期（萬聖節、聖誕節、情人節、10月31日…）會找回那一天的。「🔍 這一回送了什麼」會寫為什麼：同樣的詞「萬聖節」、同一天（10-31）。',
+            ],
+            'zh-CN': [
+                '🔍 找回旧楼层、以前的日记和记事时，会特别看你最新说的那句话：矢量另外拿那句话单独比一次（以前混在 AI 的长回复里，短短的一句几乎没影响）；那句话里比较少见的词（例如「万圣节」）在回忆或日记里也有，就算相关；提到节日或日期（万圣节、圣诞节、情人节、10月31日…）会找回那一天的。「🔍 这一回送了什么」会写为什么：同样的词「万圣节」、同一天（10-31）。',
+            ],
+            en: [
+                '🔍 Recall of old floors, earlier diaries and notes now looks closely at your latest message: the vector search compares that message on its own (before, it was mixed into the long AI reply and barely counted); uncommon words in it (like "Halloween") that also appear in a memory or diary count as related; holidays and dates (Halloween, Christmas, Valentine\'s Day, 10/31…) bring back that day. "🔍 What was sent" says why: same word "Halloween", same day (10-31).',
+            ],
+        },
+    },
+    {
         v: '0.13.50',
         fix: {
             'zh-TW': [

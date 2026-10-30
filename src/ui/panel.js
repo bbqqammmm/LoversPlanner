@@ -4904,7 +4904,7 @@ function recallDetails(sel) {
         const items = [...sel.notes].map(([id, info]) => {
             const note = notes.get(id);
             if (!note) return '';
-            const why = t(`preview.why.${info.reason}`) + (info.score !== undefined ? ` ${pct(info.score)}` : '');
+            const why = t(`preview.why.${info.reason}`, { term: info.term ?? '' }) + (info.score !== undefined ? ` ${pct(info.score)}` : '');
             return `<li data-recall-note="${esc(id)}">${esc(typeLabel(note.type))}：${esc(noteTitle(note))} <span class="lp-note">（${esc(why)}）</span></li>`;
         }).filter(Boolean);
         const skipped = sel.total - sel.notes.size;
@@ -4913,7 +4913,7 @@ function recallDetails(sel) {
     }
     if (sel.memories.length) {
         const items = sel.memories.map((m) => {
-            const why = m.reason === 'vector' ? `${t('preview.why.vector')} ${pct(m.score)}` : t('preview.why.keyword');
+            const why = m.reason === 'vector' ? `${t('preview.why.vector')} ${pct(m.score)}` : t(`preview.why.${m.reason}`, { term: m.term ?? '' });
             return `<li data-recall-floor="${m.index}">${esc(t('preview.floor', { n: m.index }))} <span class="lp-note">（${esc(why)}）</span></li>`;
         });
         lines.push(`<div class="lp-label">${esc(t('preview.memories', { n: sel.memories.length }))}</div><ul class="lp-recall-list">${items.join('')}</ul>`);

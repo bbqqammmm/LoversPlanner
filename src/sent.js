@@ -41,19 +41,20 @@ export function recordSend({ type, selection, reminders = [], pinnedKey = null, 
         notesSent: filtered ? selection.notes.size : (selection?.total ?? notes.size),
         notes: filtered ? [...selection.notes].map(([id, x]) => {
             const n = notes.get(id);
-            return { title: n ? cut(noteTitle(n)) : id, type: n?.type ?? '', reason: x.reason, ...(typeof x.score === 'number' ? { score: Math.round(x.score * 100) } : {}) };
+            return { title: n ? cut(noteTitle(n)) : id, type: n?.type ?? '', reason: x.reason, ...(typeof x.score === 'number' ? { score: Math.round(x.score * 100) } : {}), ...(x.term ? { term: x.term } : {}) };
         }) : [],
         floors: (selection?.memories ?? []).map((m) => ({
             date: chat[m.index]?.send_date ?? null,
             floor: m.index,
             line: cut(m.line),
             reason: m.reason,
+            ...(m.term ? { term: m.term } : {}),
             ...(m.reason === 'vector' && typeof m.score === 'number' ? { score: Math.round(m.score * 100) } : {}),
         })),
         reminders: reminders.map((m) => ({ title: cut(m.title), reason: m.key === pinnedKey ? 'pinned' : 'random' })),
         // 以前的日記（v0.13.36）：找回了哪幾段。最近幾天的全文、大綱每回都送，不用記。
         diary: (selection?.diary ?? []).map((d) => ({
-            date: d.date, part: d.part, total: d.total, line: cut(d.line), reason: d.reason,
+            date: d.date, part: d.part, total: d.total, line: cut(d.line), reason: d.reason, ...(d.term ? { term: d.term } : {}),
             ...(d.reason === 'vector' && typeof d.score === 'number' ? { score: Math.round(d.score * 100) } : {}),
         })),
         vector: selection?.vector ?? 'off',

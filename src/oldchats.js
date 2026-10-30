@@ -45,6 +45,11 @@ export function hasLoadedDays() {
     return lastUnits.size > 0;
 }
 
+/** 換了聊天（可能是別的角色）：上次讀到的舊聊天內容不能再用（v0.13.42，不然會寫進別的角色的聊天）。 */
+export function clearLoadedDays() {
+    lastUnits = new Map();
+}
+
 /** 這一天讀到的內容來自哪幾個聊天（照讀的順序）。only 同 dayParts。 */
 export function dayChats(date, only = '') {
     const out = [];

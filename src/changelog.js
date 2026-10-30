@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.42',
+        fix: {
+            'zh-TW': ['換到別的角色（或別的聊天）後，📦 舊聊天整理列的還是上一個角色的舊聊天，修好了。讀到一半的內容、選好準備導入的檔案也會一起清掉，不會寫進別的聊天。'],
+            'zh-CN': ['换到别的角色（或别的聊天）后，📦 旧聊天整理列的还是上一个角色的旧聊天，修好了。读到一半的内容、选好准备导入的文件也会一起清掉，不会写进别的聊天。'],
+            en: ['After switching to another character (or chat), "📦 Old chats" still listed the previous character\'s chats; fixed. Half-read content and a backup file picked for import are cleared too, so nothing lands in the wrong chat.'],
+        },
+    },
+    {
         v: '0.13.41',
         fix: {
             'zh-TW': ['魔術棒選單上的 NEW：打開過一次大視窗就不再顯示，有新版本才會再出現（更新內容的卡片還在，按「知道了」才收起來）。'],

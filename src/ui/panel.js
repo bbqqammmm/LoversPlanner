@@ -13,7 +13,7 @@ import { getLoadedVersion } from '../update.js';
 import { VERSION } from '../version.js';
 import { ROUTES, usesMain } from '../llm.js';
 import { allChanges, markBadgeSeen, markSeen, seenVersion, unseenChanges } from '../changelog.js';
-import { analyzeChats, hasLoadedDays, listOldChats, loadOldChat } from '../oldchats.js';
+import { analyzeChats, clearLoadedDays, hasLoadedDays, listOldChats, loadOldChat } from '../oldchats.js';
 import { diaryPlan } from '../diarysend.js';
 import { addPref, editPref, listPrefs, onPrefsChange, removePref, togglePref } from '../prefs.js';
 import {
@@ -349,7 +349,28 @@ async function applyTauriSurface() {
 
 // ===== 畫面 =====
 
+/** 大視窗上一次畫的是哪個聊天（換聊天時清掉只屬於那個聊天的畫面狀態）。 */
+let viewChat;
+
+/**
+ * 換了聊天（v0.13.42，使用者回報：打開別的角色的聊天，舊聊天整理列的還是上一個角色的聊天）：
+ * 舊聊天清單和讀到的內容、選好的導入檔、日記的提示、備份的訊息等都只屬於原本那個聊天，清掉。
+ */
+function resetChatView() {
+    view.old = { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '', only: {} };
+    clearLoadedDays();
+    view.diary = { ...view.diary, open: new Set(), editing: null, compress: null, msg: '', conflicts: [], replace: null, outlineEdit: false };
+    view.data = { ...view.data, file: null, bundle: null, fileName: '', confirmWipe: false, confirmReplace: false, message: null };
+    view.backup = { ...view.backup, confirm: null, msg: '', bundleMsg: '' };
+    view.cal = { ...view.cal, carryMsg: '', carryBusy: false, selected: null, month: null };
+    view.notes = { ...view.notes, overdueHidden: false, overdueConfirm: false };
+}
+
 function render() {
+    if (chatKey() !== viewChat) {
+        if (viewChat !== undefined) resetChatView();
+        viewChat = chatKey();
+    }
     applyTheme();
     const body = panel.querySelector('.lp-body');
     const scrollTop = body ? body.scrollTop : 0;
@@ -999,8 +1020,12 @@ async function carryCalendar() {
     v.carryBusy = true;
     v.carryMsg = '';
     render();
+    const chat = chatKey();
     try {
-        const r = analyzeChats([{ id: src, data: await loadOldChat(src) }], { keepDays: false });
+        const data = await loadOldChat(src);
+        // 讀的時候換了聊天：不要加到別的聊天裡。
+        if (chatKey() !== chat) return;
+        const r = analyzeChats([{ id: src, data }], { keepDays: false });
         const n = addCarriedEvents(r.calendar.items, src);
         markCarryAsked(src);
         toast(n ? t('cal.carryDone', { n, period: r.calendar.period, intimacy: r.calendar.intimacy, anniversary: r.calendar.anniversary }) : t('cal.carryNone'), n ? 'success' : 'info');
@@ -1527,6 +1552,7 @@ function compressBox(d) {
 
 async function readOldChats() {
     const o = view.old;
+    const chat = chatKey();
     // 照聊天清單的順序反過來讀（舊的先），分支聊天重複的訊息算在比較早的那個。
     const ids = (o.list ?? []).map((x) => x.id).filter((id) => o.picked.has(id)).reverse();
     const loaded = [];
@@ -1541,6 +1567,8 @@ async function readOldChats() {
         o.reading = t('old.analyzing');
         if (isPanelOpen()) render();
         await new Promise((r) => setTimeout(r, 0));
+        // 讀的時候換了聊天：不分析（不然會把別的角色的內容當成這個聊天的舊聊天）。
+        if (chatKey() !== chat || o !== view.old) return;
         o.result = analyzeChats(loaded);
         o.ids = ids;
     } catch (e) {
@@ -3479,9 +3507,11 @@ function onClick(e) {
         case 'old-open':
             view.old.open = true;
             if (!view.old.list) {
-                view.old.loading = true;
-                listOldChats().then((list) => { view.old.list = list; }).catch((err) => { view.old.list = []; view.old.msg = t('old.fail', { error: errorText(err) }); })
-                    .finally(() => { view.old.loading = false; if (isPanelOpen()) render(); });
+                const o = view.old;
+                o.loading = true;
+                // 讀到一半換了聊天：結果丟掉（o 已經不是現在的 view.old）。
+                listOldChats().then((list) => { o.list = list; }).catch((err) => { o.list = []; o.msg = t('old.fail', { error: errorText(err) }); })
+                    .finally(() => { o.loading = false; if (isPanelOpen() && o === view.old) render(); });
             }
             render();
             return;

@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.45',
+        fix: {
+            'zh-TW': ['寫日記出現「看不懂模型的回覆」：被截斷、或日記裡用了半形引號的回覆，現在大多救得回來；寫到一半被截斷的會自動加倍額度重寫一次。還是失敗時，錯誤會附上模型回了什麼，像是拒絕寫的也會提示。'],
+            'zh-CN': ['写日记出现「看不懂模型的回复」：被截断、或日记里用了半角引号的回复，现在大多救得回来；写到一半被截断的会自动加倍额度重写一次。还是失败时，错误会附上模型回了什么，像是拒绝写的也会提示。'],
+            en: ['"Could not read the model\'s reply" when writing diaries: cut-off replies and ones with unescaped quotes are now mostly recovered, and cut-off parts are rewritten once with a doubled budget. If it still fails, the error shows what the model said and hints when it looks like a refusal.'],
+        },
+    },
+    {
         v: '0.13.44',
         new: {
             'zh-TW': [

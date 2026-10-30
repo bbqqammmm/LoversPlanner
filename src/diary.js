@@ -112,11 +112,51 @@ export function parsePoints(list) {
     }).filter(Boolean);
 }
 
-function parseDiary(raw) {
-    const r = parseJsonLenient(raw, { accept: (o) => typeof o?.summary === 'string' });
+/**
+ * 讀模型回的日記 JSON。讀不懂時（v0.13.45，使用者回報兩個模型都在同一段失敗）先盡量救：
+ *   回覆被截斷（summary 排在最後，寫到一半就斷）、summary 裡有沒跳脫的半形引號（"晚安"）。
+ * 還是救不回來就丟 parse 錯誤，附上模型回的開頭；像是拒絕的（抱歉、不能…）另外提示。
+ */
+export function parseDiary(raw) {
+    const text = String(raw ?? '');
+    const r = parseJsonLenient(text, { accept: (o) => typeof o?.summary === 'string' && o.summary.trim() !== '' });
     const v = r?.value;
-    if (!v || typeof v.summary !== 'string' || !v.summary.trim()) throw new ApiError('parse', t('diary.parseFail'));
-    return v;
+    const ok = v && typeof v.summary === 'string' && v.summary.trim();
+    if (ok && !r.repaired) return v;
+    // 修過的（例如半形引號把 summary 切斷了）：救回來的比較長就用救回來的。
+    const saved = salvageDiary(text);
+    // 被截斷的（寬鬆解析會幫忙補上括號）要標 cut，寫日記時會加倍額度重寫。
+    const cutOff = !/}\s*(?:```)?\s*$/.test(text.trim());
+    if (ok && (!saved || saved.summary.length <= v.summary.length)) return cutOff ? { ...v, cut: true } : v;
+    if (saved) return saved;
+    const head = text.replace(/\s+/g, ' ').trim().slice(0, 80);
+    const refused = REFUSAL.test(text.slice(0, 300)) && !text.includes('"summary"');
+    throw new ApiError('parse', [t('diary.parseFail'), head ? t('diary.parseSaid', { text: head }) : '', refused ? t('diary.parseRefused') : ''].filter(Boolean).join(' '));
+}
+
+const REFUSAL = /sorry|can['’]t|cannot|unable to|I won['’]t|抱歉|對不起|对不起|無法|无法|不能(?:協助|协助|幫|帮|提供|寫|写)|拒絕|拒绝/i;
+
+/** 從壞掉的 JSON 裡把日記救回來：summary 到下一個欄位或結尾為止；points、time、location 讀得到就用。 */
+function salvageDiary(text) {
+    const m = text.match(/"summary"\s*:\s*"/);
+    if (!m) return null;
+    let rest = text.slice(m.index + m[0].length);
+    const next = rest.search(/"\s*,\s*"(?:points|time|location|prefs)"\s*:/);
+    let cut = false;
+    if (next >= 0) rest = rest.slice(0, next);
+    else {
+        // 到結尾：去掉收尾的 "} 和 ``` ；沒有收尾的就是被截斷了，整段拿（cut）。
+        const trimmed = rest.replace(/\s*```\s*$/, '');
+        cut = !/"\s*}\s*$/.test(trimmed);
+        rest = trimmed.replace(/"\s*}\s*$/, '');
+    }
+    const summary = rest.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\\\/g, '\\').trim();
+    if (summary.length < 10) return null;
+    const field = (name) => text.match(new RegExp(`"${name}"\\s*:\\s*"([^"\\n]*)"`))?.[1] ?? '';
+    let points = [];
+    const pm = text.match(/"points"\s*:\s*\[([\s\S]*?)\]/);
+    if (pm) points = [...pm[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((x) => x[1]);
+    return { summary, points, time: field('time'), location: field('location'), salvaged: true, ...(cut ? { cut: true } : {}) };
 }
 
 // ===== 進度（v0.13.43，使用者要求：寫日記時看得到寫到哪） =====
@@ -159,8 +199,22 @@ async function writePartInner(date, partNo, style, only) {
     }
     const { prompt, length, floors } = buildDiaryPrompt(date, p, style);
     try {
-        const raw = await generateText(prompt, { maxTokens: Math.max(MIN_OUTPUT, length * 3), purpose: 'diary' });
-        const v = parseDiary(raw);
+        const maxTokens = Math.max(MIN_OUTPUT, length * 3);
+        let v = null;
+        try {
+            v = parseDiary(await generateText(prompt, { maxTokens, purpose: 'diary' }));
+        } catch (e) {
+            if (e?.code !== 'parse') throw e;
+        }
+        // 讀不懂、或寫到一半被截斷：多半是額度用完了。額度加倍再寫一次；還是截斷的話，用比較長的那份。
+        if (!v || v.cut) {
+            try {
+                const again = parseDiary(await generateText(prompt, { maxTokens: maxTokens * 2, purpose: 'diary' }));
+                if (!v || !again.cut || again.summary.length > v.summary.length) v = again;
+            } catch (e) {
+                if (!v) throw e;
+            }
+        }
         day.parts.length = p.total;
         day.parts[partNo - 1] = {
             part: partNo, total: p.total, floors,

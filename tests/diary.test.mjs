@@ -170,6 +170,59 @@ const order = await page.evaluate(async () => {
 check('sending does not wait for queued diaries', order.waited < 1500 && order.left >= 1 && !order.aborted, JSON.stringify(order));
 await idle();
 
+// ===== 讀不懂的回覆（v0.13.45）：截斷、半形引號、拒絕 =====
+const pd = await page.evaluate(async () => {
+  const { parseDiary } = await import('/src/diary.js');
+  const tryIt = (raw) => { try { const v = parseDiary(raw); return { ok: true, summary: v.summary, points: v.points, time: v.time, cut: v.cut }; } catch (e) { return { ok: false, msg: e.detail ?? e.message }; } };
+  return {
+    cut: tryIt('{"points":["重大｜第一次一起看海","中等｜吃火鍋"],"time":"晚上","location":"海邊","summary":"晚上兩人去海邊散步，他牽起她的手，'),
+    quotes: tryIt('{"points":["重大｜告白"],"time":"晚上","summary":"他說"晚安"之後，又回頭揮揮手，說"明天見"。"}'),
+    fenced: tryIt('```json\n{"summary":"平常的一天，一起吃早餐、散步。","points":[]}\n```'),
+    refusal: tryIt("I'm sorry, but I can't help with writing this part."),
+  };
+});
+check('truncated reply: summary salvaged with points', pd.cut.ok && pd.cut.summary.startsWith('晚上兩人去海邊散步') && pd.cut.cut === true && pd.cut.points.length === 2 && pd.cut.time === '晚上', JSON.stringify(pd.cut));
+check('unescaped quotes: whole summary kept', pd.quotes.ok && pd.quotes.summary.includes('明天見'), JSON.stringify(pd.quotes));
+check('fenced JSON still fine', pd.fenced.ok && pd.fenced.summary.startsWith('平常的一天'));
+check('refusal: shows what the model said and a hint', !pd.refusal.ok && pd.refusal.msg.includes("I'm sorry") && pd.refusal.msg.includes('拒絕'), JSON.stringify(pd.refusal));
+// 第一次讀不懂 → 額度加倍再寫一次
+const retry = await page.evaluate(async () => {
+  window.__junkOnce = true;
+  const lens = [];
+  const prev = window.__generateRaw;
+  window.__generateRaw = async (opts) => {
+    if (String(opts.prompt).includes('故事裡 ')) {
+      lens.push(opts.responseLength);
+      if (window.__junkOnce) { window.__junkOnce = false; return '好的，我來寫'; }
+      return JSON.stringify({ points: [], summary: '重寫成功的日記。' });
+    }
+    return prev(opts);
+  };
+  const d = await import('/src/diary.js');
+  d.queueDays(['2025-03-01'], { rewrite: true });
+  for (let i = 0; i < 200 && d.diaryPending(); i++) await new Promise((r) => setTimeout(r, 50));
+  window.__generateRaw = prev;
+  return { lens, text: d.listDiary().find((x) => x.date === '2025-03-01').original };
+});
+check('unreadable reply retried once with double budget', retry.lens.length === 2 && retry.lens[1] === retry.lens[0] * 2 && retry.text === '重寫成功的日記。', JSON.stringify(retry));
+const cutRetry = await page.evaluate(async () => {
+  let n = 0;
+  const prev = window.__generateRaw;
+  window.__generateRaw = async (opts) => {
+    if (String(opts.prompt).includes('故事裡 ')) {
+      n++;
+      return n === 1 ? '{"points":[],"summary":"寫到一半就斷了，' : JSON.stringify({ points: [], summary: '完整的日記，有好好結尾。' });
+    }
+    return prev(opts);
+  };
+  const d = await import('/src/diary.js');
+  d.queueDays(['2025-03-01'], { rewrite: true });
+  for (let i = 0; i < 200 && d.diaryPending(); i++) await new Promise((r) => setTimeout(r, 50));
+  window.__generateRaw = prev;
+  return { n, text: d.listDiary().find((x) => x.date === '2025-03-01').original };
+});
+check('cut-off reply rewritten with more budget', cutRetry.n === 2 && cutRetry.text === '完整的日記，有好好結尾。', JSON.stringify(cutRetry));
+
 const missing = await page.evaluate(async () => (await import('/src/i18n.js')).missingKeys());
 check('i18n keys complete', !missing.length, JSON.stringify(missing));
 const tpl = await page.evaluate(async () => { const p = await import('/src/prompts.js'); return ['zh-TW', 'zh-CN', 'en'].every((l) => ['diary', 'diaryConcise', 'diaryCompress'].every((key) => p.defaultTemplate(key, l)?.includes('{{'))); });

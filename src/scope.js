@@ -17,6 +17,17 @@ export function characterKey() {
     return ch?.avatar ?? null;
 }
 
+/**
+ * 聊天搬到別的酒館後被改了名（酒館導入聊天會換檔名，v0.13.52）：舊的 id 換成現在的 id。
+ * 改名紀錄在 characters[頭像].renamed（導入打包檔時認出來的）。沒改過名就原樣回傳。
+ */
+export function currentChatId(id, avatar = characterKey()) {
+    const renamed = avatar ? getSettings().characters?.[avatar]?.renamed : null;
+    let cur = id;
+    for (let k = 0; renamed && k < 10 && renamed[cur] && renamed[cur] !== cur; k++) cur = renamed[cur];
+    return cur;
+}
+
 export function characterName() {
     const c = ctx();
     return c?.characters?.[c.characterId]?.name ?? c?.name2 ?? '';

@@ -168,20 +168,33 @@ async function load(entry, key) {
 // ===== 備份 =====
 
 /** 角色卡自己的資料裡屬於這個角色、也該備份的部分（不含其他聊天的快照）。 */
-export function characterPart(avatar = characterKey()) {
+export function characterPart(avatar = characterKey(), { snapshots = false } = {}) {
     const rec = getSettings().characters?.[avatar];
     if (!rec) return null;
     const out = {};
-    for (const k of ['shared', 'prefs', 'prefsRemoved', 'scope']) if (rec[k] !== undefined) out[k] = JSON.parse(JSON.stringify(rec[k]));
+    // snapshots：各聊天的快照和改名紀錄（搬到別的酒館用，v0.13.52：「即時共用」的摘要、回憶要讀來源聊天的快照）。
+    const keys = ['shared', 'prefs', 'prefsRemoved', 'scope', ...(snapshots ? ['chats', 'renamed'] : [])];
+    for (const k of keys) if (rec[k] !== undefined) out[k] = JSON.parse(JSON.stringify(rec[k]));
     return Object.keys(out).length ? out : null;
 }
 
-/** 放回角色卡的資料：只補沒有的（共用的記事照 id、偏好照內容），不蓋掉現在的。 */
-export function restoreCharacterPart(part, key = characterKey()) {
+/**
+ * 放回角色卡的資料：只補沒有的（共用的記事照 id、偏好照內容、快照照聊天），不蓋掉現在的。
+ * rename：{ 舊聊天 id: 新聊天 id }（搬過來時聊天被改了名，快照放在新的名字底下，也記下改名）。
+ */
+export function restoreCharacterPart(part, key = characterKey(), rename = {}) {
     if (!part || !key) return;
     const all = getSettings().characters;
     const rec = all[key] ?? (all[key] = {});
     if (part.scope && !rec.scope) rec.scope = part.scope;
+    const renamed = { ...(part.renamed ?? {}), ...rename };
+    const to = (id) => renamed[id] ?? id;
+    if (part.chats && typeof part.chats === 'object') {
+        rec.chats ??= {};
+        for (const [id, snap] of Object.entries(part.chats)) if (!rec.chats[to(id)]) rec.chats[to(id)] = snap;
+    }
+    const moved = Object.entries(renamed).filter(([a, b]) => a !== b);
+    if (moved.length) rec.renamed = { ...(rec.renamed ?? {}), ...Object.fromEntries(moved) };
     if (part.shared?.notes) {
         rec.shared ??= { notes: {} };
         rec.shared.notes ??= {};

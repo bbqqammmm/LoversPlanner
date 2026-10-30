@@ -11,7 +11,7 @@
 import { ctx, LOG_PREFIX, MODULE, toast } from './util.js';
 import { getSettings, saveSettings } from './settings.js';
 import { t } from './i18n.js';
-import { characterKey } from './scope.js';
+import { characterKey, currentChatId } from './scope.js';
 import { chatKey, isAiMessage } from './chat.js';
 import { applySettings, BACKUP_FORMAT, BACKUP_VERSION, backupFileName, buildBackup, importBackup, withoutSecrets } from './backup.js';
 import { backupKey, backupNow, browserStore, characterPart, markIntentional, onChatReady, restoreCharacterPart } from './autobackup.js';
@@ -85,7 +85,7 @@ export async function buildBundle({ scope = 'character', settings = false, onPro
     }
     const characters = {};
     for (const ch of list) {
-        const part = characterPart(ch.avatar);
+        const part = characterPart(ch.avatar, { snapshots: true });
         if (part) characters[ch.avatar] = part;
     }
     const data = {
@@ -137,30 +137,125 @@ export async function pendingCount() {
     return (await pendingList()).length;
 }
 
+// ===== 搬到別的酒館（v0.13.52，使用者要求：從 TauriTavern 搬一個角色到 SillyTavern） =====
+// 酒館導入角色卡時頭像檔名可能不一樣，導入聊天時會換檔名（「… imported」）。
+// 角色卡：同一個頭像檔名找不到，就找同名的角色（只有一個時）。
+// 聊天：同一個 id 找不到，就讀這個角色的聊天，比 AI 樓層的 send_date，大部分對得上的就是同一個聊天；
+//   記下改名（characters[頭像].renamed），「即時共用」的來源、日記記的聊天都會換成新的名字。
+
+/** 打包檔裡的頭像 → 這邊的頭像（找不到回傳 null）。 */
+function localAvatar(avatar, name) {
+    const list = (ctx()?.characters ?? []).filter((x) => x?.avatar);
+    if (list.some((x) => x.avatar === avatar)) return avatar;
+    const same = list.filter((x) => x.name === name);
+    return same.length === 1 ? same[0].avatar : null;
+}
+
+/** 一個聊天檔裡 AI 樓層的 send_date。 */
+function aiDates(file) {
+    const header = file[0] && !('mes' in file[0]) ? file[0] : null;
+    return new Set((header ? file.slice(1) : file).filter((m) => isAiMessage(m) && m.send_date).map((m) => String(m.send_date)));
+}
+
+/**
+ * 打包檔裡的聊天 → 這邊的聊天 id。chats：同一個角色的 [{ chat, data }]。
+ * 回傳 Map(舊 id → 新 id)；對不上的不放。
+ */
+async function matchChats(avatar, name, chats) {
+    const out = new Map();
+    let files = [];
+    try {
+        const list = await post('/api/characters/chats', { avatar_url: avatar });
+        files = (Array.isArray(list) ? list : []).map((f) => String(f.file_id ?? String(f.file_name ?? '').replace(/\.jsonl$/, ''))).filter(Boolean);
+    } catch (e) {
+        console.warn(LOG_PREFIX, '讀不到聊天清單', e);
+        return out;
+    }
+    const left = [];
+    for (const x of chats) {
+        if (files.includes(x.chat)) out.set(x.chat, x.chat);
+        else left.push(x);
+    }
+    const free = files.filter((id) => ![...out.values()].includes(id));
+    if (!left.length || !free.length) return out;
+    // 讀還沒對上的聊天，比 send_date。
+    const dates = new Map();
+    for (const id of free) {
+        try {
+            const file = await post('/api/chats/get', { ch_name: name, file_name: id, avatar_url: avatar });
+            if (Array.isArray(file)) dates.set(id, aiDates(file));
+        } catch (e) {
+            console.warn(LOG_PREFIX, '讀不到聊天', id, e);
+        }
+    }
+    for (const x of left) {
+        const mine = (x.data?.floors ?? []).map((f) => String(f.sendDate ?? '')).filter(Boolean);
+        if (!mine.length) continue;
+        let best = null;
+        let bestHit = 0;
+        for (const [id, set] of dates) {
+            if ([...out.values()].includes(id)) continue;
+            const hit = mine.filter((d) => set.has(d)).length;
+            if (hit > bestHit) {
+                best = id;
+                bestHit = hit;
+            }
+        }
+        if (best && bestHit >= Math.max(1, Math.ceil(mine.length * 0.5))) out.set(x.chat, best);
+    }
+    return out;
+}
+
 /**
  * 導入打包檔。mode 和單一聊天的導入一樣（merge／replace）。
- * 回傳 { now: 現在這個聊天的 importBackup 結果或 null, later: 等打開時才放回的聊天數 }。
+ * 回傳 { now: 現在這個聊天的 importBackup 結果或 null, later: 等打開時才放回的聊天數,
+ *   renamed: 認出改過名的聊天數, moved: 角色卡換了頭像檔名的角色數 }。
  */
 export async function importBundle(data, { mode = 'merge', settings = false } = {}) {
     const me = characterKey();
     const current = chatKey();
     let now = null;
     const later = [];
+    // 打包檔的頭像 → 這邊的頭像；每個角色的聊天改名。
+    const avatars = new Map();
+    const renames = new Map();
+    const byAvatar = new Map();
     for (const x of data.chats) {
-        if (x.avatar === me && x.chat === current) {
+        if (!byAvatar.has(x.avatar)) byAvatar.set(x.avatar, []);
+        byAvatar.get(x.avatar).push(x);
+    }
+    const names = new Map([...data.chats.map((x) => [x.avatar, x.character])]);
+    for (const avatar of new Set([...byAvatar.keys(), ...Object.keys(data.characters ?? {})])) {
+        const local = localAvatar(avatar, names.get(avatar) ?? '') ?? avatar;
+        avatars.set(avatar, local);
+        if (byAvatar.has(avatar) && (ctx()?.characters ?? []).some((x) => x?.avatar === local)) {
+            renames.set(avatar, await matchChats(local, (ctx()?.characters ?? []).find((x) => x.avatar === local)?.name ?? names.get(avatar) ?? '', byAvatar.get(avatar)));
+        }
+    }
+    for (const x of data.chats) {
+        const avatar = avatars.get(x.avatar) ?? x.avatar;
+        const chat = renames.get(x.avatar)?.get(x.chat) ?? x.chat;
+        if (avatar === me && (chat === current || currentChatId(x.chat, me) === current)) {
             await backupNow('before');
             now = importBackup(x.data, { mode, settings: false });
             markIntentional();
-        } else later.push({ avatar: x.avatar, chat: x.chat, character: x.character, mode, data: x.data, at: Date.now() });
+        } else later.push({ avatar, chat, character: x.character, mode, data: x.data, at: Date.now() });
     }
-    for (const [avatar, part] of Object.entries(data.characters ?? {})) restoreCharacterPart(part, avatar);
+    let renamed = 0;
+    for (const avatar of avatars.keys()) {
+        const rename = Object.fromEntries([...(renames.get(avatar) ?? new Map())].filter(([a, b]) => a !== b));
+        renamed += Object.keys(rename).length;
+        const part = data.characters?.[avatar] ?? (Object.keys(rename).length ? {} : null);
+        if (part) restoreCharacterPart(part, avatars.get(avatar), rename);
+    }
+    const moved = [...avatars].filter(([a, b]) => a !== b).length;
     if (settings && data.settings) applySettings(data.settings);
     saveSettings();
     if (later.length) {
         const keep = (await pendingList()).filter((p) => !later.some((l) => l.avatar === p.avatar && l.chat === p.chat));
         await savePending([...keep, ...later]);
     }
-    return { now, later: later.length };
+    return { now, later: later.length, renamed, moved };
 }
 
 /** 打開聊天時：有等著放回的就放回（先備份一份）。 */

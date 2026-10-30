@@ -9,6 +9,20 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.52',
+        new: {
+            'zh-TW': [
+                '🚚 搬到別的酒館（例如從 TauriTavern 搬一個角色到 SillyTavern）：「📦 一鍵備份全部聊天」的打包檔現在也帶上「即時共用」要用的資料；導入時角色卡的檔名不一樣會用名字對上，聊天被酒館改了名也認得出來，「即時共用」和日記會接回新的名字。步驟寫在「設定 › 資料管理 › 一鍵備份全部聊天 › 搬到別的酒館」。',
+            ],
+            'zh-CN': [
+                '🚚 搬到别的酒馆（例如从 TauriTavern 搬一个角色到 SillyTavern）：「📦 一键备份全部聊天」的打包档现在也带上「即时共用」要用的数据；导入时角色卡的文件名不一样会用名字对上，聊天被酒馆改了名也认得出来，「即时共用」和日记会接回新的名字。步骤写在「设置 › 资料管理 › 一键备份全部聊天 › 搬到别的酒馆」。',
+            ],
+            en: [
+                '🚚 Moving to another tavern (e.g. one character from TauriTavern to SillyTavern): bundles from "📦 Back up all chats" now include what live sharing needs; on import, a character card with a different file name is matched by name, renamed chats are recognized, and live sharing and diaries follow the new names. Steps are under "Settings › Data › Back up all chats › Moving to another tavern".',
+            ],
+        },
+    },
+    {
         v: '0.13.51',
         fix: {
             'zh-TW': [

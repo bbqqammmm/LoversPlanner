@@ -2517,6 +2517,8 @@ function renderBundle() {
     return `<div class="lp-card lp-bundle" data-role="bundle">
         <div class="lp-scope-title">${esc(t('bundle.title'))}</div>
         <div class="lp-note">${esc(t('bundle.desc'))}</div>
+        <details class="lp-bundle-move" data-role="bundle-move"><summary>${esc(t('bundle.moveTitle'))}</summary>
+          <ol class="lp-note">${['1', '2', '3', '4'].map((k) => `<li>${esc(t(`bundle.move${k}`))}</li>`).join('')}</ol></details>
         ${scope('character')}${scope('all')}
         <div class="lp-row"><button type="button" class="menu_button lp-btn lp-primary" data-action="bundle-export"${v.bundling ? ' disabled' : ''}>${esc(t('bundle.export'))}</button></div>
         ${v.bundling ? `<div class="lp-note" role="status" data-role="bundle-progress">${esc(v.bundling)}</div>` : ''}
@@ -4476,7 +4478,10 @@ function onClick(e) {
             }
             if (d.bundle) {
                 importBundle(d.bundle, { mode: d.mode, settings: d.importSettings })
-                    .then((r) => { view.data = { ...view.data, bundle: null, fileName: '', confirmReplace: false, message: t('bundle.imported', { now: r.now?.matched ?? 0, later: r.later }) }; })
+                    .then((r) => {
+                        const extra = [r.moved ? t('bundle.moved', { n: r.moved }) : '', r.renamed ? t('bundle.renamed', { n: r.renamed }) : ''].filter(Boolean).join('');
+                        view.data = { ...view.data, bundle: null, fileName: '', confirmReplace: false, message: t('bundle.imported', { now: r.now?.matched ?? 0, later: r.later }) + extra };
+                    })
                     .catch((e) => { view.data = { ...view.data, message: t('bundle.fail', { error: errorText(e) }) }; })
                     .finally(() => { pendingImports().then((n) => { view.backup.pending = n; if (isPanelOpen()) render(); }); });
                 return;

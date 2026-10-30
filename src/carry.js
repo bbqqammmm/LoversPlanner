@@ -30,7 +30,7 @@ import { addCarriedEvents, calendarOn, carryItems, onCalendarChange, removeCarri
 import { digestLabel, structure } from './compress.js';
 import { isActive, onSummaryChange } from './summarize.js';
 import {
-    characterKey, getCharacterScope, getChatScope, SCOPE_KINDS, setCharacterScope, setChatScope,
+    characterKey, currentChatId, getCharacterScope, getChatScope, SCOPE_KINDS, setCharacterScope, setChatScope,
 } from './scope.js';
 
 export const KIND_OF_TYPE = { character: 'characters', item: 'items', promise: 'promises', todo: 'todos' };
@@ -216,8 +216,10 @@ export function otherSnapshots() {
 }
 
 export function getSnapshot(id) {
-    const s = snapshots(false)?.[id];
-    return s ? { id, ...s } : null;
+    // 來源聊天搬過來時改了名：找現在的名字（v0.13.52）。
+    const real = currentChatId(id);
+    const s = snapshots(false)?.[real] ?? snapshots(false)?.[id];
+    return s ? { id: snapshots(false)?.[real] ? real : id, ...s } : null;
 }
 
 /** 把目前聊天的摘要和記事記一份快照（有摘要或記事才記）。 */

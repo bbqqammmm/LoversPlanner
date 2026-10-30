@@ -23,6 +23,7 @@ import { hashText } from './chat.js';
 import { addPrefsFromModel } from './prefs.js';
 import { dropTasks, enqueueTask, queuedTasks } from './summarize.js';
 import { noteError } from './errlog.js';
+import { currentChatId } from './scope.js';
 
 export const TASK = 'diary';
 /** 再壓一次可以選的比例；低於 MIN_SAFE_RATIO 會提醒（測試：壓到一半以下，中等的事大多會不見）。 */
@@ -266,7 +267,8 @@ export function conflictDays(dates, only = {}) {
         const day = days[date];
         if (!day?.parts?.some((p) => p?.summary)) return false;
         const now = dayChats(date, only[date] ?? '');
-        if (Array.isArray(day.chats) && day.chats.length) return day.chats.some((id) => !now.includes(id));
+        // 聊天搬過來時改了名的，用現在的名字比（v0.13.52）。
+        if (Array.isArray(day.chats) && day.chats.length) return day.chats.some((id) => !now.includes(currentChatId(id)));
         const total = day.parts[0]?.total ?? day.parts.length;
         return dayParts(date, only[date] ?? '').length !== total;
     });

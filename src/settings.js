@@ -90,7 +90,8 @@ export const DEFAULTS = Object.freeze({
     // theme 外觀（v0.13.22，使用者要求）：'tavern' 跟隨酒館主題 | 'techo' 日系手帳；themeBlocks 聊天裡的摘要區塊也套用。
     // （以前 ui 不在預設值裡，重新整理後 hideSkip 會被 mergeDefaults 丟掉。）
     // seenVersion（v0.13.30）：看過哪一版的更新通知；新安裝時直接設成目前版本，不跳通知。
-    ui: { hideSkip: false, theme: 'tavern', themeBlocks: false, seenVersion: '' },
+    // badgeVersion（v0.13.41，使用者要求）：打開過大視窗的版本；打開過就不再標 NEW（更新卡片要按「知道了」才收）。
+    ui: { hideSkip: false, theme: 'tavern', themeBlocks: false, seenVersion: '', badgeVersion: '' },
     // 角色還沒有自己的「共同設定」時用的初始值：'none' | 'copy' | 'share'（見 scope.js）
     scope: {
         summary: 'copy',

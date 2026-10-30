@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.41',
+        fix: {
+            'zh-TW': ['魔術棒選單上的 NEW：打開過一次大視窗就不再顯示，有新版本才會再出現（更新內容的卡片還在，按「知道了」才收起來）。'],
+            'zh-CN': ['魔术棒菜单上的 NEW：打开过一次大窗口就不再显示，有新版本才会再出现（更新内容的卡片还在，按「知道了」才收起来）。'],
+            en: ['The NEW badge on the wand menu now goes away once you open the panel, and comes back only with a new version (the update card stays until you press "Got it").'],
+        },
+    },
+    {
         v: '0.13.40',
         new: {
             'zh-TW': ['📖 日記有寫失敗的日子時，上方可以按「重寫失敗的」一次重寫全部失敗的。'],
@@ -289,6 +297,23 @@ export function unseenChanges() {
 
 export function hasNews() {
     return unseenChanges().length > 0;
+}
+
+/**
+ * 魔術棒、擴充設定的 NEW（v0.13.41，使用者要求：只在有更新時顯示）：
+ * 有沒看過的更新、而且這一版還沒打開過大視窗才標。打開大視窗就算看到了，更新卡片照樣等「知道了」才收。
+ */
+export function showNewBadge() {
+    return hasNews() && getSettings().ui?.badgeVersion !== VERSION;
+}
+
+/** 打開了大視窗：這一版的 NEW 不再標。 */
+export function markBadgeSeen() {
+    const s = getSettings();
+    if (s.ui?.badgeVersion === VERSION) return;
+    s.ui = { ...(s.ui ?? {}), badgeVersion: VERSION };
+    saveSettings();
+    for (const fn of listeners) fn();
 }
 
 const listeners = new Set();

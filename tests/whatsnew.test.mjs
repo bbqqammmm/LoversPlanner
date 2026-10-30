@@ -34,6 +34,9 @@ let page = await open({ lovers_planner: { settingsVersion: 5 } });
 check('NEW on the wand entry', (await page.textContent('#lp_wand_entry')).includes('NEW'));
 check('NEW on the settings drawer', (await page.textContent('#lp_settings_drawer')).includes('NEW'));
 await openPanel(page);
+// v0.13.41（使用者要求）：打開過大視窗，NEW 就不標了；更新卡片還在。
+check('opening the panel removes NEW, card stays', !(await page.textContent('#lp_wand_entry')).includes('NEW') && !(await page.textContent('#lp_settings_drawer')).includes('NEW') && Boolean(await page.$('[data-role="whatsnew"]')));
+check('badge version saved', await page.evaluate(async () => SillyTavern.getContext().extensionSettings.lovers_planner.ui.badgeVersion === (await import('/src/version.js')).VERSION));
 // 內容跟著 CHANGES 走（每一版都會換）：最新一版的第一條、上一版的版本號和第一條。
 const C = await page.evaluate(async () => { const { CHANGES } = await import('/src/changelog.js'); const f = (c) => (c.new ?? c.fix)['zh-TW'][0].slice(0, 12); return { now: f(CHANGES[0]), prevV: CHANGES[1].v, prev: f(CHANGES[1]) }; });
 let card = await page.textContent('[data-role="whatsnew"]');
@@ -44,7 +47,7 @@ card = await page.textContent('[data-role="whatsnew"]');
 check('see all expands older versions', card.includes(`v${C.prevV}`) && card.includes(C.prev) && card.includes('收起更新紀錄'), card.slice(0, 200));
 await page.click('[data-action="whatsnew-ok"]');
 check('got it hides the card', !(await page.$('[data-role="whatsnew"]')));
-check('got it removes NEW', !(await page.textContent('#lp_wand_entry')).includes('NEW') && !(await page.textContent('#lp_settings_drawer')).includes('NEW'));
+check('still no NEW after got it', !(await page.textContent('#lp_wand_entry')).includes('NEW') && !(await page.textContent('#lp_settings_drawer')).includes('NEW'));
 check('seen version saved', await page.evaluate(() => SillyTavern.getContext().extensionSettings.lovers_planner.ui.seenVersion) === version);
 // 設定 › 一般有全部更新紀錄
 await page.click('[data-tab="settings"]');
@@ -57,6 +60,13 @@ page = await open({ lovers_planner: { settingsVersion: 5, ui: { seenVersion: '0.
 await openPanel(page);
 card = await page.textContent('[data-role="whatsnew"]');
 check('lists every version since last seen', card.includes(`v0.13.27 → v${version}`) && card.includes('v0.13.29') && card.includes('v0.13.28') && !card.includes('v0.13.27\n') && !card.includes('小劇場排隊'), card.slice(0, 240));
+await page.close();
+
+// ===== 2b. 這一版打開過大視窗、但還沒按「知道了」：沒有 NEW，卡片還在 =====
+page = await open({ lovers_planner: { settingsVersion: 5, ui: { seenVersion: '0.13.27', badgeVersion: version } } });
+check('opened before: no NEW', !(await page.textContent('#lp_wand_entry')).includes('NEW'));
+await openPanel(page);
+check('opened before: card still there until got it', Boolean(await page.$('[data-role="whatsnew"]')));
 await page.close();
 
 // ===== 3. 已經看過這一版：不跳 =====

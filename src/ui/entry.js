@@ -4,7 +4,7 @@ import { escapeHtml as esc } from '../util.js';
 import { t } from '../i18n.js';
 import { openPanel } from './panel.js';
 import { VERSION } from '../version.js';
-import { hasNews, onSeenChange } from '../changelog.js';
+import { onSeenChange, showNewBadge } from '../changelog.js';
 
 const WAND_ID = 'lp_wand_entry';
 const DRAWER_ID = 'lp_settings_drawer';
@@ -70,9 +70,9 @@ export function relabelEntries() {
     refreshNewBadges();
 }
 
-/** 有沒看過的更新時，入口旁邊標 NEW（v0.13.30）。 */
+/** 有沒看過的更新、而且這一版還沒打開過大視窗時，入口旁邊標 NEW（v0.13.30；v0.13.41 起打開大視窗就不標）。 */
 export function refreshNewBadges() {
-    const on = hasNews();
+    const on = showNewBadge();
     for (const host of [document.querySelector(`#${WAND_ID} .lp-wand-label`), document.querySelector(`#${DRAWER_ID} .lp-drawer-title`)]) {
         if (!host) continue;
         let dot = host.parentElement.querySelector('.lp-new-dot');

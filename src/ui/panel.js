@@ -12,7 +12,7 @@ import { cleanForSummary, extractRef, scanTags, setTagMode, tagMode } from '../f
 import { getLoadedVersion } from '../update.js';
 import { VERSION } from '../version.js';
 import { ROUTES, usesMain } from '../llm.js';
-import { allChanges, markSeen, seenVersion, unseenChanges } from '../changelog.js';
+import { allChanges, markBadgeSeen, markSeen, seenVersion, unseenChanges } from '../changelog.js';
 import { analyzeChats, hasLoadedDays, listOldChats, loadOldChat } from '../oldchats.js';
 import { diaryPlan } from '../diarysend.js';
 import { addPref, editPref, listPrefs, onPrefsChange, removePref, togglePref } from '../prefs.js';
@@ -225,6 +225,8 @@ export function openPanel(tab) {
         showOnTopLayer();
     }
     render();
+    // 打開了大視窗：魔術棒上的 NEW 不再標（更新卡片還在，按「知道了」才收）。
+    markBadgeSeen();
     panel.querySelector('[data-action="close"]')?.focus();
     // 畫好之後確認真的蓋滿畫面（有些主題會把聊天區放在我們上面）。
     requestAnimationFrame(() => requestAnimationFrame(ensureVisible));

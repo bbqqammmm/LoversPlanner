@@ -28,7 +28,7 @@ import {
     abandonCatchup, applyExtras, catchupTags, decideExtras, findExtras, findExtrasAll, fineFromFor, getCatchup, pauseCatchup, planCatchup, remaining, resumeCatchup, startCatchup,
 } from '../catchup.js';
 import {
-    changeCharacterScope, changeChatScope, condenseRecap, deleteRecap, editRecap, effectiveScope, getLinkedSummary,
+    carryDiaryFrom, changeCharacterScope, changeChatScope, condenseRecap, deleteRecap, editRecap, effectiveScope, getLinkedSummary,
     getRecap, importFrom, lastCarry, onCarryChange, otherSnapshots, restoreRecapRaw, setSummarySource, undoCarry,
 } from '../carry.js';
 import { errorText } from '../errors.js';
@@ -184,6 +184,7 @@ const view = {
     anniv: { editing: null },
     // 📦 舊聊天整理（v0.13.33）：聊天清單、勾了哪些、讀取中、分析結果、訊息。
     old: { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '', only: {}, days: null, from: '', to: '' },
+    diaryCarry: { open: false, busy: false, msg: '' }, // 從別的聊天帶日記過來（v0.13.53）
     // 📖 日記（v0.13.34）：展開的日子、正在編輯的、正在設定再壓一次的（比例、要留的重點）、一次壓很多天的設定。
     diary: { open: new Set(), editing: null, compress: null, ratio: MIN_SAFE_RATIO, keep: new Set(), batchMin: 1000, batchRatio: MIN_SAFE_RATIO, msg: '', show: true, conflicts: [], outlineEdit: false },
     prefs: { editing: null },
@@ -366,6 +367,7 @@ function resetChatView() {
     view.backup = { ...view.backup, confirm: null, msg: '', bundleMsg: '' };
     view.cal = { ...view.cal, carryMsg: '', carryBusy: false, selected: null, month: null };
     view.notes = { ...view.notes, overdueHidden: false, overdueConfirm: false };
+    view.diaryCarry = { open: false, busy: false, msg: '' };
 }
 
 function render() {
@@ -1263,9 +1265,29 @@ function renderDiaryTab() {
     const diary = diarySection();
     return `<div class="lp-diary-tab">
         <div class="lp-note">${esc(t('diaryTab.intro'))}</div>
+        ${diaryCarryCard()}
         ${oldChatsCard()}
         ${diary || `<div class="lp-wip">${esc(t('diaryTab.empty'))}</div>`}
       </div>`;
+}
+
+/**
+ * 從別的聊天帶日記過來（v0.13.53，使用者要求）：同角色其他聊天有日記的（快照記著天數）列出來，按一下複製。
+ * 已經有的日子不動。快照是那個聊天打開過才有的，所以更新後要先打開過一次。
+ */
+function diaryCarryCard() {
+    const list = otherSnapshots().filter((x) => x.diary > 0);
+    if (!list.length) return '';
+    const v = view.diaryCarry;
+    const rows = list.map((x) => `<li class="lp-row"><span class="lp-grow"><b>${esc(x.id)}</b> <span class="lp-note">${esc(t('diaryCarry.days', { n: x.diary }))}</span></span>
+        <button type="button" class="menu_button lp-btn lp-mini" data-action="diary-carry" data-id="${esc(x.id)}"${v.busy ? ' disabled' : ''}>${esc(t('diaryCarry.go'))}</button></li>`).join('');
+    return `<details class="lp-card lp-diary-carry" data-role="diary-carry"${v.open || !listDiary().length ? ' open' : ''}>
+        <summary data-action="diary-carry-toggle">${esc(t('diaryCarry.title'))}</summary>
+        <div class="lp-note">${esc(t('diaryCarry.hint'))}</div>
+        <ul class="lp-diary-carry-list">${rows}</ul>
+        ${v.busy ? `<div class="lp-note" role="status">${esc(t('diaryCarry.busy'))}</div>` : ''}
+        ${v.msg ? `<div class="lp-note" role="status" data-role="diary-carry-msg">${esc(v.msg)}</div>` : ''}
+      </details>`;
 }
 
 function oldChatsCard() {
@@ -3626,7 +3648,7 @@ function onClick(e) {
             if (!view.imp.src) return;
             const kinds = Object.fromEntries(SCOPE_KINDS.map((k) => [k, view.imp.kinds.has(k) ? 'copy' : 'none']));
             importFrom(view.imp.src, kinds).then((r) => {
-                view.imp.result = r ? t('import.done', { notes: r.notes, memories: r.memories ?? 0, summary: r.summary ? t('import.withRecap') : '' }) : '';
+                view.imp.result = r ? t('import.done', { notes: r.notes, memories: r.memories ?? 0, summary: r.summary ? t('import.withRecap') : '' }) + (r.diary ? t('carry.diary', { n: r.diary }) : '') : '';
                 if (isPanelOpen()) render();
             });
             return;
@@ -3808,6 +3830,24 @@ function onClick(e) {
             o.sideChoice = set === 'suggest' ? {} : Object.fromEntries((o.result.sides ?? []).map((x) => [x.key, set === 'all']));
             reanalyzeSides();
             render();
+            return;
+        }
+        case 'diary-carry-toggle':
+            view.diaryCarry.open = !panel.querySelector('[data-role="diary-carry"]')?.open;
+            return;
+        case 'diary-carry': {
+            const id = btn.dataset.id;
+            const chat = chatKey();
+            view.diaryCarry = { ...view.diaryCarry, busy: true, msg: '' };
+            render();
+            carryDiaryFrom(id).then((r) => {
+                if (chatKey() !== chat) return;
+                view.diaryCarry = {
+                    ...view.diaryCarry, busy: false, open: true,
+                    msg: r.error ? t('diaryCarry.fail', { error: r.error }) : t('diaryCarry.done', { n: r.added.length, skipped: r.skipped }),
+                };
+                if (isPanelOpen()) render();
+            });
             return;
         }
         case 'old-undated-toggle':

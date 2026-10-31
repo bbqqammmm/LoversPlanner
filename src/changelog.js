@@ -9,6 +9,20 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.53',
+        new: {
+            'zh-TW': [
+                '📥 日記會跟著帶到新聊天了：開同角色的新聊天時，摘要有帶的話，日記和大綱也一起複製過去（「復原」會一起拿掉）。已經開好的聊天，可以在日記分頁按「📥 從別的聊天帶日記過來」，選一個有日記的聊天帶過來；這裡已經有的日子不會被蓋掉。',
+            ],
+            'zh-CN': [
+                '📥 日记会跟着带到新聊天了：开同角色的新聊天时，摘要有带的话，日记和大纲也一起拷贝过去（「复原」会一起拿掉）。已经开好的聊天，可以在日记分页按「📥 从别的聊天带日记过来」，选一个有日记的聊天带过来；这里已经有的日子不会被盖掉。',
+            ],
+            en: [
+                '📥 Diaries now come along to new chats: when a new chat of the same character carries the summaries, the diary and its outline are copied too (Undo removes them). For a chat you already opened, use "📥 Bring diaries from another chat" in the Diary tab; days already there are kept.',
+            ],
+        },
+    },
+    {
         v: '0.13.52',
         new: {
             'zh-TW': [

@@ -28,6 +28,8 @@ import { sceneLine } from './lines.js';
 import { listMemories, memoryOrigin, onMemoriesChange, setMemoriesBase } from './memories.js';
 import { addCarriedEvents, calendarOn, carryItems, onCalendarChange, removeCarriedFrom } from './calendar.js';
 import { digestLabel, structure } from './compress.js';
+import { diaryDayCount, importDiary, undoDiaryImport } from './diary.js';
+import { loadOldChat } from './oldchats.js';
 import { isActive, onSummaryChange } from './summarize.js';
 import {
     characterKey, currentChatId, getCharacterScope, getChatScope, SCOPE_KINDS, setCharacterScope, setChatScope,
@@ -235,10 +237,12 @@ export function writeSnapshot() {
     const memories = listMemories().filter((m) => !m.linked).map((m) => plainMemory(m, id));
     // 行事曆（生理期、親熱、紀念日，v0.13.33）：以前沒帶，新聊天的「上次生理期」和紀念日都是空的。
     const calendar = calendarOn() ? carryItems(id) : [];
-    if (!lines.length && !notes.length && !memories.length && !calendar.length) return;
+    // 日記只記有幾天（全文可能很長，不放進設定；帶的時候再去讀聊天檔，v0.13.53）。
+    const diary = diaryDayCount();
+    if (!lines.length && !notes.length && !memories.length && !calendar.length && !diary) return;
     const all = snapshots(true);
     const prev = all[id];
-    const next = { at: Date.now(), floors: aiIndices().length, lines, notes, ...(memories.length ? { memories } : {}), ...(calendar.length ? { calendar } : {}) };
+    const next = { at: Date.now(), floors: aiIndices().length, lines, notes, ...(memories.length ? { memories } : {}), ...(calendar.length ? { calendar } : {}), ...(diary ? { diary } : {}) };
     if (prev && JSON.stringify({ ...prev, at: 0 }) === JSON.stringify({ ...next, at: 0 })) return;
     all[id] = next;
     const ids = Object.keys(all);
@@ -445,6 +449,7 @@ export function undoCarry() {
         if (kinds?.[kind] === 'share' && kind !== 'summary') rec.scope = { ...getChatScope(), ...(rec.scope ?? {}), [kind]: 'own' };
     }
     removeCarriedFrom(carry.source);
+    if (carry.diary?.length) undoDiaryImport(carry.source, carry.diary);
     delete rec.carry;
     saveMeta();
     emit();
@@ -461,8 +466,45 @@ function isNewChat() {
     return !chat.some(isUserMessage) && aiIndices().length <= 1;
 }
 
+/**
+ * 帶日記（v0.13.53，使用者要求）：日記存在寫的那個聊天裡，開新聊天時不會在。
+ * 讀來源聊天檔裡的日記複製過來（這裡已經有的日子不動）。回傳 { added: [日期], skipped, error? }。
+ */
+export async function carryDiaryFrom(chatId) {
+    const none = { added: [], skipped: 0 };
+    const key = chatKey();
+    if (!chatId || !key || chatId === key) return none;
+    let file;
+    try {
+        file = await loadOldChat(chatId);
+    } catch (e) {
+        console.warn(LOG_PREFIX, '讀不到來源聊天的日記', e);
+        return { ...none, error: errorText(e) };
+    }
+    // 讀的時候換了聊天：不放（不然會放進別的聊天）。
+    if (chatKey() !== key) return none;
+    const header = file[0] && !('mes' in file[0]) ? file[0] : null;
+    return importDiary(header?.chat_metadata?.[MODULE]?.diary, { source: chatId });
+}
+
+/**
+ * 帶摘要的時候順便帶日記，記在 carry 裡（復原時一起拿掉）。
+ * 快照記著有日記才去讀聊天檔（新聊天通常是從剛剛開著的聊天開的，快照是新的）。
+ */
+async function carryDiaryWith(snap, kinds) {
+    if (!kinds.summary || kinds.summary === 'none' || !(snap.diary > 0)) return 0;
+    const key = chatKey();
+    const r = await carryDiaryFrom(snap.id);
+    if (!r.added.length || chatKey() !== key) return 0;
+    const rec = chatRecord(true);
+    if (rec.carry) rec.carry = { ...rec.carry, diary: r.added };
+    saveMeta();
+    return r.added.length;
+}
+
 function announce(snap, result) {
-    toastActions(t('carry.done', { chat: snap.id, notes: result.notes, memories: result.memories, calendar: result.calendar ?? 0 }), [{
+    const diary = result.diary ? t('carry.diary', { n: result.diary }) : '';
+    toastActions(t('carry.done', { chat: snap.id, notes: result.notes, memories: result.memories, calendar: result.calendar ?? 0 }) + diary, [{
         label: t('carry.undo'),
         run: () => {
             undoCarry();
@@ -496,7 +538,8 @@ export async function onChatOpened() {
     const kinds = getCharacterScope();
     if (Object.values(kinds).every((v) => v === 'none')) return;
     const result = carryFrom(snap, kinds, { condense: getSettings().carry.recapMode === 'condense' });
-    if (!result.summary && !result.notes && !result.memories && !result.calendar) {
+    result.diary = await carryDiaryWith(snap, kinds);
+    if (!result.summary && !result.notes && !result.memories && !result.calendar && !result.diary) {
         delete rec.carry;
         saveMeta();
         return;
@@ -514,6 +557,7 @@ export async function importFrom(snapshotId, kinds, { condense = getSettings().c
     if (!snap) return null;
     if (kinds.summary === 'share') setChatScope('summary', 'share');
     const result = carryFrom(snap, kinds, { condense });
+    result.diary = await carryDiaryWith(snap, kinds);
     if (result.condense) condenseRecap();
     return result;
 }

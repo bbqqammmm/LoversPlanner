@@ -222,6 +222,7 @@ async function writePartInner(date, partNo, style, only) {
                 if (!v) throw e;
             }
         }
+        delete day.from;
         day.parts.length = p.total;
         day.parts[partNo - 1] = {
             part: partNo, total: p.total, floors,
@@ -349,6 +350,57 @@ export function diarySources() {
     return record(false)?.sources ?? [];
 }
 
+// ===== 從別的聊天帶日記過來（v0.13.53，使用者要求：在窗口 7 寫了日記，開窗口 8 時日記也要在） =====
+
+/** 這個聊天的日記有幾天（寫好的）。 */
+export function diaryDayCount(diary = record(false)) {
+    return Object.values(diary?.days ?? {}).filter((d) => d?.parts?.some((p) => p?.summary) || d?.compressed?.summary).length;
+}
+
+/**
+ * 把別的聊天的日記（那個聊天的 chat_metadata.lovers_planner.diary）複製過來。
+ * 這裡沒有的日子整天複製（標 from: 來源聊天）；這裡已經寫好的日子不動。大綱：這裡沒有才帶過來
+ * （照原本的依據，日子和來源一樣就不算過期）。回傳 { added: [日期], skipped: 已經有的天數 }。
+ */
+export function importDiary(diary, { source = '' } = {}) {
+    const out = { added: [], skipped: 0 };
+    if (!diary?.days || typeof diary.days !== 'object') return out;
+    const rec = record(true);
+    for (const [date, d] of Object.entries(diary.days)) {
+        if (!d?.parts?.some((p) => p?.summary) && !d?.compressed?.summary) continue;
+        if (rec.days[date]?.parts?.some((p) => p?.summary) || rec.days[date]?.compressed?.summary) {
+            out.skipped++;
+            continue;
+        }
+        rec.days[date] = { ...JSON.parse(JSON.stringify(d)), ...(source ? { from: source } : {}) };
+        out.added.push(date);
+    }
+    if (!out.added.length) return out;
+    if (!rec.outline?.text && diary.outline?.text) rec.outline = { ...JSON.parse(JSON.stringify(diary.outline)), ...(source ? { from: source } : {}) };
+    rec.sources = [...new Set([...(rec.sources ?? []), ...(diary.sources ?? [])])];
+    saveMeta();
+    emit();
+    return out;
+}
+
+/** 復原帶過來的日記：只刪從 source 帶來、之後沒改過的那幾天（編輯、重寫、再壓一次過的會拿掉 from，留著）。回傳刪了幾天。 */
+export function undoDiaryImport(source, dates) {
+    const rec = record(false);
+    if (!rec?.days) return 0;
+    let n = 0;
+    for (const date of dates ?? []) {
+        const d = rec.days[date];
+        if (d?.from === source) {
+            delete rec.days[date];
+            n++;
+        }
+    }
+    if (rec.outline?.from === source) delete rec.outline;
+    saveMeta();
+    emit();
+    return n;
+}
+
 // ===== 再壓一次 =====
 
 export function buildCompressPrompt(date, { ratio = MIN_SAFE_RATIO, keep = null } = {}) {
@@ -378,6 +430,7 @@ export function compressDay(date, opts = {}) {
             const raw = await generateText(prompt, { maxTokens: Math.max(MIN_OUTPUT, length * 3), purpose: 'diaryCompress' });
             const v = parseDiary(raw);
             day.compressed = { summary: v.summary.trim(), at: Date.now(), by: modelLabel(), ratio: opts.ratio ?? MIN_SAFE_RATIO, keep: kept.map((p) => p.text), from };
+            delete day.from;
             day.use = 'compressed';
             day.compressError = '';
         } catch (e) {
@@ -417,6 +470,7 @@ export function editDay(date, text) {
     const day = record(false)?.days?.[date];
     const value = String(text ?? '').trim();
     if (!day || !value) return false;
+    delete day.from;
     if (day.use === 'compressed' && day.compressed) {
         day.compressed.summary = value;
     } else {

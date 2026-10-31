@@ -114,7 +114,7 @@ export const DEFAULTS = Object.freeze({
         vector: { enabled: false, url: VECTOR_URL, key: '', model: VECTOR_MODEL },
     },
     // 帶到新聊天的摘要：'condense' 請模型濃縮成一段 | 'raw' 原樣帶過去。recapLength：濃縮成大約幾個字。
-    carry: { recapMode: 'condense', recapLength: 400 },
+    carry: { recapMode: 'condense', recapLength: 400, diary: true }, // diary：開新聊天時日記也帶過去（和摘要分開，v0.13.54）
     // 擴充更新後自動重新整理頁面（等生成、摘要做完）。
     update: { autoReload: true },
     inject: {

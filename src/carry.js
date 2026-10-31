@@ -488,11 +488,12 @@ export async function carryDiaryFrom(chatId) {
 }
 
 /**
- * 帶摘要的時候順便帶日記，記在 carry 裡（復原時一起拿掉）。
+ * 帶日記，記在 carry 裡（復原時一起拿掉）。和摘要分開（v0.13.54，使用者要求：做了日記就不想再帶摘要）：
+ * 開新聊天時看設定 carry.diary，手動匯入時看有沒有勾「日記」。
  * 快照記著有日記才去讀聊天檔（新聊天通常是從剛剛開著的聊天開的，快照是新的）。
  */
-async function carryDiaryWith(snap, kinds) {
-    if (!kinds.summary || kinds.summary === 'none' || !(snap.diary > 0)) return 0;
+async function carryDiaryWith(snap, want) {
+    if (!want || !(snap.diary > 0)) return 0;
     const key = chatKey();
     const r = await carryDiaryFrom(snap.id);
     if (!r.added.length || chatKey() !== key) return 0;
@@ -536,9 +537,10 @@ export async function onChatOpened() {
     const snap = otherSnapshots()[0];
     if (!snap) return;
     const kinds = getCharacterScope();
-    if (Object.values(kinds).every((v) => v === 'none')) return;
+    const diary = getSettings().carry?.diary !== false && snap.diary > 0;
+    if (Object.values(kinds).every((v) => v === 'none') && !diary) return;
     const result = carryFrom(snap, kinds, { condense: getSettings().carry.recapMode === 'condense' });
-    result.diary = await carryDiaryWith(snap, kinds);
+    result.diary = await carryDiaryWith(snap, diary);
     if (!result.summary && !result.notes && !result.memories && !result.calendar && !result.diary) {
         delete rec.carry;
         saveMeta();
@@ -550,14 +552,14 @@ export async function onChatOpened() {
 
 /**
  * 手動從其他聊天匯入（一律複製帶走；摘要選「即時共用」時改成連結）。
- * kinds：{ summary: 'copy'|'share'|'none', characters: 'copy'|'none', … }
+ * kinds：{ summary: 'copy'|'share'|'none', characters: 'copy'|'none', …, diary: 'copy'|'none' }
  */
 export async function importFrom(snapshotId, kinds, { condense = getSettings().carry.recapMode === 'condense' } = {}) {
     const snap = getSnapshot(snapshotId);
     if (!snap) return null;
     if (kinds.summary === 'share') setChatScope('summary', 'share');
     const result = carryFrom(snap, kinds, { condense });
-    result.diary = await carryDiaryWith(snap, kinds);
+    result.diary = await carryDiaryWith(snap, kinds.diary === 'copy');
     if (result.condense) condenseRecap();
     return result;
 }

@@ -2885,6 +2885,7 @@ function renderScope() {
         ${radio('lp-recap-mode', 'carry.recapMode', 'raw', t('set.carry.raw'))}
         ${getSettings().carry.recapMode === 'condense' ? `<div class="lp-row">${inline('set.carry.length', { n: numberInput('carry.recapLength', t('set.carry.length.aria')) })}</div>` : ''}
         <div class="lp-note">${esc(t('set.carry.note'))}</div>
+        ${checkbox('carry.diary', t('set.carry.diary'))}
       </div>
       ${importBlock()}`;
 }
@@ -2911,7 +2912,7 @@ function importBlock() {
     const imp = view.imp;
     if (!imp.kinds) {
         const cs = getCharacterScope();
-        imp.kinds = new Set(SCOPE_KINDS.filter((k) => cs[k] !== 'none'));
+        imp.kinds = new Set([...SCOPE_KINDS.filter((k) => cs[k] !== 'none'), ...(getSettings().carry?.diary !== false ? ['diary'] : [])]);
     }
     if (!list.some((x) => x.id === imp.src)) imp.src = list[0]?.id ?? null;
     const undo = lastCarry() ? `<div class="lp-row"><span class="lp-note">${esc(t('import.last', { chat: lastCarry().source }))}</span>
@@ -2921,7 +2922,7 @@ function importBlock() {
         body = `<div class="lp-note">${esc(t('import.none'))}</div>`;
     } else {
         const opts = list.map((x) => `<option value="${esc(x.id)}"${x.id === imp.src ? ' selected' : ''}>${esc(snapshotLabel(x))}</option>`).join('');
-        const kinds = SCOPE_KINDS.map((k) => `<label class="lp-check"><input type="checkbox" data-import-kind="${k}"${imp.kinds.has(k) ? ' checked' : ''}><span>${esc(t(`kind.${k}`))}</span></label>`).join('');
+        const kinds = [...SCOPE_KINDS, 'diary'].map((k) => `<label class="lp-check"><input type="checkbox" data-import-kind="${k}"${imp.kinds.has(k) ? ' checked' : ''}><span>${esc(t(`kind.${k}`))}</span></label>`).join('');
         body = `
           <div class="lp-row"><select class="text_pole lp-select lp-grow" data-role="import-src" aria-label="${esc(t('import.title'))}">${opts}</select></div>
           <div class="lp-track-group">${kinds}</div>
@@ -3646,7 +3647,7 @@ function onClick(e) {
             return;
         case 'import-run': {
             if (!view.imp.src) return;
-            const kinds = Object.fromEntries(SCOPE_KINDS.map((k) => [k, view.imp.kinds.has(k) ? 'copy' : 'none']));
+            const kinds = Object.fromEntries([...SCOPE_KINDS, 'diary'].map((k) => [k, view.imp.kinds.has(k) ? 'copy' : 'none']));
             importFrom(view.imp.src, kinds).then((r) => {
                 view.imp.result = r ? t('import.done', { notes: r.notes, memories: r.memories ?? 0, summary: r.summary ? t('import.withRecap') : '' }) + (r.diary ? t('carry.diary', { n: r.diary }) : '') : '';
                 if (isPanelOpen()) render();

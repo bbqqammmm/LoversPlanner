@@ -9,6 +9,20 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.54',
+        new: {
+            'zh-TW': [
+                '📥 日記和摘要分開帶了：開新聊天時日記一定會帶（可以在「設定 › 記憶範圍」關掉），記憶範圍的摘要選「不帶」也照樣帶。已經做了日記、不想再帶摘要的話，把摘要改成「不帶」就好。從其他聊天匯入時也多了「日記」可以勾。',
+            ],
+            'zh-CN': [
+                '📥 日记和摘要分开带了：开新聊天时日记一定会带（可以在「设置 › 记忆范围」关掉），记忆范围的摘要选「不带」也照样带。已经做了日记、不想再带摘要的话，把摘要改成「不带」就好。从其他聊天导入时也多了「日记」可以勾。',
+            ],
+            en: [
+                '📥 Diaries are now brought separately from summaries: new chats get the diary even when summaries are set to "Don\'t bring" (turn it off in "Settings › Memory scope"). Importing from another chat also has a "Diary" checkbox.',
+            ],
+        },
+    },
+    {
         v: '0.13.53',
         new: {
             'zh-TW': [

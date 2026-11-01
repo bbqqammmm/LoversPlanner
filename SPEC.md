@@ -853,6 +853,8 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
 
 - 日記不會跟著到新聊天（v0.13.53，使用者問：在窗口 7 寫了日記，開窗口 8 時日記不能複製過去嗎）：日記存在寫它的聊天的 chat_metadata.diary，帶走用的是設定裡的快照，快照沒有日記。日記可能很長，不放進設定（settings.json 會變很大），快照只記天數（snap.diary）；帶的時候用 /api/chats/get 讀來源聊天檔，把日記複製過來（diary.js importDiary：這裡沒有的日子整天複製、標 from，這裡有的不動；大綱這裡沒有才帶）。開新聊天時：v0.13.53 跟著摘要走；v0.13.54 改成和摘要分開（使用者：做了日記就不想帶摘要），看設定 carry.diary（預設開），手動匯入多一個「日記」勾選；快照記著有日記才讀（不然每開新聊天都要讀一個大檔）；carry.diary 記帶來的日子，復原時拿掉（編輯、重寫、再壓一次過的會拿掉 from，留著）。日記分頁有手動帶的卡片（列出快照記著有日記的聊天）。
 
+- TauriTavern 的聊天 API（v0.13.55，使用者找到 TT 給記憶類擴充的 api.chat 文件）：評估過——api.chat.open(ref).summary({ includeMetadata: true }) 只讀別的聊天的 chat_metadata，用在帶日記（src/tthost.js；ChatRef 的 characterId 格式文件沒寫，拿目前聊天的 ref 只換檔名；summary 回傳裡 metadata 的欄位名也沒寫，試 metadata／chatMetadata／chat_metadata，都沒有就改讀整個檔）。一鍵備份、補帶行事曆、搬家比對要每一層的資料，還是讀整個檔。store.* 不用：存在那裡的資料不在聊天檔裡，導出 .jsonl 搬到 SillyTavern 會丟。searchMessages（原文全文搜尋，可以搜別的聊天）之後做召回時再評估（使用者問：只有日記裡有的事搜不搜得到、相關的不只 3～5 段怎麼辦 → 規劃：同一天合併、改用 token 上限）。冷 swipe（歷史滑動按需加載）會把沒在看的 swipe 槽位設成 null，檢查過戀人手帳讀 swipe_info 的地方都有處理 null。未在真的 TT 上驗證（只有假的 API 測試）。
+
 ## 📝 決策紀錄
 
 > 規格有改動時寫進來，說明改了什麼、為什麼改。
@@ -1015,3 +1017,4 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
 - 2026-10-30（v0.13.52，使用者要求）：搬到別的酒館：打包檔帶快照、導入時認出換了檔名的角色卡和聊天（見已知問題）。測試 tests/movechar.test.mjs。
 - 2026-10-31（v0.13.53，使用者要求）：日記帶到新聊天（自動跟著摘要、日記分頁手動帶）（見已知問題）。測試 tests/diarycarry.test.mjs。
 - 2026-10-31（v0.13.54，使用者要求）：日記和摘要分開帶（carry.diary，預設開；手動匯入可勾「日記」）。diarycarry.test.mjs 多三條。
+- 2026-11-01（v0.13.55）：TT 上帶日記只讀聊天資料（見已知問題）。測試 tests/tthost.test.mjs。

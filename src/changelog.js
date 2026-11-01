@@ -9,6 +9,20 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.55',
+        fix: {
+            'zh-TW': [
+                '📥 在 TauriTavern 上帶日記（開新聊天、或日記分頁的「帶過來」）會用 TT 的聊天 API，只讀那個聊天的日記，不用把整個聊天檔載進來，大聊天在手機上快很多。',
+            ],
+            'zh-CN': [
+                '📥 在 TauriTavern 上带日记（开新聊天、或日记分页的「带过来」）会用 TT 的聊天 API，只读那个聊天的日记，不用把整个聊天档载进来，大聊天在手机上快很多。',
+            ],
+            en: [
+                '📥 On TauriTavern, bringing diaries (to a new chat, or with "Bring" in the Diary tab) uses TT\'s chat API to read only that chat\'s diary instead of loading the whole chat file, which is much faster for big chats on phones.',
+            ],
+        },
+    },
+    {
         v: '0.13.54',
         new: {
             'zh-TW': [

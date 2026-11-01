@@ -30,6 +30,7 @@ import { addCarriedEvents, calendarOn, carryItems, onCalendarChange, removeCarri
 import { digestLabel, structure } from './compress.js';
 import { diaryDayCount, importDiary, undoDiaryImport } from './diary.js';
 import { loadOldChat } from './oldchats.js';
+import { otherChatMetadata } from './tthost.js';
 import { isActive, onSummaryChange } from './summarize.js';
 import {
     characterKey, currentChatId, getCharacterScope, getChatScope, SCOPE_KINDS, setCharacterScope, setChatScope,
@@ -474,17 +475,21 @@ export async function carryDiaryFrom(chatId) {
     const none = { added: [], skipped: 0 };
     const key = chatKey();
     if (!chatId || !key || chatId === key) return none;
-    let file;
-    try {
-        file = await loadOldChat(chatId);
-    } catch (e) {
-        console.warn(LOG_PREFIX, '讀不到來源聊天的日記', e);
-        return { ...none, error: errorText(e) };
+    // TT：只讀那個聊天的聊天資料（v0.13.55）；不行再讀整個聊天檔。
+    let meta = await otherChatMetadata(chatId);
+    if (meta === undefined) {
+        try {
+            const file = await loadOldChat(chatId);
+            const header = file[0] && !('mes' in file[0]) ? file[0] : null;
+            meta = header?.chat_metadata ?? {};
+        } catch (e) {
+            console.warn(LOG_PREFIX, '讀不到來源聊天的日記', e);
+            return { ...none, error: errorText(e) };
+        }
     }
     // 讀的時候換了聊天：不放（不然會放進別的聊天）。
     if (chatKey() !== key) return none;
-    const header = file[0] && !('mes' in file[0]) ? file[0] : null;
-    return importDiary(header?.chat_metadata?.[MODULE]?.diary, { source: chatId });
+    return importDiary(meta?.[MODULE]?.diary, { source: chatId });
 }
 
 /**

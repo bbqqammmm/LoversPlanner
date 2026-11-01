@@ -2472,7 +2472,7 @@ function renderUsageSection() {
         <tr><td>${esc(r.name)}</td><td>${fmt(r.calls)}</td><td>${esc(tok(r))}</td><td>${r.calls ? Math.round((r.fails / r.calls) * 100) : 0}%</td><td>${r.calls ? (r.ms / r.calls / 1000).toFixed(1) : '–'}s</td></tr>`).join('')}</tbody></table>` : '';
     const recent = recentUsage(20).map((r) => {
         const time = new Date(r.at).toLocaleString(undefined, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-        return `<li class="${r.ok ? '' : 'lp-warn-text'}">${esc(`${time}・${t(`usage.p.${r.purpose}`)}・${r.model}・${r.est ? '≈' : ''}${fmt(r.input)}/${fmt(r.output)}・${(r.ms / 1000).toFixed(1)}s${r.ok ? '' : `・${t('usage.failed')} ${USAGE_ERRORS.includes(r.error) ? t(`usage.err.${r.error}`) : (r.error ?? '')}`}`)}</li>`;
+        return `<li class="${r.ok ? '' : 'lp-warn-text'}">${esc(`${time}・${t(`usage.p.${r.purpose}`)}・${r.model}・${r.est ? '≈' : ''}${fmt(r.input)}/${fmt(r.output)}・${(r.ms / 1000).toFixed(1)}s${r.level ? `・${t(`set.thinking.${r.level}`)}` : ''}${Number.isFinite(r.think) ? `・${t('usage.think', { n: fmt(r.think) })}` : ''}${r.ok ? '' : `・${t('usage.failed')} ${USAGE_ERRORS.includes(r.error) ? t(`usage.err.${r.error}`) : (r.error ?? '')}`}`)}</li>`;
     }).join('');
     return `
       <div class="lp-note">${esc(t('usage.desc'))}</div>

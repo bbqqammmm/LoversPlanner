@@ -40,7 +40,7 @@ export function onUsageChange(fn) {
 }
 
 /** 記一筆。 */
-export function recordUsage({ purpose = 'other', model = '', input = 0, output = 0, est = false, ms = 0, ok = true, error = '' }) {
+export function recordUsage({ purpose = 'other', model = '', input = 0, output = 0, est = false, ms = 0, ok = true, error = '', think = null, level = '' }) {
     const u = store();
     const at = Date.now();
     const day = localDay(at);
@@ -53,7 +53,7 @@ export function recordUsage({ purpose = 'other', model = '', input = 0, output =
     slot.output += Math.max(0, Math.round(output));
     slot.ms += Math.max(0, Math.round(ms));
     if (est) slot.est = true;
-    u.recent.unshift({ at, purpose: p, model: m, input: Math.round(input), output: Math.round(output), est, ms: Math.round(ms), ok, ...(error ? { error: String(error).slice(0, 120) } : {}), chat: chatKey() ?? '' });
+    u.recent.unshift({ at, purpose: p, model: m, input: Math.round(input), output: Math.round(output), est, ms: Math.round(ms), ok, ...(error ? { error: String(error).slice(0, 120) } : {}), ...(Number.isFinite(think) ? { think: Math.round(think) } : {}), ...(level ? { level } : {}), chat: chatKey() ?? '' });
     if (u.recent.length > RECENT_MAX) u.recent.length = RECENT_MAX;
     // 太舊的天數拿掉。
     const keys = Object.keys(u.days).sort();

@@ -9,6 +9,20 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.59',
+        new: {
+            'zh-TW': [
+                '🧠 調用紀錄的「最近 20 次」會寫這次用了哪個思考程度，和服務商回報的思考 token（例如「不思考・思考 0 token」），看得出思考程度有沒有生效。',
+            ],
+            'zh-CN': [
+                '🧠 调用纪录的「最近 20 次」会写这次用了哪个思考程度，和服务商回报的思考 token（例如「不思考・思考 0 token」），看得出思考程度有没有生效。',
+            ],
+            en: [
+                '🧠 "Last 20 calls" in the call log now shows the thinking level used and the thinking tokens the provider reported (e.g. "No thinking・thinking 0 tokens"), so you can see whether the setting works.',
+            ],
+        },
+    },
+    {
         v: '0.13.58',
         new: {
             'zh-TW': [

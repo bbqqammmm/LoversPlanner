@@ -30,6 +30,17 @@ const reply = (r) => {
 await page.route('https://api.example.test/v1/**', reply);
 await page.route('https://openrouter.ai/api/v1/**', reply);
 await page.route('https://api.siliconflow.cn/v1/**', reply);
+// DeepSeek 官方：thinking 開關；關掉時不思考（回報的思考 token 是 0）
+await page.route('https://api.deepseek.com/**', (r) => {
+  if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
+  const body = JSON.parse(r.request().postData() ?? '{}');
+  bodies.push({ url: r.request().url(), body });
+  const think = body.thinking?.type === 'disabled' ? 0 : 900;
+  return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({
+    choices: [{ message: { content: '{"summary":"打招呼。","ops":[]}', ...(think ? { reasoning_content: '想了很久'.repeat(50) } : {}) }, finish_reason: 'stop' }],
+    usage: { prompt_tokens: 100, completion_tokens: 20 + think, completion_tokens_details: { reasoning_tokens: think } },
+  }) });
+});
 await page.addInitScript(() => {
   window.__chat = Array.from({ length: 12 }, (_, i) => ({ name: i % 2 ? '沈言' : '小雨', is_user: !(i % 2), mes: `第${i}則`, send_date: `d${i}`, extra: {} }));
   window.__presetSettings = { lovers_planner: { settingsVersion: 6, summary: { mode: 'manual' }, ui: { seenVersion: '9.9.9' }, backup: { auto: false },
@@ -67,6 +78,25 @@ check('remembered for this API', st.rejected === 'effort');
 await page.evaluate(async () => { const c = await import('/src/chat.js'); c.setEntry(11, null); const s = await import('/src/summarize.js'); s.enqueue(11); await s.waitForIdle(); });
 check('not sent again afterwards', !('reasoning_effort' in last()), JSON.stringify(last()));
 
+// DeepSeek 官方：自動用 thinking 開關；調用紀錄看得出有沒有思考
+await page.evaluate(async () => {
+  const s = SillyTavern.getContext().extensionSettings.lovers_planner;
+  s.custom.url = 'https://api.deepseek.com';
+  s.custom.thinkingFormat = 'auto';
+  delete s.custom.thinkingRejected;
+  s.thinking.l1 = 'off';
+  const c = await import('/src/chat.js'); c.setEntry(9, null);
+  const sm = await import('/src/summarize.js'); sm.enqueue(9); await sm.waitForIdle();
+  s.thinking.l1 = '';
+  c.setEntry(7, null); sm.enqueue(7); await sm.waitForIdle();
+  // 還原給下面的畫面檢查用
+  s.thinking.l1 = 'off';
+  s.custom.thinkingRejected = 'switch';
+});
+check('DeepSeek official: thinking switch guessed from the URL', bodies.some((b) => b.url.includes('deepseek.com') && b.body.thinking?.type === 'disabled'), JSON.stringify(bodies.filter((b) => b.url.includes('deepseek')).map((b) => b.body.thinking)));
+const recent = await page.evaluate(async () => (await import('/src/usage.js')).recentUsage(2));
+check('call log records the level and thinking tokens', recent[1]?.level === 'off' && recent[1]?.think === 0 && recent[0]?.think === 900 && !recent[0]?.level, JSON.stringify(recent.map((r) => [r.level, r.think])));
+
 // 畫面
 await page.evaluate(() => { document.getElementById('extensionsMenu').style.display = ''; document.getElementById('lp_wand_entry').click(); });
 await page.click('[data-tab="settings"]');
@@ -79,6 +109,8 @@ check('tasks on the main API cannot set it here', await page.isDisabled('[data-t
 await page.selectOption('[data-thinking="diary"]', 'high');
 check('choice saved', await page.evaluate(() => SillyTavern.getContext().extensionSettings.lovers_planner.thinking.diary === 'high'));
 await page.locator('[data-role="routes"]').screenshot({ path: `${OUT}/thinking.png` });
+const row = await page.textContent('[data-role="usage-recent"]');
+check('call log shows it', row.includes('不思考・思考 0 token') && row.includes('思考 900 token'), row.replace(/\s+/g, ' ').slice(0, 300));
 
 const missing = await page.evaluate(async () => (await import('/src/i18n.js')).missingKeys());
 check('i18n keys complete', !missing.length, JSON.stringify(missing));

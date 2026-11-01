@@ -171,8 +171,13 @@ async function send(base, key, body, extra, wait) {
     if (typeof text !== 'string') throw new ApiError('bad_response', JSON.stringify(json).slice(0, 120));
     // 服務商回報的實際用量（調用紀錄用）；沒有就是 null。
     const u = json?.usage;
+    // 思考用了多少（v0.13.59）：服務商有回報就用；沒有但回覆裡有思考內容（reasoning_content），粗估。
+    const reasoning = Number(u?.completion_tokens_details?.reasoning_tokens ?? u?.reasoning_tokens);
+    const thought = String(choice?.message?.reasoning_content ?? choice?.message?.reasoning ?? '');
+    const think = Number.isFinite(reasoning) ? reasoning : thought ? Math.ceil(thought.length / 1.5) : null;
     const usage = u && (Number.isFinite(u.prompt_tokens) || Number.isFinite(u.completion_tokens))
-        ? { input: Number(u.prompt_tokens) || 0, output: Number(u.completion_tokens) || 0 } : null;
+        ? { input: Number(u.prompt_tokens) || 0, output: Number(u.completion_tokens) || 0, ...(think !== null ? { think } : {}) }
+        : think !== null ? { input: 0, output: 0, think, partial: true } : null;
     return { text, via, usage };
 }
 

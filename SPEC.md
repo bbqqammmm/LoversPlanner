@@ -1031,3 +1031,4 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
 - 2026-11-01（v0.13.56，使用者要求）：找回改成總字數上限＋同一天合併＋TT 原文搜尋（見已知問題）。測試 tests/recallbudget.test.mjs。
 - 2026-11-01（v0.13.57，使用者回報）：單層摘要額度至少 4000；自動重試成功的錯誤標起來（見已知問題）。errlog.test.mjs 多三條。
 - 2026-11-01（v0.13.58，使用者要求）：每種工作的思考程度（見已知問題）。測試 tests/thinking.test.mjs；custom-api 測試的欄位順序多一欄。
+- 2026-11-01（v0.13.59，使用者問：連的是 DeepSeek 官方）：官方網址自動用 thinking 開關（只有開／關，低中高都是開）。調用紀錄每次記用了哪個思考程度（level）和思考 token（think：usage.completion_tokens_details.reasoning_tokens，沒有就用 reasoning_content 粗估），讓使用者看得出設定有沒有生效。thinking.test.mjs 多三條。

@@ -154,6 +154,9 @@ async function generateOnce(prompt, { maxTokens = 512, purpose = 'other', target
     const sentGuess = roughTokens(system) + roughTokens(prompt);
     let usage = null;
     let text = '';
+    // 調用紀錄（v0.13.59）：用了哪個思考程度、思考了多少 token，看得出設定有沒有生效。
+    let think = null;
+    let thinkLevel = '';
     try {
         if (target !== 'main') {
             if (!cfg?.url || !cfg?.model) throw new ApiError('need_custom');
@@ -165,7 +168,9 @@ async function generateOnce(prompt, { maxTokens = 512, purpose = 'other', target
             const thinking = cfg.thinkingRejected === format ? {} : thinkingParams(level, format);
             const r = await chatCompletion({ ...cfg, timeout: s.custom?.timeout }, messages, { maxTokens, thinking });
             if (r.thinkingRejected) rememberRejected(target, format);
-            usage = r.usage;
+            usage = r.usage?.partial ? null : r.usage;
+            think = r.usage?.think ?? null;
+            thinkLevel = r.thinkingRejected ? '' : level;
             text = r.text;
         } else {
             const c = ctx();
@@ -175,7 +180,7 @@ async function generateOnce(prompt, { maxTokens = 512, purpose = 'other', target
         }
         const clean = cleanReply(text);
         lastLabel = model;
-        recordUsage({ purpose, model, input: usage?.input ?? sentGuess, output: usage?.output ?? roughTokens(text), est: !usage, ms: Date.now() - started, ok: true });
+        recordUsage({ purpose, model, input: usage?.input ?? sentGuess, output: usage?.output ?? roughTokens(text), est: !usage, ms: Date.now() - started, ok: true, think, level: thinkLevel });
         return clean;
     } catch (e) {
         // 還沒送出去就失敗的（沒設定好）不算呼叫。

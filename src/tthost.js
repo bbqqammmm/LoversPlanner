@@ -34,3 +34,41 @@ export async function otherChatMetadata(fileName) {
         return undefined;
     }
 }
+
+/** 等太久就放棄（搜尋不能卡住生成）。 */
+function withTimeout(promise, ms) {
+    let timer;
+    return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), ms); })]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * TT 的原文全文搜尋（v0.13.56）：在這些聊天裡找 query。chats 裡的 null 是目前的聊天，其他是同角色的聊天檔名。
+ * 回傳 [{ chat, index, role, text, snippet, score }]；不是 TT 回傳 null。單一聊天出錯或太慢就跳過它。
+ */
+export async function searchChats(query, chats, { limit = 20, timeout = 5000 } = {}) {
+    const api = chatApi();
+    if (!query || !api?.current?.handle) return null;
+    try {
+        await (globalThis.__TAURITAVERN__?.ready ?? globalThis.__TAURITAVERN_MAIN_READY__);
+    } catch (e) {
+        return null;
+    }
+    const cur = api.current.ref?.();
+    const one = async (id) => {
+        let handle;
+        if (id === null) handle = api.current.handle();
+        else {
+            if (cur?.kind !== 'character' || !cur.fileName || !api.open) return [];
+            handle = await api.open({ ...cur, fileName: /\.jsonl$/i.test(cur.fileName) ? `${id}.jsonl` : id });
+        }
+        const hits = await handle?.searchMessages?.({ query, limit });
+        return (Array.isArray(hits) ? hits : []).map((h) => ({
+            chat: id, index: Number(h.index), role: h.role ?? '', text: String(h.text ?? h.snippet ?? ''), snippet: String(h.snippet ?? ''), score: Number(h.score) || 0,
+        })).filter((h) => Number.isInteger(h.index));
+    };
+    const all = await Promise.all(chats.map((id) => withTimeout(one(id), timeout).catch((e) => {
+        console.warn(LOG_PREFIX, 'TT 搜尋失敗', id, e);
+        return [];
+    })));
+    return all.flat();
+}

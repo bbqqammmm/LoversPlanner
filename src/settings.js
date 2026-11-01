@@ -107,7 +107,9 @@ export const DEFAULTS = Object.freeze({
         notes: true, // 只送相關的人物／物件／約定／待辦（關掉＝全部都送）
         recentFloors: 3, // 最近幾個 AI 樓層出場、變動過的記事也送
         memory: true, // 從已壓縮成章的舊樓層裡，挑相關的單層摘要一起送
-        memoryTopK: 3,
+        memoryTopK: 8, // 最多找回幾層（v0.13.56 起另有 budget 總字數上限，所以放寬）
+        budget: 1500, // 找回的回憶和日記加起來最多多少 token（0＝不限，v0.13.56）
+        ttSearch: true, // TauriTavern：用原文全文搜尋幫忙找（v0.13.56）
         noteTopK: 5, // 向量最多再補幾條記事
         threshold: 45, // 向量相似度門檻（%）
         // 預填硅基流動和推薦模型（使用者要求），只要自己填 Key。
@@ -133,7 +135,7 @@ export const DEFAULTS = Object.freeze({
     // 日記（v0.13.34）：style 'natural' 自然（像回憶，預設）| 'concise' 精簡（像紀錄）。
     // 送給角色（v0.13.36）：send 開關；recentDays 最近幾天送全文；recallTopK 更早的日記聊到相關的事時最多找回幾段；
     // outline 寫完日記後自動寫一份大綱，也送給角色。
-    diary: { style: 'natural', send: true, recentDays: 3, recallTopK: 2, outline: true },
+    diary: { style: 'natural', send: true, recentDays: 3, recallTopK: 5, outline: true },
     // 你的偏好（v0.13.36，使用者要求，預設關）：auto 摘要、寫日記時讓模型把 OOC 裡對角色的長期要求記下來；
     // inject 每回提醒角色。清單存在角色卡自己的資料裡（characters[頭像].prefs），換新聊天也在。
     prefs: { auto: false, inject: true },
@@ -146,7 +148,7 @@ export const DEFAULTS = Object.freeze({
     // 每張角色卡自己的資料，key 是角色卡頭像檔名：{ [avatar]: { scope } }
     characters: {},
     // 設定格式的版本，用來做一次性的轉換。
-    settingsVersion: 5,
+    settingsVersion: 6,
 });
 
 function isPlainObject(v) {
@@ -224,6 +226,11 @@ export function initSettings() {
     // v4 → v5：L3 改成每 5 章一卷（測試結果）。還是舊預設 10 的才換。
     if (saved && !(saved.settingsVersion >= 5)) {
         if (s.compress.l2PerL3 === 10) s.compress.l2PerL3 = DEFAULTS.compress.l2PerL3;
+    }
+    // v5 → v6：找回改成有總字數上限，段數放寬（使用者：相關的不只 3～5 段）。還是舊預設的才換。
+    if (saved && !(saved.settingsVersion >= 6)) {
+        if (s.recall.memoryTopK === 3) s.recall.memoryTopK = DEFAULTS.recall.memoryTopK;
+        if (s.diary.recallTopK === 2) s.diary.recallTopK = DEFAULTS.diary.recallTopK;
     }
     // 新安裝的不用看「更新了什麼」。
     if (!saved) s.ui.seenVersion = VERSION;

@@ -91,7 +91,7 @@ check('receipt lists recalled diary parts', receipt.includes('📖 找回的日�
 await page.click('[data-tab="diary"]');
 await page.waitForSelector('[data-role="diary-send"]');
 let info = await page.textContent('[data-role="diary-send-info"]');
-check('diary card explains what is sent', info.includes('2025-05-10') && info.includes('2025-05-08～2025-05-09') && info.includes('最多找回 2 段'), info);
+check('diary card explains what is sent', info.includes('2025-05-10') && info.includes('2025-05-08～2025-05-09') && info.includes('最多找回 5 段'), info);
 await page.fill('input[data-path="diary.recentDays"]', '1');
 await page.dispatchEvent('input[data-path="diary.recentDays"]', 'change');
 info = await page.textContent('[data-role="diary-send-info"]');

@@ -57,6 +57,14 @@ export function dayChats(date, only = '') {
     return out;
 }
 
+/**
+ * 這一天用到哪幾層：[{ chat, from, to }]（v0.13.56：存在日記裡，TT 原文搜尋搜到舊聊天的某一層時，
+ * 用來找出是哪一天的日記）。only 同 dayParts。
+ */
+export function dayFloorRanges(date, only = '') {
+    return floorRanges((lastUnits.get(date) ?? []).filter((u) => Number.isInteger(u.floor) && u.chat && (!only || u.chat === only)));
+}
+
 /** 一段最多幾個 AI 樓層（太長的一天切成幾段寫日記）。 */
 export const PART_FLOORS = 17;
 /** 日記大約每個 AI 樓層幾個字（自然版提示詞的設定），上下限是一段的。 */

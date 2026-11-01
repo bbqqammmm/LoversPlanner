@@ -18,7 +18,7 @@ import { generateText, modelLabel } from './llm.js';
 import { parseJsonLenient } from './json.js';
 import { ApiError } from './api/custom.js';
 import { errorText } from './errors.js';
-import { dayChats, dayParts } from './oldchats.js';
+import { dayChats, dayFloorRanges, dayParts } from './oldchats.js';
 import { hashText } from './chat.js';
 import { addPrefsFromModel } from './prefs.js';
 import { dropTasks, enqueueTask, queuedTasks } from './summarize.js';
@@ -236,6 +236,7 @@ async function writePartInner(date, partNo, style, only) {
         day.compressed = null;
         day.use = 'original';
         day.chats = dayChats(date, only);
+        day.ranges = dayFloorRanges(date, only);
         if (only) day.only = only;
         else delete day.only;
     } catch (e) {
@@ -348,6 +349,18 @@ export function listDiary() {
 
 export function diarySources() {
     return record(false)?.sources ?? [];
+}
+
+/**
+ * 每天的日記是從哪幾個聊天、哪幾層寫的：[{ date, chats, ranges: [{ chat, from, to }] }]（聊天改過名的用現在的名字）。
+ * TT 原文搜尋用（v0.13.56）：搜到舊聊天的某一層時找出是哪一天。v0.13.56 之前寫的日記沒有 ranges，只有 chats。
+ */
+export function diaryRanges() {
+    return Object.values(record(false)?.days ?? {}).filter((d) => d?.date).map((d) => ({
+        date: d.date,
+        chats: [...new Set([...(d.chats ?? []), ...(d.ranges ?? []).map((x) => x.chat)].map((id) => currentChatId(id)))],
+        ranges: (Array.isArray(d.ranges) ? d.ranges : []).map((x) => ({ ...x, chat: currentChatId(x.chat) })),
+    }));
 }
 
 // ===== 從別的聊天帶日記過來（v0.13.53，使用者要求：在窗口 7 寫了日記，開窗口 8 時日記也要在） =====

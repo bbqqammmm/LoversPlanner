@@ -102,7 +102,8 @@ const NUMBER_LIMITS = {
     'compress.ratioMax': [1, 100],
     'inject.depth': [0, 100],
     'recall.recentFloors': [0, 20],
-    'recall.memoryTopK': [0, 20],
+    'recall.memoryTopK': [0, 30],
+    'recall.budget': [0, 20000],
     'recall.noteTopK': [0, 50],
     'recall.threshold': [0, 100],
     'carry.recapLength': [50, 4000],
@@ -113,7 +114,7 @@ const NUMBER_LIMITS = {
     'calendar.ahead': [0, 60],
     'custom.timeout': [30, 600],
     'diary.recentDays': [0, 30],
-    'diary.recallTopK': [0, 10],
+    'diary.recallTopK': [0, 20],
     'backup.everyDays': [0, 30],
     'backup.everyFloors': [0, 1000],
     'backup.keep': [1, 30],
@@ -3182,6 +3183,9 @@ function renderSettings() {
       ${checkbox('recall.memory', t('set.recall.memory'), true)}
       <div class="lp-note">${esc(t('set.recall.memory.desc'))}</div>
       ${r.memory ? `<div class="lp-row">${inline('set.recall.memoryTopK', { n: numberInput('recall.memoryTopK', t('set.recall.memoryTopK.aria')) })}</div>` : ''}
+      <div class="lp-row">${inline('set.recall.budget', { n: numberInput('recall.budget', t('set.recall.budget.aria')) })}</div>
+      <div class="lp-note">${esc(t('set.recall.budget.note'))}</div>
+      ${isTauriTavern() ? `${checkbox('recall.ttSearch', t('set.recall.ttSearch'))}<div class="lp-note">${esc(t('set.recall.ttSearch.note'))}</div>` : ''}
       <div class="lp-track-group">
         <span class="lp-label">${esc(t('set.vector.title'))}</span>
         ${checkbox('recall.vector.enabled', t('set.vector.enabled'), true)}

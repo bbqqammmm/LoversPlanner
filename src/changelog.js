@@ -9,6 +9,34 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.56',
+        new: {
+            'zh-TW': [
+                '🧺 找回的回憶和日記改成「總字數上限」：照相關程度放到上限（預設 1500 token）為止，短的就能多放幾段，不再固定只有 3～5 段；同一天找回了日記，那天的單層回憶就不重複送。',
+                '🔎 在 TauriTavern 上會用它的原文全文搜尋幫忙找：現在的聊天和寫過日記的舊聊天都搜，摘要、日記沒寫到的細節也找得到；搜到舊聊天會找回那天的日記，找不到是哪天的送一小段原文。',
+            ],
+            'zh-CN': [
+                '🧺 找回的回忆和日记改成「总字数上限」：照相关程度放到上限（缺省 1500 token）为止，短的就能多放几段，不再固定只有 3～5 段；同一天找回了日记，那天的单层回忆就不重复发送。',
+                '🔎 在 TauriTavern 上会用它的原文全文搜索帮忙找：现在的聊天和写过日记的旧聊天都搜，摘要、日记没写到的细节也找得到；搜到旧聊天会找回那天的日记，找不到是哪天的发送一小段原文。',
+            ],
+            en: [
+                '🧺 Recalled memories and diary now fill a total token limit (1500 by default) from most to least related, instead of a fixed 3–5 parts, so short ones leave room for more; when a day\'s diary is recalled, that day\'s single-floor memories are not repeated.',
+                '🔎 On TauriTavern, its full-text search helps: this chat and the old chats your diaries came from are searched, so details missing from summaries and diaries can be found; a hit in an old chat brings back that day\'s diary, or a short excerpt when the day is unknown.',
+            ],
+        },
+        fix: {
+            'zh-TW': [
+                '修正：找回的日記段落顯示的「第幾段／共幾段」有時會錯。',
+            ],
+            'zh-CN': [
+                '修正：找回的日记段落显示的「第几段／共几段」有时会错。',
+            ],
+            en: [
+                'Fixed: the "part N of M" of recalled diary parts was sometimes wrong.',
+            ],
+        },
+    },
+    {
         v: '0.13.55',
         fix: {
             'zh-TW': [

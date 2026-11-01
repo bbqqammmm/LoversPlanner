@@ -16,7 +16,7 @@
 
 import { ctx, LOG_PREFIX } from './util.js';
 import { getSettings, isTracked } from './settings.js';
-import { getChat, getEntry, isAiMessage } from './chat.js';
+import { chatKey, getChat, getEntry, isAiMessage } from './chat.js';
 import { getNotes, leadRoles, noteLine } from './notes.js';
 import { sceneLine } from './lines.js';
 import { structure } from './compress.js';
@@ -27,6 +27,9 @@ import { errorText } from './errors.js';
 import { cleanForSummary } from './filter.js';
 import { diaryPlan } from './diarysend.js';
 import { normDate } from './calendar.js';
+import { hasTtChatApi, searchChats } from './tthost.js';
+import { diaryRanges } from './diary.js';
+import { t } from './i18n.js';
 
 /** 拿來比對向量的「最近原文」最多取多少字（取最後面的）。 */
 const QUERY_CHARS = 1500;
@@ -201,7 +204,9 @@ const HAN = /[\u3400-\u9fff\uf900-\ufaff]+/g;
  * 虛字、代名詞、常見動詞（含有這些字的片段不拿來比）。用使用者的真實聊天紀錄（本機）試過：
  * 不濾的話，長長的一句話裡總有幾個片段碰巧很少見（「你還不」「不要在」），每回都會亂找回。
  */
-const FUNC = new Set([...'你我他她它您們们的地得了著着過过是在不沒没就都也還还把被讓让給给會会要想說说看這这那個个嗎吗呢吧啊呀哦喔嗯欸哈啦嘛麼么什怎誰谁哪裡里很太更最又再才只已和跟與与或而且但卻却如果因為为所以然後后一二兩两些點点下上來来去到從从對对向往能可以自己有好大小多少今昨明鐘钟']);
+const FUNC = new Set([...'你我他她它您們们的地得了著着過过是在不沒没就都也還还把被讓让給给會会要想說说看這这那個个嗎吗呢吧啊呀哦喔嗯欸哈啦嘛麼么什怎誰谁哪裡里很太更最又再才只已和跟與与或而且但卻却如果因為为所以然後后一二兩两些點点下上來来去到從从對对向往能可以自己有好大小多少鐘钟']);
+/** 時間的說法（不能只濾「明」這個字，不然「孔明燈」也會被濾掉）。 */
+const TIME_WORDS = /今天|明天|昨天|今晚|明晚|昨晚|今早|明早|今年|明年|去年|前天|後天|后天|現在|现在/;
 /** 中文片段至少幾個字（兩個字的太常碰巧出現，交給向量和日期）。 */
 const TERM_MIN = 3;
 
@@ -212,7 +217,7 @@ function termsOf(text, names) {
         for (let n = TERM_MIN; n <= 4; n++) {
             for (let i = 0; i + n <= run.length; i++) {
                 const w = run.slice(i, i + n);
-                if (![...w].some((ch) => FUNC.has(ch))) out.add(w);
+                if (![...w].some((ch) => FUNC.has(ch)) && !TIME_WORDS.test(w)) out.add(w);
             }
         }
     }
@@ -245,7 +250,78 @@ function explain(c, sims, threshold) {
     const vector = Boolean(sims && c.sim >= threshold);
     const reason = c.words.length ? 'word' : c.sameDay ? 'date' : vector ? 'vector' : 'keyword';
     const term = reason === 'word' ? c.words.slice(0, 2).join('、') : reason === 'date' ? c.date.slice(5) : '';
-    return { total: (sims ? c.sim : 0) + bonus, reason, term, hit: c.shared > 0 || c.words.length > 0 || c.sameDay || vector };
+    // rank（不叫 total：日記的段落本身就有 total＝那天有幾段）。
+    return { rank: (sims ? c.sim : 0) + bonus, reason, term, hit: c.shared > 0 || c.words.length > 0 || c.sameDay || vector };
+}
+
+/** 粗估 token（和 hide.js 的 estimateTokens 一樣；這裡另寫一份免得互相 import）。 */
+function roughTokens(s) {
+    const str = String(s ?? '');
+    const cjk = (str.match(/[㐀-鿿豈-﫿]/g) ?? []).length;
+    return Math.ceil(cjk / 1.2 + (str.length - cjk) / 4);
+}
+
+/** 一段文字裡有哪些使用者的話裡的詞（最長的那幾個）。 */
+function wordsIn(text, terms) {
+    const lower = String(text ?? '').toLowerCase();
+    const hit = terms.filter((w) => lower.includes(w));
+    return hit.filter((w) => !hit.some((o) => o !== w && o.includes(w)));
+}
+
+/** 原文片段最多送幾段（找不到是哪天日記的舊聊天原文）。 */
+const RAW_MAX = 3;
+const RAW_CHARS = 160;
+
+/**
+ * TT 的原文全文搜尋（v0.13.56，使用者要求）：用使用者最新的話搜現在的聊天和寫過日記的那幾個舊聊天的原文。
+ * 摘要、日記沒寫到的細節也找得到。搜到的那一層：
+ *   現在的聊天 → 那一層的單層回憶（已經壓縮成章的）加分；
+ *   舊聊天 → 用日記記的樓層範圍找出是哪一天，那天的日記加分；找不到是哪天的，送一小段原文（最多 RAW_MAX 段）。
+ * 搜到的那層要有使用者的話裡的詞（3 字以上、不含虛字）才算，免得只對到「你」「了」這種字。
+ * 不是 TT、或關掉了：回傳空的，照原本的方式找。
+ */
+async function searchRaw(focus, terms, candidates, diaryCands, limit, diaryTopK) {
+    if (!terms.length || !hasTtChatApi()) return [];
+    const query = focus.trim().slice(-200);
+    const ranges = diaryRanges();
+    const me = chatKey();
+    const others = [...new Set(ranges.flatMap((d) => d.chats))].filter((id) => id && id !== me);
+    const hits = await searchChats(query, [null, ...others]);
+    if (!hits?.length) return [];
+    const chat = getChat();
+    const byIndex = new Map(candidates.map((c) => [c.index, c]));
+    const byDate = new Map();
+    for (const c of diaryCands) {
+        if (!byDate.has(c.date)) byDate.set(c.date, []);
+        byDate.get(c.date).push(c);
+    }
+    const raw = [];
+    const add = (c, w) => { c.words = [...new Set([...(c.words ?? []), ...w])]; };
+    for (const h of hits) {
+        const w = wordsIn(cleanForSummary(h.text), terms);
+        if (!w.length) continue;
+        if (h.chat === null) {
+            if (h.index >= limit) continue;
+            // 使用者的話：算進後面那層 AI 回覆。
+            let i = h.index;
+            while (i < chat.length && !isAiMessage(chat[i])) i++;
+            const c = byIndex.get(i);
+            if (c) add(c, w);
+            continue;
+        }
+        const day = ranges.find((d) => d.ranges.some((x) => x.chat === h.chat && h.index >= x.from && h.index <= x.to));
+        const units = day ? byDate.get(day.date) : null;
+        if (units?.length) {
+            units.forEach((c) => add(c, w));
+            continue;
+        }
+        if (day || !diaryTopK || raw.length >= RAW_MAX) continue;
+        const text = cleanForSummary(h.snippet || h.text).replace(/\s+/g, ' ').trim().slice(0, RAW_CHARS);
+        if (!text || raw.some((x) => x.line.includes(text))) continue;
+        raw.push({ kind: 'raw', key: `raw#${h.chat}#${h.index}`, date: '', part: 0, total: 1, line: `${t('inject.rawSnippet')}${text}`, shared: 0, sim: 0,
+            reason: 'word', term: w.slice(0, 2).join('、'), rank: WORD_BONUS * w.length, hit: true });
+    }
+    return raw;
 }
 
 let lastVectorError = { at: 0, text: '' };
@@ -342,6 +418,9 @@ export async function selectRelevant({ keepFrom, limit = getChat().length, previ
         c.sameDay = Boolean(c.date && days.has(c.date.slice(5)));
     });
 
+    // ===== TT：原文全文搜尋（v0.13.56） =====
+    const rawHits = r.ttSearch === false ? [] : await searchRaw(focus, terms, candidates, diaryCands, limit, diaryTopK);
+
     // ===== 向量 =====
     const cfg = vectorConfig();
     let sims = null;
@@ -377,34 +456,52 @@ export async function selectRelevant({ keepFrom, limit = getChat().length, previ
             .forEach((x) => out.notes.set(x.n.id, { reason: 'vector', score: x.score }));
     }
 
-    if (candidates.length) {
-        const topK = Math.max(0, Number(r.memoryTopK) || 0);
-        const scored = candidates.map((c, k) => {
+    // ===== 挑：同一天合併、總字數上限（v0.13.56，使用者問：相關的不只 3～5 段怎麼辦） =====
+    // 回憶和日記放在一起，照分數由高到低挑：每種有段數上限，加起來不超過 recall.budget（token，0＝不限）。
+    // 同一天：挑了那天的日記，那天的單層回憶就不用再送（日記比較完整），已經挑的會換掉。
+    const memTopK = Math.max(0, Number(r.memoryTopK) || 0);
+    const pool = [
+        ...candidates.map((c, k) => {
             const sim = sims ? sims[rest.length + k] : 0;
-            return { ...c, sim, ...explain({ ...c, sim }, sims, threshold) };
-        });
-        const picked = scored
-            .filter((c) => c.hit)
-            // 分數一樣時，比較新的優先。
-            .sort((a, b) => b.total - a.total || b.index - a.index)
-            .slice(0, topK)
-            .map((c) => ({ index: c.index, line: c.line, shared: c.shared, score: sims ? c.sim : null, reason: c.reason, term: c.term }));
-        out.memories = picked.sort((a, b) => a.index - b.index);
+            return { kind: 'memory', ...c, sim, ...explain({ ...c, sim }, sims, threshold) };
+        }),
+        ...diaryCands.map((c, k) => {
+            const sim = sims ? sims[rest.length + candidates.length + k] : 0;
+            return { kind: 'diary', ...c, sim, ...explain({ ...c, sim }, sims, threshold) };
+        }),
+    ].filter((c) => c.hit);
+    pool.push(...rawHits);
+    // 分數一樣時，比較新的優先。
+    pool.sort((a, b) => b.rank - a.rank || (b.date || '').localeCompare(a.date || '') || (b.index ?? 0) - (a.index ?? 0));
+    const budget = Math.max(0, Number(r.budget) || 0);
+    const chosen = [];
+    let used = 0;
+    const count = (kind) => chosen.filter((c) => (c.kind === 'raw' ? 'diary' : c.kind) === kind).length;
+    for (const c of pool) {
+        const kind = c.kind === 'raw' ? 'diary' : c.kind;
+        if (count(kind) >= (kind === 'memory' ? memTopK : diaryTopK)) continue;
+        if (c.kind === 'memory' && c.date && chosen.some((x) => x.kind === 'diary' && x.date === c.date)) continue;
+        const cost = roughTokens(c.line);
+        // 一定至少送一段（就算比上限長）。
+        if (budget && chosen.length && used + cost > budget) continue;
+        if (c.kind === 'diary' && c.date) {
+            for (let k = chosen.length - 1; k >= 0; k--) {
+                if (chosen[k].kind === 'memory' && chosen[k].date === c.date) {
+                    used -= roughTokens(chosen[k].line);
+                    chosen.splice(k, 1);
+                }
+            }
+        }
+        chosen.push(c);
+        used += cost;
     }
-
-    if (diaryCands.length) {
-        const offset = rest.length + candidates.length;
-        out.diary = diaryCands
-            .map((c, k) => {
-                const sim = sims ? sims[offset + k] : 0;
-                return { ...c, sim, ...explain({ ...c, sim }, sims, threshold) };
-            })
-            .filter((c) => c.hit)
-            .sort((a, b) => b.total - a.total || b.date.localeCompare(a.date))
-            .slice(0, diaryTopK)
-            .map(({ key, date, part, total, line, shared, sim, reason, term }) => ({ key, date, part, total, line, shared, score: sims ? sim : null, reason, term }))
-            .sort((a, b) => a.date.localeCompare(b.date) || a.part - b.part);
-    }
+    out.memories = chosen.filter((c) => c.kind === 'memory')
+        .map((c) => ({ index: c.index, line: c.line, shared: c.shared, score: sims ? c.sim : null, reason: c.reason, term: c.term }))
+        .sort((a, b) => a.index - b.index);
+    out.diary = chosen.filter((c) => c.kind !== 'memory')
+        .map(({ key, date, part, total, line, shared, sim, reason, term, kind }) => ({ key, date, part, total, line, shared, score: sims && kind === 'diary' ? sim : null, reason, term, ...(kind === 'raw' ? { raw: true } : {}) }))
+        .sort((a, b) => (a.date || '').localeCompare(b.date || '') || a.part - b.part);
+    out.tokens = used;
     return out;
 }
 

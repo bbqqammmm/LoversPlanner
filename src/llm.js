@@ -1,7 +1,8 @@
 // 呼叫模型：依設定走主 API（酒館目前的連線）或自訂 API。
 
-import { ctx } from './util.js';
-import { getSettings } from './settings.js';
+import { ctx, LOG_PREFIX } from './util.js';
+import { getSettings, saveSettings } from './settings.js';
+import { resolveFormat, thinkingParams } from './api/thinking.js';
 import { t } from './i18n.js';
 import { recordUsage, roughTokens } from './usage.js';
 import { ApiError, chatCompletion } from './api/custom.js';
@@ -114,6 +115,16 @@ export function targetConfig(id) {
     return (s.profiles ?? []).find((p) => p.id === id);
 }
 
+/** 這組 API 不收這種思考參數（服務商說參數不對）：記下來，以後不送（改了格式或重新儲存就會再試）。 */
+function rememberRejected(id, format) {
+    const s = getSettings();
+    const cfg = id === 'custom' ? s.custom : (s.profiles ?? []).find((p) => p.id === id);
+    if (!cfg || cfg.thinkingRejected === format) return;
+    cfg.thinkingRejected = format;
+    saveSettings();
+    console.warn(LOG_PREFIX, '服務商不收這種思考參數，之後不送', { id, format });
+}
+
 /** 有沒有哪種工作（或備援）會用到酒館主 API（摘要隊伍要等正常生成結束）。給 purpose 就只看那一種。 */
 export function usesMain(purpose) {
     if (purpose) return targetId(purpose) === 'main';
@@ -148,7 +159,12 @@ async function generateOnce(prompt, { maxTokens = 512, purpose = 'other', target
             if (!cfg?.url || !cfg?.model) throw new ApiError('need_custom');
             const messages = [...(system ? [{ role: 'system', content: system }] : []), { role: 'user', content: prompt }];
             // 等待時間大家共用「自訂 API」那裡的設定。
-            const r = await chatCompletion({ ...cfg, timeout: s.custom?.timeout }, messages, { maxTokens });
+            // 思考程度（v0.13.58）：照工作選的程度、照這組 API 的格式加參數；這組 API 不收這種格式就不加。
+            const format = resolveFormat(cfg);
+            const level = s.thinking?.[routeKey(purpose)] ?? '';
+            const thinking = cfg.thinkingRejected === format ? {} : thinkingParams(level, format);
+            const r = await chatCompletion({ ...cfg, timeout: s.custom?.timeout }, messages, { maxTokens, thinking });
+            if (r.thinkingRejected) rememberRejected(target, format);
             usage = r.usage;
             text = r.text;
         } else {

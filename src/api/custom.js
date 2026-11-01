@@ -6,6 +6,7 @@
 // 用 custom_include_headers 帶上我們自己的 Key。
 
 import { ctx } from '../util.js';
+import { rejectsThinking } from './thinking.js';
 
 /** 預設等多久（拉模型清單、測試連接）。呼叫模型用設定的 custom.timeout（v0.13.10 起預設 120 秒）。 */
 const TIMEOUT_MS = 30000;
@@ -117,13 +118,27 @@ export async function listModels({ url, key }) {
 }
 
 /** 呼叫模型，回傳文字。 */
-export async function chatCompletion({ url, key, model, timeout }, messages, { maxTokens = 512, temperature } = {}) {
+export async function chatCompletion({ url, key, model, timeout }, messages, { maxTokens = 512, temperature, thinking = {} } = {}) {
     // 會先「思考」的模型、比較慢的服務商常常要超過 30 秒（使用者回報部的壓縮常逾時）。
     const wait = Math.min(600, Math.max(30, Number(timeout) || 120)) * 1000;
     const base = normalizeBaseUrl(url);
     if (!base) throw new ApiError('need_url');
-    const body = { model, messages, max_tokens: maxTokens, stream: false };
+    // 思考預算比輸出額度還大時，額度跟著加（不然想完就沒額度寫了）。
+    const budget = Number(thinking?.thinking_budget) || 0;
+    const body = { model, messages, max_tokens: budget ? Math.max(maxTokens, budget + 2000) : maxTokens, stream: false };
     if (temperature !== undefined) body.temperature = temperature;
+    const extra = thinking && Object.keys(thinking).length ? thinking : null;
+    try {
+        return await send(base, key, extra ? { ...body, ...extra } : body, extra, wait);
+    } catch (e) {
+        // 服務商不認得思考的參數（v0.13.58）：拿掉再送一次，告訴呼叫的人（llm.js 會記下來，以後不送）。
+        if (!extra || !(e instanceof ApiError) || !rejectsThinking(e.status, e.detail)) throw e;
+        const r = await send(base, key, body, null, wait);
+        return { ...r, thinkingRejected: true };
+    }
+}
+
+async function send(base, key, body, extra, wait) {
     const { json, via } = await withFallback(
         () => fetchJson(`${base}/chat/completions`, {
             method: 'POST',
@@ -138,6 +153,8 @@ export async function chatCompletion({ url, key, model, timeout }, messages, { m
                 chat_completion_source: 'custom',
                 custom_url: base,
                 custom_include_headers: includeHeadersYaml(key),
+                // 酒館轉發時，額外的參數要放在 custom_include_body（YAML；JSON 也是合法的 YAML）。
+                ...(extra ? { custom_include_body: JSON.stringify(extra) } : {}),
             }),
         }, wait),
     );

@@ -11,7 +11,8 @@ import { warmVectors } from '../recall.js';
 import { cleanForSummary, extractRef, scanTags, setTagMode, tagMode } from '../filter.js';
 import { getLoadedVersion } from '../update.js';
 import { VERSION } from '../version.js';
-import { ROUTES, usesMain } from '../llm.js';
+import { ROUTES, targetId, usesMain } from '../llm.js';
+import { detectFormat, THINKING_FORMATS, THINKING_LEVELS } from '../api/thinking.js';
 import { allChanges, markBadgeSeen, markSeen, seenVersion, unseenChanges } from '../changelog.js';
 import { analyzeChats, clearLoadedDays, dateSources, hasLoadedDays, listOldChats, loadOldChat, withSources } from '../oldchats.js';
 import { diaryPlan } from '../diarysend.js';
@@ -3322,7 +3323,7 @@ function customDraft(which = 'custom') {
     const st = apiState(which);
     if (!st.draft) {
         const saved = savedApi(which);
-        st.draft = { url: saved.url ?? '', key: saved.key ?? '', model: saved.model ?? '' };
+        st.draft = { url: saved.url ?? '', key: saved.key ?? '', model: saved.model ?? '', thinkingFormat: saved.thinkingFormat ?? 'auto' };
     }
     return st.draft;
 }
@@ -3331,6 +3332,7 @@ function customDirty(which = 'custom') {
     const d = apiState(which).draft;
     if (!d) return false;
     const saved = savedApi(which);
+    if (which !== 'vector' && (d.thinkingFormat ?? 'auto') !== (saved.thinkingFormat ?? 'auto')) return true;
     return ['url', 'key', 'model'].some((k) => (d[k] ?? '') !== (saved[k] ?? ''));
 }
 
@@ -3384,12 +3386,25 @@ function renderCustom(which = 'custom') {
             <button type="button" class="menu_button lp-btn" data-action="fetch-models" ${api}${disabled}>${esc(t('set.custom.fetch'))}</button>
           </div>
         </div>
+        ${which === 'vector' ? '' : thinkingFormatField(which, d, id)}
         <div class="lp-row">
           <button type="button" class="menu_button lp-btn" data-action="test-${which}"${disabled}>${esc(t('set.custom.test'))}</button>
           <button type="button" class="menu_button lp-btn lp-primary" data-action="save-${which}"${disabled}>${esc(t('set.custom.save'))}</button>
           <span class="lp-custom-status" data-role="${which}-status">${customStatusHtml(which)}</span>
         </div>
         <div class="lp-note lp-warn">${esc(t('set.custom.warn'))}</div>
+      </div>`;
+}
+
+/** 思考參數的格式（v0.13.58）：自動（照網址猜）或指定；服務商不收的話寫出來。 */
+function thinkingFormatField(which, d, id) {
+    const guess = detectFormat(d.url);
+    const opts = THINKING_FORMATS.map((f) => [f, f === 'auto' ? t('set.thinking.format.auto', { name: t(`set.thinking.format.${guess}`) }) : t(`set.thinking.format.${f}`)]);
+    const rejected = savedApi(which).thinkingRejected;
+    return `<div class="lp-field">
+        <label class="lp-label" for="${id('thinking')}">${esc(t('set.thinking.format'))}</label>
+        <select id="${id('thinking')}" class="text_pole lp-select" data-draft="thinkingFormat" data-api="${which}">${opts.map(([v, label]) => `<option value="${v}"${(d.thinkingFormat ?? 'auto') === v ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>
+        ${rejected ? `<div class="lp-note lp-warn" data-role="thinking-rejected">${esc(t('set.thinking.rejected', { name: t(`set.thinking.format.${rejected}`) }))}</div>` : ''}
       </div>`;
 }
 
@@ -3435,11 +3450,16 @@ function renderRoutes() {
     const select = (key, value, first) => `<select class="text_pole lp-select" data-route="${key}" aria-label="${esc(t(`set.route.${key}`))}">
         ${[first, ...ids.map((id) => [id, targetName(id)])].map(([id, label]) => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(label)}</option>`).join('')}
       </select>`;
-    const rows = ROUTES.map((k) => `<div class="lp-row lp-route-row"><span class="lp-label">${esc(t(`set.route.${k}`))}</span><span class="lp-spacer"></span>${select(k, s.routes?.[k] ?? 'inherit', ['inherit', t('set.route.inherit', { name: targetName(s.source === 'custom' ? 'custom' : 'main') })])}</div>`).join('');
+    // 思考程度（v0.13.58）：每種工作各自選；用酒館主 API 的那幾種，在酒館自己的連線設定調。
+    const thinking = (k) => `<select class="text_pole lp-select lp-thinking" data-thinking="${k}" aria-label="${esc(t('set.thinking.aria', { task: t(`set.route.${k}`) }))}"${targetId(k) === 'main' ? ' disabled' : ''}>
+        ${THINKING_LEVELS.map((v) => `<option value="${v}"${(s.thinking?.[k] ?? '') === v ? ' selected' : ''}>${esc(t(`set.thinking.${v || 'default'}`))}</option>`).join('')}
+      </select>`;
+    const rows = ROUTES.map((k) => `<div class="lp-row lp-route-row"><span class="lp-label">${esc(t(`set.route.${k}`))}</span><span class="lp-spacer"></span>${select(k, s.routes?.[k] ?? 'inherit', ['inherit', t('set.route.inherit', { name: targetName(s.source === 'custom' ? 'custom' : 'main') })])}${thinking(k)}</div>`).join('');
     return `
       <div class="lp-routes" data-role="routes">
         <div class="lp-scope-title">${esc(t('set.routes.title'))}</div>
         <div class="lp-note">${esc(t('set.routes.note'))}</div>
+        <div class="lp-note">${esc(t('set.thinking.note'))}</div>
         ${rows}
         <div class="lp-row lp-route-row"><span class="lp-label">${esc(t('set.route.fallback'))}</span><span class="lp-spacer"></span>${select('fallback', s.fallback ?? '', ['', t('set.route.none')])}</div>
         <div class="lp-note">${esc(t('set.route.fallbackNote'))}</div>
@@ -3504,6 +3524,8 @@ function saveCustom(which = 'custom') {
     const d = customDraft(which);
     const s = getSettings();
     const value = { url: normalizeBaseUrl(d.url).replace(/\/embeddings$/, ''), key: d.key.trim(), model: d.model.trim() };
+    // 思考參數的格式（v0.13.58）；重新儲存就再試一次（清掉「服務商不收」的紀錄）。
+    if (which !== 'vector') Object.assign(value, { thinkingFormat: d.thinkingFormat ?? 'auto', thinkingRejected: undefined });
     if (which === 'vector') Object.assign(s.recall.vector, value);
     else if (which === 'profile') {
         const list = s.profiles ?? (s.profiles = []);
@@ -4702,6 +4724,12 @@ function onChange(e) {
     if (el.dataset?.role === 'diary-ratio' || el.dataset?.role === 'diary-batch-ratio') {
         view.diary[el.dataset.role === 'diary-ratio' ? 'ratio' : 'batchRatio'] = Number(el.value) || MIN_SAFE_RATIO;
         render();
+        return;
+    }
+    if (el.dataset?.thinking) {
+        const s0 = getSettings();
+        s0.thinking = { ...(s0.thinking ?? {}), [el.dataset.thinking]: el.value };
+        saveSettings();
         return;
     }
     if (el.dataset?.route) {

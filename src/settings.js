@@ -129,6 +129,8 @@ export const DEFAULTS = Object.freeze({
     // routes：每種工作用哪一組（'inherit' 跟預設／'main'／'custom'／profile id）；fallback：失敗時改用哪一組（空的＝不改用）。
     customName: '',
     profiles: [],
+    // 每種工作的思考程度（v0.13.58）：''＝不指定（照服務商預設）| 'off' | 'low' | 'medium' | 'high'。只用在自訂 API 和其他組。
+    thinking: { l1: '', compress: '', catchup: '', diary: '', diaryCompress: '', other: '' },
     routes: { l1: 'inherit', compress: 'inherit', catchup: 'inherit', diary: 'inherit', diaryCompress: 'inherit', other: 'inherit' },
     fallback: '',
     prompts: { l1: null, l2: null, l3: null, recap: null, catchup: null, audit: null, diary: null, diaryConcise: null, diaryCompress: null, diaryOutline: null },

@@ -9,6 +9,23 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.58',
+        new: {
+            'zh-TW': [
+                '🧠 思考程度：在「設定 › 每種工作用哪一組」，每種工作（單層摘要、壓縮、補建、日記…）右邊可以選照預設／不思考／低／中／高。摘要通常不用想太多，選「不思考」或「低」會快很多。只對自訂 API 和其他組有用。',
+                '每組 API 可以選思考程度用哪種參數（預設照網址自動判斷）；服務商不收的話會自動拿掉重送，生成照常。',
+            ],
+            'zh-CN': [
+                '🧠 思考程度：在「设置 › 每种工作用哪一组」，每种工作（单层摘要、压缩、补建、日记…）右边可以选照缺省／不思考／低／中／高。摘要通常不用想太多，选「不思考」或「低」会快很多。只对自订 API 和其他组有用。',
+                '每组 API 可以选思考程度用哪种参数（缺省照网址自动判断）；服务商不收的话会自动拿掉重送，生成照常。',
+            ],
+            en: [
+                '🧠 Thinking level: in "Settings › Which API for each task", every task (summaries, compression, catch-up, diaries…) has default / no thinking / low / medium / high. Summaries rarely need much thinking, so "no thinking" or "low" is much faster. Only for the custom API and other API sets.',
+                'Each API set can choose which thinking parameter to send (guessed from the URL by default); if the provider rejects it, it is removed and sent again, so generation still works.',
+            ],
+        },
+    },
+    {
         v: '0.13.57',
         fix: {
             'zh-TW': [

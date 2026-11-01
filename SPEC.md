@@ -863,6 +863,8 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
 
 - 單層摘要 empty_length（v0.13.57，使用者貼錯誤報告：l1 empty_length maxTokens=2000、19.5 秒）：llm.js 本來就會加倍額度重試（2000→4000→8000），報告只有 2000 那筆，表示加倍後成功了，但報告看起來像失敗。改成：單層摘要／小劇場的額度至少 4000（和日記一樣，少白等一輪思考）；generateText 收集這次呼叫途中記下的錯誤，最後成功就標 recovered（報告寫「→ retried OK」、設定頁標「✅ 已自動重試成功」）。舊的錯誤紀錄不知道後來有沒有成功，不會補標。
 
+- 思考程度（v0.13.58，使用者要求）：settings.thinking[工作]＝''|off|low|medium|high，只用在自訂 API 和其他組（酒館主 API 用 generateRaw，參數由酒館的預設決定，這裡不能調，選單變灰）。每家參數不同（src/api/thinking.js）：effort＝reasoning_effort（off→none）、openrouter＝reasoning {effort}／{enabled:false}、budget＝enable_thinking＋thinking_budget（1024/4096/16384，max_tokens 至少 budget+2000）、switch＝thinking {type}（只有開關）。每組 API 的 thinkingFormat 預設 auto 照網址猜。各家參數是照記憶寫的，沒有對真的服務商驗證；所以服務商回 400（或酒館轉發時的錯誤）說 reasoning/thinking/effort/budget 不對，就拿掉重送一次，記在那組 API 的 thinkingRejected，之後不送，重新儲存就清掉。走酒館後端轉發時，參數放 custom_include_body（JSON 當 YAML）。
+
 ## 📝 決策紀錄
 
 > 規格有改動時寫進來，說明改了什麼、為什麼改。
@@ -1028,3 +1030,4 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
 - 2026-11-01（v0.13.55）：TT 上帶日記只讀聊天資料（見已知問題）。測試 tests/tthost.test.mjs。
 - 2026-11-01（v0.13.56，使用者要求）：找回改成總字數上限＋同一天合併＋TT 原文搜尋（見已知問題）。測試 tests/recallbudget.test.mjs。
 - 2026-11-01（v0.13.57，使用者回報）：單層摘要額度至少 4000；自動重試成功的錯誤標起來（見已知問題）。errlog.test.mjs 多三條。
+- 2026-11-01（v0.13.58，使用者要求）：每種工作的思考程度（見已知問題）。測試 tests/thinking.test.mjs；custom-api 測試的欄位順序多一欄。

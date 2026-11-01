@@ -52,7 +52,7 @@ await page.click('details[data-sec="model"] > summary');
 await page.click('input[data-path="source"][value="custom"]');
 
 const order = await page.$$eval('.lp-custom .lp-label', (els) => els.map((e) => e.textContent.trim()));
-check('field order URL → Key → model', JSON.stringify(order) === JSON.stringify(['API URL 地址', 'API Key', '模型']), JSON.stringify(order));
+check('field order URL → Key → model → thinking format', JSON.stringify(order) === JSON.stringify(['API URL 地址', 'API Key', '模型', '思考程度用哪種參數']), JSON.stringify(order));
 check('buttons', (await page.isVisible('[data-action="test-custom"]')) && (await page.isVisible('[data-action="save-custom"]')) && (await page.isVisible('[data-action="fetch-models"]')));
 
 // 沒填網址就測試

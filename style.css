@@ -1747,3 +1747,7 @@ html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
 .lp-diary-carry > summary { cursor: pointer; font-weight: 600; }
 .lp-diary-carry-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .lp-diary-carry-list .lp-row { gap: 8px; align-items: center; overflow-wrap: anywhere; }
+
+/* 思考程度（v0.13.58）：窄螢幕換行時靠右，和上面的選單對齊 */
+.lp-route-row { flex-wrap: wrap; }
+.lp-route-row .lp-thinking { margin-left: auto; }

@@ -61,8 +61,24 @@ export function logError(where, error, info = {}) {
         for (const fn of listeners) {
             try { fn(); } catch (x) { console.error(LOG_PREFIX, x); }
         }
+        return entry;
     } catch (x) {
         console.warn(LOG_PREFIX, '記錯誤失敗', x);
+        return null;
+    }
+}
+
+/**
+ * 這幾筆錯誤後來自動重試成功了（加倍額度、再試一次、改用另一組，v0.13.57）：標起來，
+ * 報告和清單上寫「已自動重試成功」，使用者才不會以為真的失敗了。
+ */
+export function markRecovered(entries) {
+    const list = (entries ?? []).filter(Boolean);
+    if (!list.length) return;
+    for (const e of list) e.recovered = 1;
+    saveSettings();
+    for (const fn of listeners) {
+        try { fn(); } catch (x) { console.error(LOG_PREFIX, x); }
     }
 }
 
@@ -114,9 +130,9 @@ function routing() {
 export function buildReport({ limit = 10 } = {}) {
     const rows = listErrors().slice(0, limit).map((e, k) => {
         const when = new Date(e.at).toISOString().replace('T', ' ').slice(0, 19);
-        const { at, where, code, status, detail, v, ...info } = e;
+        const { at, where, code, status, detail, v, recovered, ...info } = e;
         const extra = Object.entries(info).map(([key, val]) => `${key}=${val}`);
-        return `${k + 1}. ${when}Z ${where} ${code}${status ? ` HTTP ${status}` : ''}${extra.length ? ` (${extra.join(', ')})` : ''}${detail ? ` — ${detail}` : ''}${v && v !== VERSION ? ` [v${v}]` : ''}`;
+        return `${k + 1}. ${when}Z ${where} ${code}${status ? ` HTTP ${status}` : ''}${extra.length ? ` (${extra.join(', ')})` : ''}${detail ? ` — ${detail}` : ''}${recovered ? ' → retried OK' : ''}${v && v !== VERSION ? ` [v${v}]` : ''}`;
     });
     return [
         `Lover's Planner error report`,

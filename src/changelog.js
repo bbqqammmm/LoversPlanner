@@ -9,6 +9,23 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.57',
+        fix: {
+            'zh-TW': [
+                '單層摘要出現「empty_length」：會先思考的模型，以前給 2000 的額度常常想完就沒了，要白等一輪再加倍重試。現在一開始就給至少 4000（只照實際用的計費）。',
+                '🐞 錯誤報告裡，後來自動重試成功的（加倍額度、再試一次、改用另一組）會標「✅ 已自動重試成功」，不會再看起來像真的失敗了。',
+            ],
+            'zh-CN': [
+                '单层摘要出现「empty_length」：会先思考的模型，以前给 2000 的额度常常想完就没了，要白等一轮再加倍重试。现在一开始就给至少 4000（只照实际用的计费）。',
+                '🐞 错误报告里，后来自动重试成功的（加倍额度、再试一次、改用另一组）会标「✅ 已自动重试成功」，不会再看起来像真的失败了。',
+            ],
+            en: [
+                '"empty_length" in single-floor summaries: models that think first often used up the old 2000-token budget and had to wait a round before the doubled retry. They now get at least 4000 from the start (you pay only for what is used).',
+                '🐞 Errors that were retried automatically and then succeeded (doubled budget, another try, or the fallback API) are marked "✅ retried automatically and succeeded" in the error report.',
+            ],
+        },
+    },
+    {
         v: '0.13.56',
         new: {
             'zh-TW': [

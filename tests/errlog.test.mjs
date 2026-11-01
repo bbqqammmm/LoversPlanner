@@ -20,6 +20,16 @@ const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers
 await page.route('https://broken.test/v1/**', (r) => (r.request().method() === 'OPTIONS'
   ? r.fulfill({ status: 204, headers: cors })
   : r.fulfill({ status: 500, contentType: 'application/json', headers: cors, body: '{"error":{"message":"upstream overloaded, see https://status.example.com/x?token=abc key-ABCDEFGHIJKLMNOPQRS"}}' })));
+// 會思考的模型：第一次額度不夠（finish_reason length、內容空），第二次寫出來
+const thinkingCalls = [];
+function window_first_max() { return thinkingCalls[0] ?? 0; }
+await page.route('https://thinking.test/v1/**', (r) => {
+  if (r.request().method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
+  const body = JSON.parse(r.request().postData() ?? '{}');
+  thinkingCalls.push(body.max_tokens ?? body.max_completion_tokens ?? 0);
+  const content = thinkingCalls.length === 1 ? '' : '{"summary":"睡前聊天。","ops":[]}';
+  return r.fulfill({ status: 200, contentType: 'application/json', headers: cors, body: JSON.stringify({ choices: [{ message: { content }, finish_reason: thinkingCalls.length === 1 ? 'length' : 'stop' }] }) });
+});
 await page.addInitScript(() => {
   window.__chat = Array.from({ length: 6 }, (_, i) => ({ name: i % 2 ? '沈言' : '小雨', is_user: !(i % 2), mes: `秘密的第${i}則劇情`, send_date: `d${i}`, extra: {} }));
   window.__toasts = [];
@@ -37,7 +47,18 @@ await page.evaluate(async () => {
   window.__generateRaw = async () => '{"ops": [{"op": "add", "data": {"name": "這是模型寫的私密劇情內容，不應該出現在報告裡"';
   const s = await import('/src/summarize.js'); s.enqueue(3); await s.waitForIdle();
 });
+// 3. 額度被思考用光，加倍後成功（v0.13.57，使用者回報：報告裡看起來像失敗了）
+const thinking = await page.evaluate(async () => {
+  const st = SillyTavern.getContext().extensionSettings.lovers_planner;
+  st.source = 'custom';
+  st.custom.url = 'https://thinking.test/v1';
+  const s = await import('/src/summarize.js'); s.enqueue(5); await s.waitForIdle();
+  return { status: (await import('/src/chat.js')).floorStatus(5) };
+});
+check('l1 asks for at least 4000 tokens', window_first_max() >= 4000, String(window_first_max()));
+check('summary succeeded after doubling', thinking.status === 'ok', JSON.stringify(thinking));
 const report = await page.evaluate(async () => (await import('/src/errlog.js')).buildReport());
+check('the recovered error is marked', /empty_length .*→ retried OK/.test(report) && !/http HTTP 500.*retried OK/.test(report), report);
 check('report lists both errors with codes', report.includes(' l1 http HTTP 500') && report.includes(' l1 parse'), report);
 check('model name and version included', report.includes('test-model') && /version \d+\.\d+\.\d+/.test(report));
 check('no prompt, reply or chat content', !report.includes('秘密') && !report.includes('私密劇情') && !report.includes('小雨') && !report.includes('沈言'), report);
@@ -51,6 +72,7 @@ await page.click('[data-tab="settings"]');
 await page.click('details[data-sec="errors"] > summary');
 const list = await page.textContent('[data-role="error-list"]');
 check('settings lists recent errors', list.includes('單層摘要') && list.includes('服務商回錯誤') && list.includes('格式不對'), list.replace(/\s+/g, ' '));
+check('settings marks the recovered one', list.includes('已自動重試成功') && (await page.$$('[data-role="err-recovered"]')).length === 1, list.replace(/\s+/g, ' '));
 await page.click('details[data-sec="errors"] [data-action="copy-report"]');
 await page.waitForFunction(() => window.__toasts.some((x) => String(x).includes('複製好了')), null, { timeout: 5000 });
 const clip = await page.evaluate(() => navigator.clipboard.readText());

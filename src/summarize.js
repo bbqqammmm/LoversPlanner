@@ -349,7 +349,8 @@ export async function buildL1Prompt(index, { side = false } = {}) {
     }).replace(/\n{3,}/g, '\n\n'); // 空掉的段落不要留下一堆空行
     // 摘要本身＋時間、地點、人物＋記事 JSON 的空間要給夠，不然 JSON 會被截斷；
     // 會先「思考」的模型也會吃掉一部分額度。只按實際用到的計費，給多不會多花錢。
-    return { prompt, hash: src.hash, notesBefore, maxTokens: Math.max(2000, targetTokens * 2 + 1500) };
+    // 至少 4000（v0.13.57，使用者回報 l1 empty_length）：會先思考的模型 2000 常常想完就沒額度寫了，白等一輪再加倍。只照實際用的計費。
+    return { prompt, hash: src.hash, notesBefore, maxTokens: Math.max(4000, targetTokens * 2 + 1500) };
 }
 
 // ===== 解析結果 =====

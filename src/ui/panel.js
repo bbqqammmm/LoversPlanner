@@ -3241,7 +3241,8 @@ function renderErrorsSection() {
     const list = listErrors();
     const rows = list.slice(0, 10).map((e) => {
         const info = [errorWhere(e.where), label(`usage.err.${e.code}`, e.code), e.status ? `HTTP ${e.status}` : '', e.model ?? '', e.cut === 'yes' ? t('report.cut') : ''].filter(Boolean).join('・');
-        return `<li><span class="lp-note">${esc(new Date(e.at).toLocaleString())}</span> ${esc(info)}${e.detail ? `<div class="lp-note">${esc(e.detail)}</div>` : ''}</li>`;
+        const ok = e.recovered ? ` <span class="lp-badge lp-ok-text" data-role="err-recovered">${esc(t('report.recovered'))}</span>` : '';
+        return `<li><span class="lp-note">${esc(new Date(e.at).toLocaleString())}</span> ${esc(info)}${ok}${e.detail ? `<div class="lp-note">${esc(e.detail)}</div>` : ''}</li>`;
     }).join('');
     const text = view.report;
     return `

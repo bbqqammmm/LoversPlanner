@@ -5,7 +5,7 @@ import { getSettings } from './settings.js';
 import { t } from './i18n.js';
 import { recordUsage, roughTokens } from './usage.js';
 import { ApiError, chatCompletion } from './api/custom.js';
-import { logError } from './errlog.js';
+import { logError, markRecovered } from './errlog.js';
 
 /** 回覆是空的、或只有服務商自己的通知時，自動重試幾次（間隔）。 */
 const EMPTY_RETRY_MS = [2000, 6000];
@@ -41,15 +41,20 @@ function isEmptyError(e) {
  */
 export async function generateText(prompt, opts = {}) {
     const first = targetId(opts.purpose);
+    // 這次呼叫途中記下的錯誤：最後成功了就標「已自動重試成功」（v0.13.57）。
+    const logged = [];
+    let text;
     try {
-        return await generateWith(prompt, { ...opts, target: first });
+        text = await generateWith(prompt, { ...opts, target: first, logged });
     } catch (e) {
         // 失敗時改用另一組（v0.13.35，使用者要求）：連不上、逾時、空回都換；格式不對（parse）不換。
         const backup = getSettings().fallback;
         if (!backup || backup === first || !canFallback(e)) throw e;
         console.warn('[LoversPlanner] 改用備援的 API', { from: first, to: backup, error: e?.code ?? e?.message });
-        return generateWith(prompt, { ...opts, target: backup });
+        text = await generateWith(prompt, { ...opts, target: backup, logged });
     }
+    markRecovered(logged);
+    return text;
 }
 
 function canFallback(e) {
@@ -129,7 +134,7 @@ export function systemText() {
 }
 
 /** 呼叫一次模型，回傳整理過的回覆（cleanReply），並記進調用紀錄（成功、失敗、空回都記；重試的每一次都算一次呼叫）。 */
-async function generateOnce(prompt, { maxTokens = 512, purpose = 'other', target = targetId(purpose) } = {}) {
+async function generateOnce(prompt, { maxTokens = 512, purpose = 'other', target = targetId(purpose), logged = null } = {}) {
     const s = getSettings();
     const system = systemText();
     const cfg = targetConfig(target);
@@ -162,7 +167,8 @@ async function generateOnce(prompt, { maxTokens = 512, purpose = 'other', target
             recordUsage({ purpose, model, input: usage?.input ?? sentGuess, output: usage?.output ?? roughTokens(text), est: !usage, ms: Date.now() - started, ok: false, error: e?.code ?? e?.message ?? String(e) });
         }
         // 錯誤報告（v0.13.46）：每次失敗都記（加倍額度、改用另一組再試的也記，看得出試了幾次）。
-        logError(purpose, e, { model, maxTokens, ms: Date.now() - started });
+        const entry = logError(purpose, e, { model, maxTokens, ms: Date.now() - started });
+        if (entry && Array.isArray(logged)) logged.push(entry);
         throw e;
     }
 }

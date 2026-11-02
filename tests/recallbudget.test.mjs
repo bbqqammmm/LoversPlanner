@@ -25,6 +25,8 @@ const browser = await chromium.launch();
 const page = await browser.newPage();
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('favicon')) errors.push('console: ' + m.text()); });
+// 這個角色現在有的聊天（日記記著的「不見了的聊天」不在這裡）
+await page.route('**/api/characters/chats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ file_id: '雨天的約定' }, { file_id: '舊聊天' }, { file_id: '會壞掉的聊天' }]) }));
 await page.addInitScript((chat) => {
   window.__chat = chat;
   window.__presetSettings = { lovers_planner: { settingsVersion: 5, summary: { mode: 'manual' }, ui: { seenVersion: '9.9.9' }, backup: { auto: false },
@@ -50,6 +52,7 @@ await page.evaluate(async (long) => {
       '2023-10-31': { date: '2023-10-31', parts: [part('去年萬聖節的日記，第一段。', { total: 2 }), part('去年萬聖節的日記，第二段。', { part: 2, total: 2 })], use: 'original', chats: ['舊聊天'], ranges: [{ chat: '舊聊天', from: 0, to: 20 }] },
       '2023-06-01': { date: '2023-06-01', parts: [part('普通的一天。')], use: 'original', chats: ['舊聊天'], ranges: [{ chat: '舊聊天', from: 21, to: 40 }] },
       '2024-11-30': { date: '2024-11-30', parts: [part('最近的一天。')], use: 'original', chats: ['舊聊天'] },
+      '2022-01-01': { date: '2022-01-01', parts: [part('很久以前。')], use: 'original', chats: ['不見了的聊天', '會壞掉的聊天'] },
     } },
   };
   window.__generateRaw = async ({ prompt }) => (prompt.includes('章節總結') ? '章' : '{"summary":"x","ops":[]}');
@@ -88,6 +91,7 @@ await page.evaluate(() => {
     },
     open: (ref) => ({ searchMessages: async ({ query }) => {
       window.__searches.push([ref.fileName, query]);
+      if (ref.fileName.startsWith('會壞掉的聊天')) throw new Error('Not found: Chat not found');
       return [hit(25, 'assistant', '那天晚上在河邊放了孔明燈，許了願。'), hit(80, 'assistant', '<div>我們一起把孔明燈點起來，風很大。</div>'), hit(81, 'user', '好啊好啊我也是')];
     } }),
   } } };
@@ -96,6 +100,10 @@ await set({ 'recall.budget': 0, 'recall.memoryTopK': 30 });
 sel = await select();
 const searches = await page.evaluate(() => window.__searches);
 check('searched this chat and the chats the diary came from', searches.some((x) => x[0] === 'current') && searches.some((x) => x[0] === '舊聊天.jsonl'), JSON.stringify(searches));
+check('chats that no longer exist are not searched', !searches.some((x) => x[0].startsWith('不見了的聊天')), JSON.stringify(searches));
+await select();
+const again = await page.evaluate(() => window.__searches.filter((x) => x[0].startsWith('會壞掉的聊天')).length);
+check('a chat that failed is not searched again', again === 1, String(again));
 check('a floor whose summary missed the word is found from the original text', sel.memories.some((m) => m.startsWith('30:word:') && m.includes('孔明燈')), JSON.stringify(sel.memories));
 check('a hit in an old chat brings back that day\'s diary', sel.diary.some((d) => d.startsWith('2023-06-01#1/1:word:') && d.includes('孔明燈')), JSON.stringify(sel.diary));
 check('a hit with no known day sends a short excerpt', sel.diary.some((d) => d.endsWith(':raw')) && sel.lines.some((l) => l.includes('原文片段') && l.includes('一起把孔明燈點起來') && !l.includes('<div>')), JSON.stringify(sel.lines));

@@ -88,6 +88,26 @@ function currentChatId() {
     return String(c?.getCurrentChatId?.() ?? c?.chatId ?? '');
 }
 
+/**
+ * 這個角色現在有哪些聊天（id 的 Set）；拿不到回傳 null。存 5 分鐘（v0.13.60：TT 原文搜尋每回都要問，
+ * 只搜真的存在的聊天——日記記的舊聊天可能已經改名、刪掉，或是在別的酒館寫的，搜不到 TT 會跳紅色提示）。
+ */
+let chatIdCache = { avatar: null, at: 0, ids: null };
+export async function existingChatIds() {
+    const avatar = characterKey();
+    if (!avatar) return null;
+    if (chatIdCache.avatar === avatar && chatIdCache.ids && Date.now() - chatIdCache.at < 5 * 60 * 1000) return chatIdCache.ids;
+    try {
+        const list = await post('/api/characters/chats', { avatar_url: avatar });
+        if (!Array.isArray(list)) return null;
+        const ids = new Set(list.map((x) => String(x.file_id ?? String(x.file_name ?? '').replace(/\.jsonl$/, ''))).filter(Boolean));
+        chatIdCache = { avatar, at: Date.now(), ids };
+        return ids;
+    } catch (e) {
+        return null;
+    }
+}
+
 /** 同一個角色的其他聊天：[{ id, size, items, last, preview }]，新的在前。 */
 export async function listOldChats() {
     const avatar = characterKey();

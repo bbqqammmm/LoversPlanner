@@ -28,6 +28,7 @@ import { cleanForSummary } from './filter.js';
 import { diaryPlan } from './diarysend.js';
 import { normDate } from './calendar.js';
 import { hasTtChatApi, searchChats } from './tthost.js';
+import { existingChatIds } from './oldchats.js';
 import { diaryRanges } from './diary.js';
 import { t } from './i18n.js';
 
@@ -285,7 +286,9 @@ async function searchRaw(focus, terms, candidates, diaryCands, limit, diaryTopK)
     const query = focus.trim().slice(-200);
     const ranges = diaryRanges();
     const me = chatKey();
-    const others = [...new Set(ranges.flatMap((d) => d.chats))].filter((id) => id && id !== me);
+    // 只搜這個角色現在真的有的聊天（v0.13.60，使用者回報：搜不到的聊天 TT 會跳紅色的「後端錯誤」）。
+    const exist = await existingChatIds();
+    const others = [...new Set(ranges.flatMap((d) => d.chats))].filter((id) => id && id !== me && exist?.has(id));
     const hits = await searchChats(query, [null, ...others]);
     if (!hits?.length) return [];
     const chat = getChat();

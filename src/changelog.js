@@ -9,6 +9,20 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.60',
+        fix: {
+            'zh-TW': [
+                'TauriTavern 的原文搜尋：日記記著的舊聊天如果已經改名、刪掉，或不在這個酒館裡，以前每回都會跳紅色的「後端錯誤：Chat not found」。現在只搜這個角色真的有的聊天，搜失敗的也不會再搜。',
+            ],
+            'zh-CN': [
+                'TauriTavern 的原文搜索：日记记着的旧聊天如果已经改名、删掉，或不在这个酒馆里，以前每回都会跳红色的「后端错误：Chat not found」。现在只搜这个角色真的有的聊天，搜失败的也不会再搜。',
+            ],
+            en: [
+                'TauriTavern full-text search: old chats recorded in the diary that were renamed, deleted or are not in this tavern used to raise a red "Chat not found" backend error every turn. Only chats this character actually has are searched now, and a chat that fails is not searched again.',
+            ],
+        },
+    },
+    {
         v: '0.13.59',
         new: {
             'zh-TW': [

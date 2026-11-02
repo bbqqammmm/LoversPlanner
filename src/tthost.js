@@ -45,6 +45,9 @@ function withTimeout(promise, ms) {
  * TT 的原文全文搜尋（v0.13.56）：在這些聊天裡找 query。chats 裡的 null 是目前的聊天，其他是同角色的聊天檔名。
  * 回傳 [{ chat, index, role, text, snippet, score }]；不是 TT 回傳 null。單一聊天出錯或太慢就跳過它。
  */
+/** 搜過失敗的聊天：這次開著酒館的期間不再搜（每次失敗 TT 都會跳紅色提示）。 */
+const failed = new Set();
+
 export async function searchChats(query, chats, { limit = 20, timeout = 5000 } = {}) {
     const api = chatApi();
     if (!query || !api?.current?.handle) return null;
@@ -66,8 +69,9 @@ export async function searchChats(query, chats, { limit = 20, timeout = 5000 } =
             chat: id, index: Number(h.index), role: h.role ?? '', text: String(h.text ?? h.snippet ?? ''), snippet: String(h.snippet ?? ''), score: Number(h.score) || 0,
         })).filter((h) => Number.isInteger(h.index));
     };
-    const all = await Promise.all(chats.map((id) => withTimeout(one(id), timeout).catch((e) => {
-        console.warn(LOG_PREFIX, 'TT 搜尋失敗', id, e);
+    const all = await Promise.all(chats.filter((id) => id === null || !failed.has(id)).map((id) => withTimeout(one(id), timeout).catch((e) => {
+        console.warn(LOG_PREFIX, 'TT 搜尋失敗，這個聊天之後不再搜', id, e);
+        if (id !== null) failed.add(id);
         return [];
     })));
     return all.flat();

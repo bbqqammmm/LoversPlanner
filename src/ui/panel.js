@@ -14,11 +14,11 @@ import { VERSION } from '../version.js';
 import { ROUTES, targetId, usesMain } from '../llm.js';
 import { detectFormat, THINKING_FORMATS, THINKING_LEVELS } from '../api/thinking.js';
 import { allChanges, markBadgeSeen, markSeen, seenVersion, unseenChanges } from '../changelog.js';
-import { analyzeChats, clearLoadedDays, dateSources, hasLoadedDays, listOldChats, loadOldChat, withSources } from '../oldchats.js';
+import { analyzeChats, clearLoadedDays, dateSources, existingChatIds, guessRenames, hasLoadedDays, listOldChats, loadOldChat, withSources } from '../oldchats.js';
 import { diaryPlan } from '../diarysend.js';
 import { addPref, editPref, listPrefs, onPrefsChange, removePref, togglePref } from '../prefs.js';
 import {
-    buildCompressPrompt, compressDay, conflictDays, deleteDay, dayState, deleteOutline, diaryOutline, diaryPending, diaryProgress, outlineError, diaryStyle, dropCompressed, editDay, editOutline, listDiary, MIN_SAFE_RATIO, onDiaryChange, pauseDiary, queueDays, queueOutline, RATIOS, setSources, useVersion,
+    buildCompressPrompt, compressDay, conflictDays, deleteDay, diaryChatDates, dayState, deleteOutline, diaryOutline, diaryPending, diaryProgress, outlineError, diaryStyle, dropCompressed, editDay, editOutline, listDiary, MIN_SAFE_RATIO, onDiaryChange, pauseDiary, queueDays, queueOutline, RATIOS, setSources, useVersion,
 } from '../diary.js';
 import { anniversariesToday, burst, dismissOnThisDay, onThisDay, randomMemory, remindOnThisDay, takePetals } from '../eggs.js';
 import { addMemory, editMemory, listMemories, memoriesOn, nextPinned, onMemoriesChange, removeMemory, surfaceNext } from '../memories.js';
@@ -63,7 +63,7 @@ import {
     notesOfType, onNotesChange, pinNoteManual, reopenNoteManual, resultLabel, typeLabel, updateNoteManual,
 } from '../notes.js';
 import {
-    CHAR_SCOPE_VALUES, CHAT_SCOPE_VALUES, characterName, getCharacterScope, getChatScope, SCOPE_KINDS,
+    CHAR_SCOPE_VALUES, CHAT_SCOPE_VALUES, characterKey, characterName, currentChatId, getCharacterScope, getChatScope, SCOPE_KINDS, setChatRenames,
 } from '../scope.js';
 
 // 「行事曆／約定」：行事曆和約定、待辦合成一個分頁（v0.12.9，使用者要求），分頁的 key 沿用 notes。
@@ -187,6 +187,7 @@ const view = {
     // 📦 舊聊天整理（v0.13.33）：聊天清單、勾了哪些、讀取中、分析結果、訊息。
     old: { open: false, loading: false, list: null, picked: new Set(), reading: '', result: null, ids: [], msg: '', only: {}, days: null, from: '', to: '' },
     diaryCarry: { open: false, busy: false, msg: '' }, // 從別的聊天帶日記過來（v0.13.53）
+    rename: { ids: null, loading: false, picks: {}, guess: null, busy: '', msg: '' }, // 對應改過名的聊天（v0.13.61）
     // 📖 日記（v0.13.34）：展開的日子、正在編輯的、正在設定再壓一次的（比例、要留的重點）、一次壓很多天的設定。
     diary: { open: new Set(), editing: null, compress: null, ratio: MIN_SAFE_RATIO, keep: new Set(), batchMin: 1000, batchRatio: MIN_SAFE_RATIO, msg: '', show: true, conflicts: [], outlineEdit: false },
     prefs: { editing: null },
@@ -370,6 +371,7 @@ function resetChatView() {
     view.cal = { ...view.cal, carryMsg: '', carryBusy: false, selected: null, month: null };
     view.notes = { ...view.notes, overdueHidden: false, overdueConfirm: false };
     view.diaryCarry = { open: false, busy: false, msg: '' };
+    view.rename = { ids: null, loading: false, picks: {}, guess: null, busy: '', msg: '' };
 }
 
 function render() {
@@ -1268,6 +1270,7 @@ function renderDiaryTab() {
     return `<div class="lp-diary-tab">
         <div class="lp-note">${esc(t('diaryTab.intro'))}</div>
         ${diaryCarryCard()}
+        ${renameCard()}
         ${oldChatsCard()}
         ${diary || `<div class="lp-wip">${esc(t('diaryTab.empty'))}</div>`}
       </div>`;
@@ -1289,6 +1292,59 @@ function diaryCarryCard() {
         <ul class="lp-diary-carry-list">${rows}</ul>
         ${v.busy ? `<div class="lp-note" role="status">${esc(t('diaryCarry.busy'))}</div>` : ''}
         ${v.msg ? `<div class="lp-note" role="status" data-role="diary-carry-msg">${esc(v.msg)}</div>` : ''}
+      </details>`;
+}
+
+/**
+ * 對應改過名的聊天（v0.13.61，使用者要求：從酒館搬到 TT 時聊天改了名，日記記的還是舊名字，
+ * 原文搜尋找不到那幾個聊天）。日記記著、現在找不到的聊天列出來，選它現在叫什麼；可以自動配對（比故事日期）。
+ * 對應存在 characters[頭像].renamed，日記、原文搜尋、「已用別的聊天寫過」都會用新的名字。
+ */
+function renameCard() {
+    const v = view.rename;
+    const refs = diaryChatDates();
+    if (!refs.size) return '';
+    if (!v.ids) {
+        if (!v.loading) {
+            v.loading = true;
+            const chat = chatKey();
+            existingChatIds().then((ids) => {
+                if (chatKey() !== chat) return;
+                v.loading = false;
+                v.ids = ids ? [...ids] : [];
+                if (isPanelOpen()) render();
+            });
+        }
+        return '';
+    }
+    const have = new Set(v.ids);
+    const missing = [...refs.keys()].filter((id) => !have.has(currentChatId(id)));
+    const mapped = [...refs.keys()].filter((id) => currentChatId(id) !== id && have.has(currentChatId(id)));
+    if (!missing.length && !mapped.length) return '';
+    const options = (old) => [`<option value="">${esc(t('rename.none'))}</option>`, ...v.ids.map((id) => `<option value="${esc(id)}"${v.picks[old] === id ? ' selected' : ''}>${esc(id)}</option>`)].join('');
+    const rows = missing.map((old) => {
+        const days = [...refs.get(old)].filter(Boolean).length;
+        const g = v.guess?.get(old);
+        return `<li class="lp-rename-row" data-old="${esc(old)}">
+          <div><b>${esc(old)}</b> <span class="lp-note">${esc(t('rename.days', { n: days }))}</span></div>
+          <select class="text_pole lp-select" data-role="rename-pick" data-old="${esc(old)}" aria-label="${esc(t('rename.aria', { chat: old }))}">${options(old)}</select>
+          ${g ? `<div class="lp-note lp-ok-text">${esc(t('rename.guessed', { hit: g.hit, total: g.total }))}</div>` : ''}
+        </li>`;
+    }).join('');
+    const done = mapped.map((old) => `<li class="lp-row"><span class="lp-grow">${esc(old)} → ${esc(currentChatId(old))}</span>
+        <button type="button" class="menu_button lp-btn lp-mini" data-action="rename-undo" data-old="${esc(old)}">${esc(t('rename.undo'))}</button></li>`).join('');
+    const picked = Object.values(v.picks).filter(Boolean).length;
+    return `<details class="lp-card lp-rename" data-role="rename"${missing.length || v.msg ? ' open' : ''}>
+        <summary>${esc(t(missing.length ? 'rename.title' : 'rename.titleDone', { n: missing.length }))}</summary>
+        ${missing.length ? `<div class="lp-note">${esc(t('rename.hint'))}</div>
+        <ul class="lp-rename-list">${rows}</ul>
+        <div class="lp-row">
+          <button type="button" class="menu_button lp-btn" data-action="rename-guess"${v.busy ? ' disabled' : ''}>${esc(t('rename.guess'))}</button>
+          <button type="button" class="menu_button lp-btn lp-primary" data-action="rename-save"${picked && !v.busy ? '' : ' disabled'}>${esc(t('rename.save', { n: picked }))}</button>
+        </div>` : ''}
+        ${v.busy ? `<div class="lp-note" role="status" data-role="rename-busy">${esc(v.busy)}</div>` : ''}
+        ${v.msg ? `<div class="lp-note" role="status" data-role="rename-msg">${esc(v.msg)}</div>` : ''}
+        ${done ? `<div class="lp-label">${esc(t('rename.mapped'))}</div><ul class="lp-rename-done">${done}</ul>` : ''}
       </details>`;
 }
 
@@ -3860,6 +3916,48 @@ function onClick(e) {
             render();
             return;
         }
+        case 'rename-guess': {
+            const v = view.rename;
+            const chat = chatKey();
+            const refs = diaryChatDates();
+            const have = new Set(v.ids ?? []);
+            const missing = new Map([...refs].filter(([id]) => !have.has(currentChatId(id))));
+            // 已經被對應走的新名字不用再讀。
+            const taken = new Set(Object.values(getSettings().characters?.[characterKey()]?.renamed ?? {}));
+            const candidates = (v.ids ?? []).filter((id) => id !== chat && !taken.has(id));
+            v.busy = t('rename.reading', { k: 0, n: candidates.length });
+            v.msg = '';
+            render();
+            guessRenames(missing, candidates, {
+                onProgress: ({ k, n }) => {
+                    v.busy = t('rename.reading', { k, n });
+                    if (isPanelOpen() && chatKey() === chat) render();
+                },
+            }).then((g) => {
+                if (chatKey() !== chat) return;
+                v.guess = g;
+                for (const [old, x] of g) v.picks[old] = x.id;
+                v.busy = '';
+                v.msg = t(g.size ? 'rename.guessDone' : 'rename.guessNone', { n: g.size });
+                if (isPanelOpen()) render();
+            });
+            return;
+        }
+        case 'rename-save': {
+            const v = view.rename;
+            const picks = Object.fromEntries(Object.entries(v.picks).filter(([, id]) => id));
+            setChatRenames(picks);
+            v.msg = t('rename.saved', { n: Object.keys(picks).length });
+            v.picks = {};
+            v.guess = null;
+            render();
+            return;
+        }
+        case 'rename-undo':
+            setChatRenames({ [btn.dataset.old]: '' });
+            view.rename.msg = '';
+            render();
+            return;
         case 'diary-carry-toggle':
             view.diaryCarry.open = !panel.querySelector('[data-role="diary-carry"]')?.open;
             return;
@@ -4759,6 +4857,11 @@ function onChange(e) {
     if (el.dataset?.role === 'old-side') {
         view.old.sideChoice = { ...(view.old.sideChoice ?? {}), [el.dataset.key]: el.checked };
         reanalyzeSides();
+        render();
+        return;
+    }
+    if (el.dataset?.role === 'rename-pick') {
+        view.rename.picks = { ...view.rename.picks, [el.dataset.old]: el.value };
         render();
         return;
     }

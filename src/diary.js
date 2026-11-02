@@ -352,6 +352,26 @@ export function diarySources() {
 }
 
 /**
+ * 日記記著的聊天（原本記的名字，沒有換成改名後的）→ 那個聊天寫了哪幾天：Map(id → Set(日期))。
+ * 用來找改過名的聊天（v0.13.61）：日子對得上的就是同一個聊天。
+ */
+export function diaryChatDates() {
+    const rec = record(false);
+    const out = new Map();
+    const add = (id, date) => {
+        if (!id) return;
+        if (!out.has(id)) out.set(id, new Set());
+        if (date) out.get(id).add(date);
+    };
+    for (const d of Object.values(rec?.days ?? {})) {
+        for (const id of d?.chats ?? []) add(id, d.date);
+        for (const x of d?.ranges ?? []) add(x.chat, d.date);
+    }
+    for (const id of rec?.sources ?? []) add(id, '');
+    return out;
+}
+
+/**
  * 每天的日記是從哪幾個聊天、哪幾層寫的：[{ date, chats, ranges: [{ chat, from, to }] }]（聊天改過名的用現在的名字）。
  * TT 原文搜尋用（v0.13.56）：搜到舊聊天的某一層時找出是哪一天。v0.13.56 之前寫的日記沒有 ranges，只有 chats。
  */

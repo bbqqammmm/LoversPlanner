@@ -15,6 +15,8 @@ const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes('favicon')) errors.push('console: ' + m.text()); });
+// 日記分頁會問這個角色有哪些聊天（v0.13.61 對應改過名的聊天）
+await page.route('**/api/characters/chats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
 await page.addInitScript(() => {
   window.__chatId = '新聊天';
   window.__toasts = [];

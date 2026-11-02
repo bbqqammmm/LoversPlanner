@@ -28,6 +28,24 @@ export function currentChatId(id, avatar = characterKey()) {
     return cur;
 }
 
+/**
+ * 記下聊天改名：{ 舊 id: 新 id }（v0.13.61，使用者要求：從酒館搬到 TT 時聊天改了名，日記記的還是舊名字）。
+ * 新 id 是空的＝拿掉那一筆。
+ */
+export function setChatRenames(map, avatar = characterKey()) {
+    if (!avatar) return;
+    const all = getSettings().characters;
+    const rec = all[avatar] ?? (all[avatar] = {});
+    const next = { ...(rec.renamed ?? {}) };
+    for (const [from, to] of Object.entries(map ?? {})) {
+        if (!from) continue;
+        if (to && to !== from) next[from] = to;
+        else delete next[from];
+    }
+    rec.renamed = next;
+    saveSettings();
+}
+
 export function characterName() {
     const c = ctx();
     return c?.characters?.[c.characterId]?.name ?? c?.name2 ?? '';

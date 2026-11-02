@@ -867,6 +867,8 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
 
 - TT 原文搜尋搜不到的聊天會跳紅色提示（v0.13.60，使用者回報四條「後端錯誤：Failed to search chat messages … Chat not found」）：日記的 day.chats 記的是寫日記時讀的舊聊天，可能已經改名、刪掉，或是在別的酒館寫的；api.chat.open(ref).searchMessages 找不到時 TT 自己會跳 toast，每回生成都跳。改成：先用 /api/characters/chats 拿這個角色現在有的聊天（oldchats.existingChatIds，存 5 分鐘），只搜存在的；搜失敗的聊天記在 tthost 的 failed，開著酒館的期間不再搜。如果使用者確認那些聊天在 TT 裡明明存在，代表 ChatRef 的 fileName 格式猜錯了，要再查。
 
+- 日記記的聊天改過名（v0.13.61，使用者確認：那幾個聊天都在，只是從酒館搬到 TT 時改了名）：沿用 v0.13.52 的改名表（characters[頭像].renamed＋scope.currentChatId）。日記分頁「🔗 對應改過名的聊天」：diaryChatDates() 列出日記記著的聊天和各自寫過哪幾天，existingChatIds() 對不到的列出來，下拉選現在的名字；「自動配對」（oldchats.guessRenames）一個一個讀這個角色的其他聊天（不打開、不讀現在這個、已經被對應走的不讀），用 analyzeChats 拿故事日期，和日記的日子對到一半以上才算，一個新聊天只配一個舊名字。儲存用 setChatRenames；可以取消。日記分頁打開時會問聊天清單，舊的測試要 mock /api/characters/chats。
+
 ## 📝 決策紀錄
 
 > 規格有改動時寫進來，說明改了什麼、為什麼改。
@@ -1035,3 +1037,4 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
 - 2026-11-01（v0.13.58，使用者要求）：每種工作的思考程度（見已知問題）。測試 tests/thinking.test.mjs；custom-api 測試的欄位順序多一欄。
 - 2026-11-01（v0.13.59，使用者問：連的是 DeepSeek 官方）：官方網址自動用 thinking 開關（只有開／關，低中高都是開）。調用紀錄每次記用了哪個思考程度（level）和思考 token（think：usage.completion_tokens_details.reasoning_tokens，沒有就用 reasoning_content 粗估），讓使用者看得出設定有沒有生效。thinking.test.mjs 多三條。
 - 2026-11-02（v0.13.60，使用者回報）：TT 原文搜尋只搜存在的聊天、失敗的不再搜（見已知問題）。recallbudget.test.mjs 多兩條。
+- 2026-11-02（v0.13.61，使用者要求）：對應改過名的聊天（見已知問題）。測試 tests/renamechat.test.mjs。

@@ -108,6 +108,44 @@ export async function existingChatIds() {
     }
 }
 
+/**
+ * 猜改過名的聊天（v0.13.61）：missing 是日記記著、現在找不到的聊天 → 那個聊天寫過的日子；
+ * candidates 是現在有的聊天。一個一個讀（不打開聊天），看故事日期和哪個舊聊天對得最多。
+ * 回傳 Map(舊 id → { id: 新 id, hit, total })；對到一半以上的日子才算。onProgress({ k, n, id })。
+ */
+export async function guessRenames(missing, candidates, { onProgress = () => {} } = {}) {
+    const days = new Map();
+    for (const [k, id] of candidates.entries()) {
+        onProgress({ k: k + 1, n: candidates.length, id });
+        try {
+            const data = await loadOldChat(id);
+            const r = analyzeChats([{ id, data }], { keepDays: false });
+            days.set(id, new Set(r.days.filter((d) => d.date).map((d) => d.date)));
+        } catch (e) {
+            console.warn('[LoversPlanner] 讀不到聊天，略過', id, e);
+        }
+    }
+    const scored = [];
+    for (const [old, dates] of missing) {
+        const want = [...dates].filter(Boolean);
+        if (!want.length) continue;
+        for (const [id, have] of days) {
+            const hit = want.filter((d) => have.has(d)).length;
+            if (hit * 2 >= want.length && hit) scored.push({ old, id, hit, total: want.length });
+        }
+    }
+    // 對得最多的先配，一個新聊天只配一個舊名字。
+    scored.sort((a, b) => b.hit / b.total - a.hit / a.total || b.hit - a.hit);
+    const out = new Map();
+    const used = new Set();
+    for (const x of scored) {
+        if (out.has(x.old) || used.has(x.id)) continue;
+        out.set(x.old, { id: x.id, hit: x.hit, total: x.total });
+        used.add(x.id);
+    }
+    return out;
+}
+
 /** 同一個角色的其他聊天：[{ id, size, items, last, preview }]，新的在前。 */
 export async function listOldChats() {
     const avatar = characterKey();

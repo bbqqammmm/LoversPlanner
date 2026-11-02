@@ -39,6 +39,8 @@ await page.route('**/api/chats/get', (r) => {
   const body = file_name === '窗口7' ? [{ user_name: '小雨', character_name: '沈言', chat_metadata: { lovers_planner: { diary: DIARY } } }, ...A] : [];
   return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
 });
+// 日記分頁會問這個角色有哪些聊天（v0.13.61 對應改過名的聊天）
+await page.route('**/api/characters/chats', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
 await page.addInitScript((chat) => {
   window.__chat = chat;
   window.__chatId = '窗口7';

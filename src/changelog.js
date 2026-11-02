@@ -9,6 +9,20 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.61',
+        new: {
+            'zh-TW': [
+                '🔗 對應改過名的聊天（日記分頁）：從酒館搬到 TauriTavern 等原因讓聊天改了名，日記記的舊名字就對不上（原文搜尋搜不到、重讀時當成別的聊天）。現在會列出找不到的聊天，選它現在叫什麼，或按「自動配對」比故事日期來猜。',
+            ],
+            'zh-CN': [
+                '🔗 对应改过名的聊天（日记分页）：从酒馆搬到 TauriTavern 等原因让聊天改了名，日记记的旧名字就对不上（原文搜索搜不到、重读时当成别的聊天）。现在会列出找不到的聊天，选它现在叫什么，或按「自动配对」比故事日期来猜。',
+            ],
+            en: [
+                '🔗 Renamed chats (Diary tab): when chats were renamed (e.g. moving to TauriTavern), the old names in the diary no longer matched, so full-text search missed them and re-reading treated them as other chats. Missing chats are now listed so you can pick their new names, or press "Auto match" to guess from the story dates.',
+            ],
+        },
+    },
+    {
         v: '0.13.60',
         fix: {
             'zh-TW': [

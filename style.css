@@ -1757,4 +1757,4 @@ html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
 .lp-rename-list, .lp-rename-done { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .lp-rename-row { display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
 .lp-rename-row select { max-width: 100%; }
-.lp-rename-done .lp-row { gap: 8px; overflow-wrap: anywhere; }
+.lp-rename-done .lp-row { gap: 8px; overflow-wrap: anywhere; align-items: center; flex-wrap: nowrap; margin: 0; }

@@ -38,7 +38,7 @@ await openPanel(page);
 check('opening the panel removes NEW, card stays', !(await page.textContent('#lp_wand_entry')).includes('NEW') && !(await page.textContent('#lp_settings_drawer')).includes('NEW') && Boolean(await page.$('[data-role="whatsnew"]')));
 check('badge version saved', await page.evaluate(async () => SillyTavern.getContext().extensionSettings.lovers_planner.ui.badgeVersion === (await import('/src/version.js')).VERSION));
 // 內容跟著 CHANGES 走（每一版都會換）：最新一版的第一條、上一版的版本號和第一條。
-const C = await page.evaluate(async () => { const { CHANGES } = await import('/src/changelog.js'); const f = (c) => (c.new ?? c.fix)['zh-TW'][0].slice(0, 12); return { now: f(CHANGES[0]), prevV: CHANGES[1].v, prev: f(CHANGES[1]) }; });
+const C = await page.evaluate(async () => { const { CHANGES } = await import('/src/changelog.js'); const f = (c) => (c.new ?? c.fix)['zh-TW'][0].slice(0, 20); return { now: f(CHANGES[0]), prevV: CHANGES[1].v, prev: f(CHANGES[1]) }; });
 let card = await page.textContent('[data-role="whatsnew"]');
 check('card shows this version', card.includes('戀人手帳更新了') && card.includes(`v${version}`) && card.includes(C.now) && !card.includes(C.prev), card.slice(0, 160));
 await page.screenshot({ path: `${OUT}/whatsnew.png` });

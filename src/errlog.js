@@ -108,7 +108,7 @@ function environment() {
     const ua = String(globalThis.navigator?.userAgent ?? '');
     const os = /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Mac OS X/.test(ua) ? 'macOS' : /Windows/.test(ua) ? 'Windows' : /Linux/.test(ua) ? 'Linux' : '?';
     const host = globalThis.__TAURITAVERN__ || globalThis.__TAURITAVERN_MAIN_READY__ ? 'TauriTavern' : 'SillyTavern';
-    const browser = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Firefox\//.test(ua) ? 'Firefox' : '?';
+    const browser = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : /Firefox\//.test(ua) ? 'Firefox' : /iPhone|iPad|iPod/.test(ua) ? 'WebView' : '?';
     return `${host}・${os}・${browser}`;
 }
 

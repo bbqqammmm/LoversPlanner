@@ -12,6 +12,22 @@ import { logError, markRecovered } from './errlog.js';
 const EMPTY_RETRY_MS = [2000, 6000];
 /** 額度被思考用光時，加倍再試，最多到這麼多。 */
 const MAX_TOKENS_CAP = 16000;
+/** 連線半路斷了，隔多久再試。 */
+const DROPPED_RETRY_MS = 2000;
+
+/** App 在背景時（iOS 切出去、鎖螢幕）先不重試，等回到前景：在背景送出去的請求多半又會被斷。 */
+function whenVisible() {
+    const doc = globalThis.document;
+    if (!doc?.hidden) return Promise.resolve();
+    return new Promise((resolve) => {
+        const on = () => {
+            if (doc.hidden) return;
+            doc.removeEventListener('visibilitychange', on);
+            resolve();
+        };
+        doc.addEventListener('visibilitychange', on);
+    });
+}
 
 /**
  * 有些 API 服務商在模型回了空的內容時，會自己塞一段通知（HTML 註解、<style>、<div>，例如「响应内容为空，本条免费」）。
@@ -38,7 +54,7 @@ function isEmptyError(e) {
 }
 
 /**
- * 呼叫模型。自動重試：空的回覆（最多 2 次）；額度被思考用光（加倍額度再試，最多 2 次）；逾時（1 次）。
+ * 呼叫模型。自動重試：空的回覆（最多 2 次）；額度被思考用光（加倍額度再試，最多 2 次）；逾時（1 次）；連線半路斷了（1 次）。
  */
 export async function generateText(prompt, opts = {}) {
     const first = targetId(opts.purpose);
@@ -68,6 +84,7 @@ async function generateWith(prompt, opts) {
     let empty = 0;
     let longer = 0;
     let timeouts = 0;
+    let dropped = 0;
     for (;;) {
         try {
             return await generateOnce(prompt, { ...opts, maxTokens });
@@ -79,6 +96,13 @@ async function generateWith(prompt, opts) {
             }
             if (e instanceof ApiError && e.code === 'timeout' && timeouts < 1) {
                 timeouts++;
+                continue;
+            }
+            // 連線半路斷了（v0.13.62）：等畫面回到前景、隔一下再試一次。
+            if (e instanceof ApiError && e.code === 'dropped' && dropped < 1) {
+                dropped++;
+                await whenVisible();
+                await new Promise((r) => setTimeout(r, DROPPED_RETRY_MS));
                 continue;
             }
             if (!isEmptyError(e) || empty >= EMPTY_RETRY_MS.length) throw e;

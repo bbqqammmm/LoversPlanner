@@ -13,7 +13,7 @@ const TIMEOUT_MS = 30000;
 
 export class ApiError extends Error {
     /**
-     * @param {'need_url'|'need_custom'|'no_main'|'http'|'network'|'timeout'|'bad_response'|'empty'|'empty_notice'|'empty_length'|'parse'} code
+     * @param {'need_url'|'need_custom'|'no_main'|'http'|'network'|'dropped'|'timeout'|'bad_response'|'empty'|'empty_notice'|'empty_length'|'parse'} code
      */
     constructor(code, message = '', status = 0) {
         super(message || code);
@@ -51,16 +51,27 @@ export async function fetchJson(url, options, timeoutMs = TIMEOUT_MS) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     let res;
+    let text;
     try {
-        res = await fetch(url, { ...options, signal: controller.signal });
-    } catch (e) {
-        if (e?.name === 'AbortError') throw new ApiError('timeout');
-        // 連不上、DNS 錯誤、被 CORS 擋，瀏覽器都只給 TypeError。
-        throw new ApiError('network', e?.message);
+        try {
+            res = await fetch(url, { ...options, signal: controller.signal });
+        } catch (e) {
+            if (e?.name === 'AbortError') throw new ApiError('timeout');
+            // 連不上、DNS 錯誤、被 CORS 擋，瀏覽器都只給 TypeError。
+            throw new ApiError('network', e?.message);
+        }
+        // 讀回覆內容時連線斷了（v0.13.62，使用者回報 iOS 的「TypeError: Load failed」）：
+        // 已經連上了，只是半路斷（切 App、鎖螢幕、網路不穩），不是 CORS，所以不改走酒館轉發，由 llm.js 再試一次。
+        // 等待時間也算到讀完內容為止，不然讀到一半卡住就會一直等。
+        try {
+            text = await res.text();
+        } catch (e) {
+            if (e?.name === 'AbortError') throw new ApiError('timeout');
+            throw new ApiError('dropped', e?.message);
+        }
     } finally {
         clearTimeout(timer);
     }
-    const text = await res.text();
     if (!res.ok) throw new ApiError('http', errorDetail(text), res.status);
     try {
         return JSON.parse(text);

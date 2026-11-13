@@ -2508,7 +2508,7 @@ function overdueBar(pool, today) {
       </div>`;
 }
 
-const USAGE_ERRORS = ['empty', 'empty_notice', 'empty_length', 'timeout', 'http', 'network', 'parse', 'bad_response'];
+const USAGE_ERRORS = ['empty', 'empty_notice', 'empty_length', 'timeout', 'http', 'network', 'dropped', 'parse', 'bad_response'];
 
 /** 設定 › 調用紀錄（v0.13.14）：今天／7 天／30 天、各模型、各用途、最近幾次。 */
 function renderUsageSection() {

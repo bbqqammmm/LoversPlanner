@@ -9,6 +9,20 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.62',
+        fix: {
+            'zh-TW': [
+                '錯誤報告裡的「TypeError — Load failed」：回覆傳到一半連線斷了（iPhone 上切到別的 App、鎖螢幕、網路不穩常見）。以前直接失敗，現在會等 App 回到前景、隔兩秒自動再試一次，錯誤也改成看得懂的「連線中斷」。',
+            ],
+            'zh-CN': [
+                '错误报告里的「TypeError — Load failed」：回复传到一半连接断了（iPhone 上切到别的 App、锁屏、网络不稳常见）。以前直接失败，现在会等 App 回到前台、隔两秒自动再试一次，错误也改成看得懂的「连接中断」。',
+            ],
+            en: [
+                '"TypeError — Load failed" in error reports: the connection dropped while the reply was arriving (common on iPhone when switching apps, locking the screen or on a shaky network). It used to fail right away; now it waits until the app is back in front and retries once after two seconds, and the error reads "connection dropped".',
+            ],
+        },
+    },
+    {
         v: '0.13.61',
         new: {
             'zh-TW': [

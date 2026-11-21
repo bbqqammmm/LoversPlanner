@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.64',
+        new: {
+            'zh-TW': ['🏨 客人簿可以匯出／匯入欄位：改好的欄位按「📤 匯出欄位」複製成一段文字，貼給朋友；朋友按「📥 匯入欄位」貼上就有一樣的欄位（只有欄位，不帶客人資料，她原本的欄位也不會動）。'],
+            'zh-CN': ['🏨 客人簿可以导出／导入字段：改好的字段按「📤 导出字段」复制成一段文字，贴给朋友；朋友按「📥 导入字段」贴上就有一样的字段（只有字段，不带客人资料，她原本的字段也不会动）。'],
+            en: ['🏨 Guest book fields can be exported and imported: "📤 Export fields" copies them as text to send to a friend, who pastes it into "📥 Import fields" (fields only, no guest data; their existing fields stay as they are).'],
+        },
+    },
+    {
         v: '0.13.63',
         new: {
             'zh-TW': [

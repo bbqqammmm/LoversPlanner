@@ -63,8 +63,8 @@ import {
     notesOfType, onNotesChange, pinNoteManual, reopenNoteManual, resultLabel, typeFields, typeLabel, updateNoteManual,
 } from '../notes.js';
 import {
-    addGuestField, applyGuestTemplate, guestBook, guestFields, guestOn, guestSendActive, guestTitle, moveGuestField, removeGuestField,
-    setGuestBook, updateGuestField,
+    addGuestField, applyGuestTemplate, exportGuestBook, guestBook, guestFields, guestOn, guestSendActive, guestTitle, importGuestBook, moveGuestField,
+    removeGuestField, setGuestBook, updateGuestField,
 } from '../guests.js';
 import {
     CHAR_SCOPE_VALUES, CHAT_SCOPE_VALUES, characterKey, characterName, currentChatId, getCharacterScope, getChatScope, SCOPE_KINDS, setChatRenames,
@@ -138,6 +138,8 @@ let eggLast = 0;
 
 const view = {
     tab: 'summary',
+    // 🏨 客人簿的匯出／匯入欄位（v0.13.64）：mode 是 'export'／'import'／null。
+    guestIO: { mode: null, text: '', msg: '' },
     whatsNewAll: false, // 更新通知裡展開了全部更新紀錄
     openSections: new Set(['general']),
     notes: {
@@ -2552,7 +2554,7 @@ function guestSettings() {
     const head = `<div class="lp-track-group" data-role="guest-book"><span class="lp-label">${esc(t('guest.set.title'))}</span>
         <label class="lp-check"><input type="checkbox" data-guest="on"${on ? ' checked' : ''}><span>${esc(t('guest.set.on'))}</span></label></div>
         <div class="lp-note">${esc(t('guest.set.desc'))}</div>`;
-    if (!on) return head;
+    if (!on) return `${head}${guestIO(false)}`;
     const book = guestBook() ?? {};
     const rows = guestFields().map((f, i, list) => `
         <li class="lp-row lp-guest-field" data-guest-key="${esc(f.k)}">
@@ -2573,7 +2575,27 @@ function guestSettings() {
       <div class="lp-row">
         <button type="button" class="menu_button lp-btn lp-mini" data-action="guest-add-field">${esc(t('guest.set.add'))}</button>
         <button type="button" class="menu_button lp-btn lp-mini" data-action="guest-template">${esc(t('guest.set.template'))}</button>
-      </div>`;
+      </div>
+      ${guestIO(true)}`;
+}
+
+/** 📤 匯出欄位（複製成一段文字傳給朋友）／📥 匯入欄位（貼上朋友傳來的）。 */
+function guestIO(on) {
+    const io = view.guestIO;
+    const buttons = `<div class="lp-row" data-role="guest-io">
+        ${on ? `<button type="button" class="menu_button lp-btn lp-mini" data-action="guest-export">${esc(t('guest.io.export'))}</button>` : ''}
+        <button type="button" class="menu_button lp-btn lp-mini" data-action="guest-import-open">${esc(t('guest.io.import'))}</button></div>`;
+    const msg = io.msg ? `<div class="lp-note" role="status" data-role="guest-io-msg">${esc(io.msg)}</div>` : '';
+    if (io.mode === 'export') {
+        return `${buttons}<textarea class="text_pole lp-sum-editor" data-role="guest-export-text" readonly aria-label="${esc(t('guest.io.export'))}">${esc(io.text)}</textarea>${msg}
+          <div class="lp-row"><button type="button" class="menu_button lp-btn lp-mini" data-action="guest-io-close">${esc(t('extras.close'))}</button></div>`;
+    }
+    if (io.mode === 'import') {
+        return `${buttons}<textarea class="text_pole lp-sum-editor" data-role="guest-import-text" placeholder="${esc(t('guest.io.paste'))}" aria-label="${esc(t('guest.io.import'))}">${esc(io.text)}</textarea>${msg}
+          <div class="lp-row"><button type="button" class="menu_button lp-btn lp-primary" data-action="guest-import-do">${esc(t('guest.io.doImport'))}</button>
+          <button type="button" class="menu_button lp-btn" data-action="guest-io-close">${esc(t('act.cancel'))}</button></div>`;
+    }
+    return `${buttons}${msg}`;
 }
 
 /** 預定日期過了多少天以上，算「過期很久」。 */
@@ -4848,6 +4870,37 @@ function onClick(e) {
             addGuestField();
             render();
             panel.querySelector('[data-role="guest-fields"] li:last-child input')?.focus();
+            return;
+        case 'guest-export': {
+            const text = exportGuestBook();
+            view.guestIO = { mode: 'export', text, msg: '' };
+            copyReport(text).then((ok) => {
+                view.guestIO.msg = t(ok ? 'guest.io.copied' : 'guest.io.copyManual');
+                render();
+            });
+            render();
+            return;
+        }
+        case 'guest-import-open':
+            view.guestIO = { mode: 'import', text: '', msg: '' };
+            render();
+            panel.querySelector('[data-role="guest-import-text"]')?.focus();
+            return;
+        case 'guest-import-do': {
+            const text = panel.querySelector('[data-role="guest-import-text"]')?.value ?? '';
+            const r = importGuestBook(text);
+            if (r.ok) {
+                view.guestIO = { mode: null, text: '', msg: t('guest.io.done', { added: r.added, updated: r.updated }) };
+                invalidateNotes();
+            } else {
+                view.guestIO = { mode: 'import', text, msg: t(`guest.io.bad.${r.error}`) };
+            }
+            render();
+            return;
+        }
+        case 'guest-io-close':
+            view.guestIO = { mode: null, text: '', msg: '' };
+            render();
             return;
         case 'guest-template':
             applyGuestTemplate();

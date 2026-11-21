@@ -181,6 +181,35 @@ check('tab hidden when off', !tabs.includes('guests'), tabs);
 const rules = await page.evaluate(async () => (await import('/src/l1rules.js')).buildL1Parts({ length: 80, char: '沈言', user: '小雨' }).rules);
 check('no guest rule when off', !rules.includes('guest'));
 
+// 11. 匯出／匯入欄位：只有欄位；匯入時加上沒有的、同名的換說明，原本的欄位不動
+await page.evaluate(async () => (await import('/src/guests.js')).setGuestBook({ on: true }));
+const exported = await page.evaluate(async () => (await import('/src/guests.js')).exportGuestBook());
+check('export has fields only', exported.includes('lovers-planner-guestbook') && exported.includes('身分') && !exported.includes('鐵叔'), exported.slice(0, 120));
+// 換成「朋友的聊天」：她有自己的一個欄位、和一個同名但說明不同的欄位
+await page.evaluate(() => {
+  window.SillyTavern.getContext().chatMetadata.lovers_planner.guests = { on: false, title: '', sendActive: true,
+    fields: [{ k: 'g_mine', label: '身分', hint: '舊說明' }, { k: 'g_own', label: '我的欄位', hint: '' }] };
+});
+await closePanel();
+await openPanel('settings');
+await openTrack();
+await page.click('[data-action="guest-import-open"]');
+await page.fill('[data-role="guest-import-text"]', 'not json');
+await page.click('[data-action="guest-import-do"]');
+check('bad text explained, text kept', (await page.textContent('[data-role="guest-io-msg"]')).includes('讀不懂') && (await page.inputValue('[data-role="guest-import-text"]')) === 'not json');
+await page.fill('[data-role="guest-import-text"]', `朋友傳來的：${exported}`);
+await page.click('[data-action="guest-import-do"]');
+const after = await page.evaluate(async () => (await import('/src/guests.js')).guestBook());
+const labels = after.fields.filter((f) => !f.off).map((f) => f.label);
+check('import turns the book on and keeps own fields first', after.on && labels[0] === '身分' && labels[1] === '我的欄位', labels.join());
+check('import adds missing fields', labels.includes('同行') && labels.includes('印象') && !labels.includes('客房'), labels.join());
+check('same-name field gets the new hint, same key', after.fields.find((f) => f.k === 'g_mine').hint === '種族、職業、從哪裡來');
+check('import message', (await page.textContent('[data-role="guest-io-msg"]')).includes('匯入好了'));
+await page.click('[data-action="guest-export"]');
+await page.waitForSelector('[data-role="guest-export-text"]');
+check('export box shows the text', (await page.inputValue('[data-role="guest-export-text"]')).includes('我的欄位'));
+await page.screenshot({ path: `${OUT}/guests-3-io.png` });
+
 await browser.close();
 console.log(results.join('\n'));
 console.log('ERRORS:', errors.length ? errors.join('\n') : 'none');

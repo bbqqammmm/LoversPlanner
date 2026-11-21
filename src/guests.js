@@ -228,3 +228,64 @@ export function guestMentioned(note, text) {
     const head = name.split(/[·・\s]/)[0];
     return head.length >= 2 && head !== name && low.includes(head);
 }
+
+// ===== 匯出／匯入欄位（v0.13.64，使用者要求：改好的欄位想傳給朋友）=====
+// 只有欄位（名稱、說明）和客人簿的名字，不帶客人資料。是一段文字，貼到聊天軟體就能傳。
+const IO_KIND = 'lovers-planner-guestbook';
+
+/** 把這個聊天的欄位寫成一段文字。 */
+export function exportGuestBook() {
+    const book = guestBook() ?? {};
+    return JSON.stringify({
+        kind: IO_KIND, v: 1,
+        ...(book.title ? { title: book.title } : {}),
+        fields: guestFields().map((f) => (f.hint ? { label: f.label, hint: f.hint } : { label: f.label })),
+    });
+}
+
+/**
+ * 匯入別人傳來的欄位：還沒有的加上去，同名的換成對方的說明；原本的欄位和客人資料都不動。
+ * 以前刪掉（關掉）的同名欄位打開回來，舊資料接得上。客人簿還沒有名字時用對方的名字。
+ * 回傳 { ok, added, updated } 或 { ok: false, error: 'parse'|'kind'|'empty' }。
+ */
+export function importGuestBook(text) {
+    let raw = null;
+    const s = String(text ?? '');
+    try {
+        raw = JSON.parse(s.slice(s.indexOf('{'), s.lastIndexOf('}') + 1));
+    } catch (e) {
+        return { ok: false, error: 'parse' };
+    }
+    if (!raw || raw.kind !== IO_KIND || !Array.isArray(raw.fields)) return { ok: false, error: 'kind' };
+    const incoming = raw.fields.map((f) => ({ label: clip(f?.label, MAX_LABEL), hint: clip(f?.hint, MAX_HINT) })).filter((f) => f.label);
+    if (!incoming.length) return { ok: false, error: 'empty' };
+    const cur = guestBook() ?? { on: true, title: '', fields: [], sendActive: true };
+    const all = guestFields({ all: true }).map((f) => ({ ...f }));
+    const used = new Set(all.map((f) => f.k));
+    const same = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+    let added = 0;
+    let updated = 0;
+    for (const f of incoming) {
+        const live = all.find((x) => !x.off && same(x.label, f.label));
+        if (live) {
+            if (f.hint && f.hint !== live.hint) { live.hint = f.hint; updated++; }
+            continue;
+        }
+        if (all.filter((x) => !x.off).length >= MAX_FIELDS) break;
+        const old = all.find((x) => x.off && same(x.label, f.label));
+        if (old) {
+            old.off = false;
+            if (f.hint) old.hint = f.hint;
+        } else {
+            const k = newKey(used);
+            used.add(k);
+            all.push({ k, label: f.label, hint: f.hint });
+        }
+        added++;
+    }
+    // 開著的照匯入前的順序，新加的接在後面；關掉的放最後。
+    const next = { ...cur, on: true, fields: [...all.filter((f) => !f.off), ...all.filter((f) => f.off)] };
+    if (!cur.title && raw.title) next.title = clip(raw.title, 20);
+    store(next);
+    return { ok: true, added, updated };
+}

@@ -2,6 +2,7 @@
 
 import { ctx, MODULE } from './util.js';
 import { VERSION } from './version.js';
+import { guestOn } from './guests.js';
 
 export const VECTOR_URL = 'https://api.siliconflow.cn/v1';
 export const VECTOR_MODEL = 'BAAI/bge-m3';
@@ -182,6 +183,8 @@ export const NOTE_TYPE_KEYS = ['character', 'item', 'promise', 'todo'];
 
 /** 某一項有沒有勾選要記錄（time／location／cast／character／item／promise／todo）。 */
 export function isTracked(key) {
+    // 客人簿是每個聊天自己開的（guests.js），不在全域的記錄項目裡。
+    if (key === 'guest') return guestOn();
     return getSettings().track?.[key] !== false;
 }
 
@@ -197,7 +200,7 @@ export function charFields() {
 
 /** 有勾選的記事類型。 */
 export function trackedNoteTypes() {
-    return NOTE_TYPE_KEYS.filter(isTracked);
+    return [...NOTE_TYPE_KEYS.filter(isTracked), ...(guestOn() ? ['guest'] : [])];
 }
 
 /** 啟動時呼叫一次：補齊設定並寫回 extensionSettings。 */

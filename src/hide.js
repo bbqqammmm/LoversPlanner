@@ -8,7 +8,8 @@ import { ctx, LOG_PREFIX, MODULE, toast } from './util.js';
 import { getSettings, isTracked } from './settings.js';
 import { t } from './i18n.js';
 import { floorStatus, getChat, getEntry, isAiMessage, isHiddenBySelf, isUserMessage, lastAiIndex } from './chat.js';
-import { formatNotesForPrompt, getNotes, NOTE_TYPES } from './notes.js';
+import { formatNotesForPrompt, getNotes, NOTE_TYPES, noteLine } from './notes.js';
+import { guestMentioned, guestSendActive } from './guests.js';
 import { countTokens } from './llm.js';
 import { sceneLine } from './lines.js';
 import { enqueue, enqueueCompress, floorState, isActive, pendingCount, setHolding, waitForIdle } from './summarize.js';
@@ -142,6 +143,10 @@ export function injectionParts(hidden, selection = null) {
     const byType = {};
     for (const type of NOTE_TYPES) {
         if (!isTracked(type)) continue;
+        if (type === 'guest') {
+            byType.guest = guestInjection(notes, only);
+            continue;
+        }
         const list = [...notes.values()].filter((n) => n.type === type && n.state !== 'done');
         const count = only ? list.filter((n) => only.has(n.id)).length : list.length;
         byType[type] = { count, total: list.length, text: count ? formatNotesForPrompt(notes, { withIds: false, types: [type], only, emptyText: '', skipCard: true }) : '' };
@@ -173,6 +178,31 @@ export function injectionParts(hidden, selection = null) {
         memories: { count: memories.length, text: memories.map((m) => m.line).join('\n') },
         notes: byType,
     };
+}
+
+/** 最近幾層的原文（客人簿：離開了的客人又被提到時才送）。 */
+const GUEST_SCAN = 4;
+
+function recentText() {
+    const chat = getChat();
+    return chat.slice(-GUEST_SCAN).map((m) => m?.mes ?? '').join('\n');
+}
+
+/**
+ * 🏨 客人簿要送的：在住的（可以在設定關掉，卡自己有在住客人的就不用重複）＋已經離開、最近又被提到的
+ * （回頭客：上次住的經過一起送，角色才記得他）。
+ */
+function guestInjection(notes, only) {
+    const list = [...notes.values()].filter((n) => n.type === 'guest');
+    const active = list.filter((n) => n.state === 'active');
+    const sendActive = guestSendActive();
+    const picked = sendActive ? (only ? active.filter((n) => only.has(n.id)) : active) : [];
+    const text = recentText();
+    const back = list.filter((n) => n.state === 'done' && guestMentioned(n, text));
+    const lines = [];
+    if (picked.length) lines.push(formatNotesForPrompt(notes, { withIds: false, types: ['guest'], only: new Set(picked.map((n) => n.id)), emptyText: '', skipCard: true }));
+    for (const n of back) lines.push(`${noteLine(n)}｜${t('guest.leftTag', { n: n.visits ?? 1 })}${n.closedDetail ? `｜${n.closedDetail}` : ''}`);
+    return { count: picked.length + back.length, total: list.length, text: lines.join('\n') };
 }
 
 /** 注入的文字：前情摘要（依序）＋相關回憶＋記事。 */

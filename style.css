@@ -1758,3 +1758,12 @@ html.lp-techo-cloud.lp-theme-techo-blocks .lp-sum {
 .lp-rename-row { display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
 .lp-rename-row select { max-width: 100%; }
 .lp-rename-done .lp-row { gap: 8px; overflow-wrap: anywhere; align-items: center; flex-wrap: nowrap; margin: 0; }
+
+/* 🏨 客人簿（v0.13.63） */
+.lp-guest-fields { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-guest-field { flex-wrap: nowrap; gap: 6px; align-items: center; }
+.lp-guest-field .lp-btn { flex: none; }
+.lp-guest-field .text_pole { margin: 0; height: 2.2em; box-sizing: border-box; }
+.lp-guest-field .lp-guest-label { flex: 0 0 6em; width: 6em; min-width: 0; }
+.lp-guest-field .lp-grow { flex: 1 1 auto; min-width: 0; }
+.lp-guest-stays { margin: 4px 0 0; padding-left: 1.2em; }

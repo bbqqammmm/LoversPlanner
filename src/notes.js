@@ -11,8 +11,10 @@ import { CHARACTER_FIELDS, isTracked } from './settings.js';
 import { getChat, getEntry, isAiMessage, saveChatSoon } from './chat.js';
 import { normDate } from './calendar.js';
 import { noteDates, storyToday } from './notedates.js';
+import { GUEST_TITLE, guestData, guestFieldKeys, guestLabel } from './guests.js';
 
-export const NOTE_TYPES = ['character', 'item', 'promise', 'todo'];
+// guest：🏨 客人簿（v0.13.63），每個聊天自己開、欄位自己定（guests.js）。
+export const NOTE_TYPES = ['character', 'item', 'promise', 'todo', 'guest'];
 
 export const NOTE_FIELDS = {
     // relUser／relChar：和 {{user}}／{{char}} 的關係（v0.12.8，使用者要求的欄位；舊的 relation 見 LEGACY_FIELDS）。
@@ -24,14 +26,21 @@ export const NOTE_FIELDS = {
     todo: ['content', 'title', 'with', 'when', 'due'],
 };
 
-const ID_PREFIX = { character: 'c', item: 'i', promise: 'p', todo: 't' };
+const ID_PREFIX = { character: 'c', item: 'i', promise: 'p', todo: 't', guest: 'g' };
+
+/** 這一類記事要模型填、表單上顯示的欄位（客人的欄位是使用者自己定的）。 */
+export function typeFields(type) {
+    return type === 'guest' ? guestFieldKeys() : (NOTE_FIELDS[type] ?? []);
+}
 
 /** 舊版的欄位：資料還在就照樣顯示、可以編輯，但不再要求模型填。 */
 export const LEGACY_FIELDS = { character: ['relation'] };
 
 /** 這條記事要顯示／編輯的欄位：目前的欄位，加上它有資料的舊欄位（接在關係後面）。 */
 export function fieldsOf(note) {
-    const list = [...(NOTE_FIELDS[note.type] ?? [])];
+    const list = [...typeFields(note.type)];
+    // 客人：欄位關掉了，舊資料照樣顯示。
+    if (note.type === 'guest') for (const f of Object.keys(note.data ?? {})) if (!list.includes(f)) list.push(f);
     for (const f of LEGACY_FIELDS[note.type] ?? []) {
         if (note.data?.[f]) list.splice(Math.max(1, list.indexOf('relChar') + 1), 0, f);
     }
@@ -40,6 +49,7 @@ export function fieldsOf(note) {
 
 /** 欄位名稱（「和 小雨 的關係」要代入名字）。 */
 export function fieldLabel(type, f) {
+    if (type === 'guest') return guestLabel(f);
     const c = ctx();
     return t(`field.${type}.${f}`, { user: c?.name1 || '{{user}}', char: c?.name2 || '{{char}}' });
 }
@@ -51,9 +61,10 @@ export const DATE_FIELDS = new Set(['due']);
 export const NUMBER_FIELDS = new Set(['quantity']);
 
 /** 每種記事拿來當標題、也用來判斷「是不是同一條」的欄位。 */
-const TITLE_FIELD = { character: 'name', item: 'name', promise: 'content', todo: 'content' };
+const TITLE_FIELD = { character: 'name', item: 'name', promise: 'content', todo: 'content', guest: GUEST_TITLE };
 
-const RESULTS = ['done', 'kept', 'broken', 'used', 'lost', 'gone'];
+// left：客人離開了（客人簿）。
+const RESULTS = ['done', 'kept', 'broken', 'used', 'lost', 'gone', 'left'];
 const MAX_FIELD = 200;
 
 export function newNoteId(type) {
@@ -80,6 +91,16 @@ const MAX_DETAIL = 200;
 function cleanData(type, data) {
     const out = {};
     if (!data || typeof data !== 'object') return out;
+    // 客人：模型用欄位名稱當 key，換成內部的 key；關掉的欄位手動改還是可以（舊資料）。
+    if (type === 'guest') {
+        const src = guestData(data);
+        for (const [f, v] of Object.entries(src)) {
+            if (v === undefined || v === null) continue;
+            const str = String(v).trim().slice(0, MAX_FIELD);
+            if (str) out[f] = str;
+        }
+        return out;
+    }
     for (const f of [...(NOTE_FIELDS[type] ?? []), ...(LEGACY_FIELDS[type] ?? [])]) {
         const v = data[f];
         if (v === undefined || v === null) continue;
@@ -100,6 +121,13 @@ function findByTitle(state, type, title) {
         if (n.type !== type || !sameKey(noteTitle(n), title)) continue;
         if (type === 'character' || n.state !== 'done') return n;
     }
+    return null;
+}
+
+/** 已經離開的同名客人（客人簿：回頭客接回同一條）。 */
+function findGuestLeft(state, name) {
+    if (!name) return null;
+    for (const n of state.values()) if (n.type === 'guest' && n.state === 'done' && sameKey(noteTitle(n), name)) return n;
     return null;
 }
 
@@ -204,12 +232,15 @@ function applyOp(state, op, floor, stamp = 0) {
             if (!note) return false;
             const result = RESULTS.includes(op.result) ? op.result : 'done';
             if (note.type === 'character') return false; // 人物不會結束，只更新狀態
+            if (note.type === 'guest' && note.state !== 'active') return false;
             // detail：怎麼完成的（模型寫的，50～100 字）；closedDate：手動完成時的故事日期。
             const extra = {
                 closedDetail: op.detail ? String(op.detail).trim().slice(0, MAX_DETAIL) : null,
                 closedDate: op.closedDate ?? null,
             };
-            if (note.type === 'promise' && result === 'broken') {
+            if (note.type === 'guest') {
+                state.set(op.id, { ...note, ...extra, state: 'done', result: 'left', closedFloor: at, closedManual: floor === null });
+            } else if (note.type === 'promise' && result === 'broken') {
                 state.set(op.id, { ...note, ...extra, state: 'broken', result, closedFloor: at, closedManual: floor === null });
             } else {
                 state.set(op.id, { ...note, ...extra, state: 'done', result, closedFloor: at, closedManual: floor === null });
@@ -219,7 +250,14 @@ function applyOp(state, op, floor, stamp = 0) {
         case 'reopen': {
             const note = state.get(op.id);
             if (!note || note.state === 'active') return false;
-            state.set(op.id, { ...note, state: 'active', result: null, closedFloor: null, closedManual: false, closedDetail: null, closedDate: null });
+            // 客人又來了：上一次住的經過留在 stays，來訪次數 +1。
+            const visit = note.type === 'guest' ? {
+                stays: [...(note.stays ?? []), { from: note.visitFloor ?? note.createdFloor, to: note.closedFloor, detail: note.closedDetail ?? null, date: note.closedDate ?? null, data: { ...note.data } }],
+                visits: (note.visits ?? 1) + 1,
+                visitFloor: at,
+                updatedFloor: at ?? note.updatedFloor,
+            } : {};
+            state.set(op.id, { ...note, ...visit, state: 'active', result: null, closedFloor: null, closedManual: false, closedDetail: null, closedDate: null });
             return true;
         }
         case 'role': {
@@ -274,6 +312,16 @@ export function normalizeModelOps(rawOps, stateBefore, previousOps = [], { types
             // 沒勾選要記錄的類型不收。
             if (!types.includes(type)) continue;
             const data = cleanData(type, raw.data ?? raw);
+            // 以前離開的客人又來了：打開同一條（來訪次數 +1），再更新這次的欄位。
+            const back = type === 'guest' ? findGuestLeft(state, data[GUEST_TITLE]) : null;
+            if (back) {
+                const reopen = { op: 'reopen', id: back.id };
+                if (applyOp(state, reopen, 0)) out.push(reopen);
+                delete data[GUEST_TITLE];
+                const upd = Object.keys(data).length ? { op: 'update', id: back.id, data } : null;
+                if (upd && applyOp(state, upd, 0)) out.push(upd);
+                continue;
+            }
             const existing = findByTitle(state, type, data[TITLE_FIELD[type]]);
             if (existing) {
                 // 已經有同一條：改成更新，不重複新增。
@@ -287,7 +335,7 @@ export function normalizeModelOps(rawOps, stateBefore, previousOps = [], { types
             let note = state.get(String(raw.id ?? '').replace(/^\[|\]$/g, ''));
             if (!note) {
                 // 模型有時只寫名字不寫 id：用標題找找看。
-                const title = raw.data?.name ?? raw.data?.content ?? raw.name ?? raw.content;
+                const title = raw.data?.name ?? raw.data?.content ?? guestData(raw.data ?? {})[GUEST_TITLE] ?? raw.name ?? raw.content;
                 for (const type of NOTE_TYPES) {
                     note = findByTitle(state, type, title);
                     if (note) break;
@@ -301,7 +349,8 @@ export function normalizeModelOps(rawOps, stateBefore, previousOps = [], { types
                 op = { op: 'update', id: note.id, data };
             } else {
                 const detail = String(raw.detail ?? raw.note ?? raw.how ?? '').trim();
-                op = { op: 'complete', id: note.id, result: String(raw.result ?? 'done').toLowerCase(), ...(detail ? { detail: detail.slice(0, MAX_DETAIL) } : {}) };
+                const result = note.type === 'guest' ? 'left' : String(raw.result ?? 'done').toLowerCase();
+                op = { op: 'complete', id: note.id, result, ...(detail ? { detail: detail.slice(0, MAX_DETAIL) } : {}) };
             }
         }
         if (op && applyOp(state, op, 0)) out.push(op);
@@ -438,7 +487,8 @@ export function notesOfType(type, { states = ['active', 'broken'] } = {}) {
 }
 
 export function closedNotes() {
-    return [...getNotes().notes.values()].filter((n) => n.state === 'done' && isTracked(n.type));
+    // 客人離開了放在客人簿的「已離開」，不放進「已完成」分頁。
+    return [...getNotes().notes.values()].filter((n) => n.state === 'done' && n.type !== 'guest' && isTracked(n.type));
 }
 
 /** 一個變化屬於哪一類記事（新增的看 op.type，其他看它指向的記事；記事刪掉了就看以前知道的）。 */
@@ -705,6 +755,8 @@ export function describeOp(op, notes, known = getNotes().known) {
     const gone = !note ? ` ${t('changes.deleted')}` : '';
     const title = (op.op === 'add' ? (op.data?.title || op.data?.[TITLE_FIELD[op.type]] || '') : (note ? displayTitle(note) : info?.title) || op.id) + gone;
     if (op.op === 'add') return `＋ ${typeLabel(type)}：${title}`;
+    // 客人又來了（客人簿）。
+    if (op.op === 'reopen') return `↺ ${typeLabel(type)}：${title}（${t('guest.back')}）`;
     if (op.op === 'complete') {
         const sym = op.result === 'broken' ? '✗' : '✓';
         return `${sym} ${typeLabel(type)}：${title}（${resultLabel(op.result)}）`;

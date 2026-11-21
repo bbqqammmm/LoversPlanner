@@ -9,6 +9,20 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.63',
+        new: {
+            'zh-TW': [
+                '🏨 客人簿：玩經營類的卡（開酒館、開店…）時，上門的客人一人一條，住哪、點了什麼、付了多少、欠多少都自動記下來。客人走了放在「已離開」，再來時接回同一條、記得上次來的經過。欄位可以自己加、改名、排順序。每個聊天自己開：設定 › 記錄項目 › 客人簿。',
+            ],
+            'zh-CN': [
+                '🏨 客人簿：玩经营类的卡（开酒馆、开店…）时，上门的客人一人一条，住哪、点了什么、付了多少、欠多少都自动记下来。客人走了放在「已离开」，再来时接回同一条、记得上次来的经过。字段可以自己加、改名、排顺序。每个聊天自己开：设置 › 记录项目 › 客人簿。',
+            ],
+            en: [
+                '🏨 Guest book: for management cards (running a tavern, a shop…), each guest gets an entry with where they stay, what they ordered, paid and still owe, recorded automatically. Guests who leave move to "Left"; when they come back the same entry reopens with their earlier visits. Add, rename and reorder the fields yourself. Turn it on per chat: Settings › What to record › Guest book.',
+            ],
+        },
+    },
+    {
         v: '0.13.62',
         fix: {
             'zh-TW': [

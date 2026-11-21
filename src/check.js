@@ -15,7 +15,7 @@ import { errorText } from './errors.js';
 import { parseJsonLenient } from './json.js';
 import { cleanForSummary } from './filter.js';
 import { aiIndices, floorSource, getChat, getEntry } from './chat.js';
-import { completeNoteManual, deleteNoteManual, fieldLabel, getNotes, NOTE_FIELDS, noteTitle, updateNoteManual } from './notes.js';
+import { completeNoteManual, deleteNoteManual, fieldLabel, getNotes, noteTitle, typeFields, updateNoteManual } from './notes.js';
 import { compressionDue, digestLabel, structure } from './compress.js';
 import { enqueue, enqueueCompress, floorState, sideFloor, unsummarizedIndices } from './summarize.js';
 import { getCatchup, resumeCatchup } from './catchup.js';
@@ -139,7 +139,7 @@ export function mergeNotes(aId, bId) {
     const b = notes.get(bId);
     if (!a || !b) return false;
     const data = { ...a.data };
-    for (const f of NOTE_FIELDS[a.type]) if (!data[f] && b.data[f]) data[f] = b.data[f];
+    for (const f of typeFields(a.type)) if (!data[f] && b.data[f]) data[f] = b.data[f];
     updateNoteManual(aId, data);
     deleteNoteManual(bId);
     return true;

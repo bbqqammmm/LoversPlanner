@@ -6,6 +6,7 @@ import { charFields, getSettings, isTracked, trackedNoteTypes } from './settings
 import { NOTE_FIELDS } from './notes.js';
 import { ACTIVE_CAL_TYPES, calendarOn, calTracked, normDate } from './calendar.js';
 import { memoriesOn } from './memories.js';
+import { guestFields, guestTitle } from './guests.js';
 
 const TEXT = {
     'zh-TW': {
@@ -41,6 +42,9 @@ const TEXT = {
         item: 'item：只記 {char} 和 {user} 的所有物，其他人的東西不用記。一件東西一條，數量寫在 quantity（只寫數字）。在兩人之間轉手時用 update 改 holder；用掉一部分時用 update 改 quantity；全部用完、遺失、送給別人時用 complete，result 是 used／lost／gone。',
         promise: 'promise（約定）：說好、答應、承諾將來要做的具體的事，對象是另一個人。算：明確約好的（「週六一起看電影」）、答應對方的請求、隨口但認真的「下次帶你去…」。不算：這一層裡馬上就做完的事、玩笑、假設、只是想想的願望（願望記成 todo）。沒有具體要做什麼的承諾（例如「我會一直陪著你」）不記成約定；值得珍藏的話收進 keepsakes，寫清楚是在什麼情況下、為什麼說的。with 寫誰答應誰（例如「{char}答應{user}」）。',
         todo: 'todo（待辦）：主角自己打算做、還沒做、沒有和別人約好的事（例如「想偷偷準備生日驚喜」「打算週末大掃除」）。',
+        guest: 'guest（{title}）：上門的客人，一人一條（一起來的也各記一條）。data 的 key 用下面的欄位名稱，只寫有提到的：',
+        guestName: '名字：一個主要的名字',
+        guestMore: '客人走了用 complete，detail 寫這次來做了什麼、付清了沒（50～100 字）。以前走了的客人又來了，照樣用 add 同一個名字（會接回同一條）。客人記在 guest 就好，不用再記成 character，除非他和 {char}、{user} 有長期的關係。',
         noteTitle: 'promise 和 todo 都要有 title：15 字內、看得出是什麼事的短標題（例如「看電影＋宵夜」，不要寫「晚上的約定」）；content：具體寫要做什麼，有提到的話連時間、地點、怎麼做、誰負責都寫進去，照原文的關鍵細節，100 字內（✗「約好晚上要做事」 ✓「今晚回家後一起看電影，{char}負責煮宵夜」）。原文沒說清楚做什麼的照原文寫，不要自己補；之後說清楚了再用 update 補上 content 和 title。對話最後說好的事最容易漏，請特別看最後幾段。',
         promiseCheck: '每一層都對照清單裡進行中的 promise 和 todo：這一層真的做到了才 complete（promise 用 kept，todo 用 done），加上 detail 用 50～100 字寫怎麼做到的；只是提起、準備中、還沒做到的不要 complete；明確取消、做不到、被違背才 complete 加 broken（detail 寫怎麼被打破的）；改期就用 update 改 when。',
         both: '同一件事不要同時記成 promise 和 todo。',
@@ -99,6 +103,9 @@ const TEXT = {
         item: 'item：只记 {char} 和 {user} 的所有物，其他人的东西不用记。一件东西一条，数量写在 quantity（只写数字）。在两人之间转手时用 update 改 holder；用掉一部分时用 update 改 quantity；全部用完、遗失、送给别人时用 complete，result 是 used／lost／gone。',
         promise: 'promise（约定）：说好、答应、承诺将来要做的具体的事，对象是另一个人。算：明确约好的（「周六一起看电影」）、答应对方的请求、随口但认真的「下次带你去…」。不算：这一层里马上就做完的事、玩笑、假设、只是想想的愿望（愿望记成 todo）。没有具体要做什么的承诺（例如「我会一直陪着你」）不记成约定；值得珍藏的话收进 keepsakes，写清楚是在什么情况下、为什么说的。with 写谁答应谁（例如「{char}答应{user}」）。',
         todo: 'todo（待办）：主角自己打算做、还没做、没有和别人约好的事（例如「想偷偷准备生日惊喜」「打算周末大扫除」）。',
+        guest: 'guest（{title}）：上门的客人，一人一条（一起来的也各记一条）。data 的 key 用下面的字段名称，只写有提到的：',
+        guestName: '名字：一个主要的名字',
+        guestMore: '客人走了用 complete，detail 写这次来做了什么、付清了没（50～100 字）。以前走了的客人又来了，照样用 add 同一个名字（会接回同一条）。客人记在 guest 就好，不用再记成 character，除非他和 {char}、{user} 有长期的关系。',
         noteTitle: 'promise 和 todo 都要有 title：15 字内、看得出是什么事的短标题（例如「看电影＋宵夜」，不要写「晚上的约定」）；content：具体写要做什么，有提到的话连时间、地点、怎么做、谁负责都写进去，照原文的关键细节，100 字内（✗「约好晚上要做事」 ✓「今晚回家后一起看电影，{char}负责煮宵夜」）。原文没说清楚做什么的照原文写，不要自己补；之后说清楚了再用 update 补上 content 和 title。对话最后说好的事最容易漏，请特别看最后几段。',
         promiseCheck: '每一层都对照清单里进行中的 promise 和 todo：这一层真的做到了才 complete（promise 用 kept，todo 用 done），加上 detail 用 50～100 字写怎么做到的；只是提起、准备中、还没做到的不要 complete；明确取消、做不到、被违背才 complete 加 broken（detail 写怎么被打破的）；改期就用 update 改 when。',
         both: '同一件事不要同时记成 promise 和 todo。',
@@ -157,6 +164,9 @@ const TEXT = {
         item: 'item: only things owned by {char} or {user}; other people\'s belongings are not recorded. One entry per item, with the count in quantity (a number only). When it changes hands between them, update holder; when part of it is used, update quantity; when all used up, lost or given to someone else, use complete with result used / lost / gone.',
         promise: 'promise: something concrete that someone agreed, said yes to, or committed to doing later, with another person. Counts: clear plans ("movie together on Saturday"), saying yes to a request, a casual but sincere "I\'ll take you to … next time". Doesn\'t count: something done within this same floor, jokes, hypotheticals, mere wishes (a wish is a todo). A vow with nothing concrete to do (e.g. "I\'ll always be by your side") is not a promise; if it is worth treasuring, put it in keepsakes and say in what situation and why it was said. with says who promised whom (e.g. "{char} promised {user}").',
         todo: 'todo: something a lead plans to do, hasn\'t done yet, and hasn\'t arranged with anyone (e.g. "secretly plan a birthday surprise", "clean the house this weekend").',
+        guest: 'guest ({title}): a customer or visitor, one entry per person (people arriving together each get their own). In data, use the field names below as keys and only fill what was mentioned:',
+        guestName: 'name: one main name',
+        guestMore: 'When a guest leaves, use complete with a detail of what they did this visit and whether they paid up (50–100 words). If a guest who left before comes back, use add with the same name (it reopens the same entry). Guests only go in guest, not also in character, unless they have a lasting relationship with {char} or {user}.',
         noteTitle: 'Every promise and todo needs a title: a short label of at most 8 words that says what it is (e.g. "Movie + late-night snack", never "Tonight\'s plan"); content says concretely what will be done, including time, place, how, and who does what if mentioned, keeping the key details from the text, at most 50 words (✗ "agreed to do something tonight" ✓ "watch a movie together after getting home tonight; {char} makes a late-night snack"). If the text doesn\'t say what, write what it says and don\'t fill in; once the story makes it clear, update content and title. Plans made at the end of the conversation are the easiest to miss: read the last paragraphs carefully.',
         promiseCheck: 'Every floor, check the active promises and todos in the list: complete one only if it was actually done in this floor (kept for a promise, done for a todo), with detail of 50–100 words on how; if it was only mentioned, being prepared, or not done yet, don\'t complete it; use complete with broken only if it was clearly cancelled, impossible, or betrayed (detail says how); if it was rescheduled, update when.',
         both: 'Never record the same thing as both a promise and a todo.',
@@ -223,6 +233,13 @@ export function buildL1Parts({ length, char, user, chapter = false, previousDate
     if (types.length) {
         const sub = [fill(T.opsAdd, { types: types.join(T.sep) })];
         for (const type of types) {
+            if (type === 'guest') {
+                // 客人：欄位是使用者自己定的，用欄位名稱當 key（guests.js 會換回內部的 key）。
+                const name = T.guestName;
+                const fields = [`     · ${name}`, ...guestFields().map((f) => `     · ${f.label}${f.hint ? `：${f.hint}` : ''}`)];
+                sub.push([fill(T.guest, { ...vars, title: guestTitle() }), ...fields, `     ${fill(T.guestMore, vars)}`].join('\n'));
+                continue;
+            }
             if (type !== 'character') {
                 sub.push(fill(T[type], vars));
                 continue;
@@ -266,6 +283,10 @@ export function buildL1Parts({ length, char, user, chapter = false, previousDate
     if (types.length) {
         lines.push('  "summary": "…",', '  "ops": [');
         const ex = types.map((type) => {
+            if (type === 'guest') {
+                const keys = [T.guestName.split(/[：:]/)[0], ...guestFields().slice(0, 3).map((f) => f.label)];
+                return `    { "op": "add", "type": "guest", "data": { ${keys.map((k) => `"${k}": "…"`).join(', ')}${guestFields().length > 3 ? ', …' : ''} } }`;
+            }
             const fields = type === 'character' ? charFields() : NOTE_FIELDS[type].filter((f) => f !== 'due' || cal);
             const data = fields.map((f) => `"${f}": ${f === 'quantity' ? '1' : f === 'due' ? '"YYYY-MM-DD"' : '"…"'}`).join(', ');
             return `    { "op": "add", "type": "${type}", "data": { ${data} } }`;

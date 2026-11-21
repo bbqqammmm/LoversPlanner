@@ -58,20 +58,25 @@ import {
     periodStatus, removeEvent, restoreRemoved, shiftMonth, upcoming, weekdayName,
 } from '../calendar.js';
 import {
-    addNoteManual, changeQuantity, closedNotes, completeNoteManual, deleteNoteManual, getNotes, NOTE_FIELDS, NOTE_TYPES,
+    addNoteManual, changeQuantity, closedNotes, completeNoteManual, deleteNoteManual, getNotes, invalidateNotes, NOTE_FIELDS, NOTE_TYPES,
     DATE_FIELDS, displayTitle, fieldLabel, fieldsOf, keyField, leadRoles, noteTitle, notesWithoutTitle, NUMBER_FIELDS, setRoleManual,
-    notesOfType, onNotesChange, pinNoteManual, reopenNoteManual, resultLabel, typeLabel, updateNoteManual,
+    notesOfType, onNotesChange, pinNoteManual, reopenNoteManual, resultLabel, typeFields, typeLabel, updateNoteManual,
 } from '../notes.js';
+import {
+    addGuestField, applyGuestTemplate, guestBook, guestFields, guestOn, guestSendActive, guestTitle, moveGuestField, removeGuestField,
+    setGuestBook, updateGuestField,
+} from '../guests.js';
 import {
     CHAR_SCOPE_VALUES, CHAT_SCOPE_VALUES, characterKey, characterName, currentChatId, getCharacterScope, getChatScope, SCOPE_KINDS, setChatRenames,
 } from '../scope.js';
 
 // 「行事曆／約定」：行事曆和約定、待辦合成一個分頁（v0.12.9，使用者要求），分頁的 key 沿用 notes。
 // diary：📖 日記（v0.13.44 從摘要分頁搬出來，使用者要求）：舊聊天整理＋日記。
-const TABS = ['summary', 'characters', 'items', 'notes', 'memories', 'diary', 'done', 'settings'];
+// guests：🏨 客人簿（v0.13.63），每個聊天自己開。
+const TABS = ['summary', 'characters', 'items', 'guests', 'notes', 'memories', 'diary', 'done', 'settings'];
 
 /** 每個分頁放哪些記事類型（記事分頁＝約定＋待辦）。 */
-const TAB_TYPES = { characters: ['character'], items: ['item'], notes: ['promise', 'todo'] };
+const TAB_TYPES = { characters: ['character'], items: ['item'], guests: ['guest'], notes: ['promise', 'todo'] };
 
 /** 目前看得到的分頁：沒勾選記錄的類型，對應的分頁就不顯示。 */
 function visibleTabs() {
@@ -161,7 +166,7 @@ const view = {
         rangeOpen: false,
     },
     // 各分頁的篩選字串，以及總搜尋。
-    query: { summary: '', characters: '', items: '', notes: '', done: '', memories: '' },
+    query: { summary: '', characters: '', items: '', guests: '', notes: '', done: '', memories: '' },
     global: { open: false, query: '' },
     focusKey: null, // 重畫後捲到這個項目（總搜尋點結果時用）
     tpl: 'l1',
@@ -466,7 +471,7 @@ function renderTabs() {
     const items = visibleTabs().map((tab) => {
         // 總搜尋開著時，沒有分頁是「目前的」。
         const on = view.tab === tab && !view.global.open;
-        return `<button type="button" role="tab" class="lp-tab${on ? ' lp-on' : ''}" aria-selected="${on}" data-action="tab" data-tab="${tab}">${esc(t(`tab.${tab}`))}</button>`;
+        return `<button type="button" role="tab" class="lp-tab${on ? ' lp-on' : ''}" aria-selected="${on}" data-action="tab" data-tab="${tab}">${esc(tab === 'guests' ? guestTitle() : t(`tab.${tab}`))}</button>`;
     }).join('');
     return `<div class="lp-tabs" role="tablist">${items}</div>`;
 }
@@ -540,6 +545,7 @@ function renderTab() {
         case 'characters':
         case 'items':
             return renderNotesTab(TAB_TYPES[view.tab].filter(isTracked));
+        case 'guests': return renderGuestsTab();
         case 'notes':
             // 月曆在最上面，下面是約定、待辦。
             return `${calendarOn() ? renderCalendarTab() : ''}${renderNotesTab(TAB_TYPES.notes.filter(isTracked))}`;
@@ -2226,7 +2232,12 @@ onStatsChange(() => {
 // ===== 記事分頁 =====
 
 const SECTION_HINT = { character: 'notes.characterHint', promise: 'notes.promiseHint' };
-const KIND_KEY = { character: 'characters', item: 'items', promise: 'promises', todo: 'todos' };
+const KIND_KEY = { character: 'characters', item: 'items', promise: 'promises', todo: 'todos', guest: 'guests' };
+
+/** 一類記事的名稱（客人簿用使用者取的名字）。 */
+function kindLabel(type) {
+    return type === 'guest' ? guestTitle() : t(`kind.${KIND_KEY[type]}`);
+}
 
 function floorLink(index, key) {
     return `<button type="button" class="lp-link" data-action="note-jump" data-index="${index}">${esc(t(key, { n: index }))}</button>`;
@@ -2244,7 +2255,7 @@ function noteTrace(note) {
 }
 
 function noteForm(type, data, { id = null } = {}) {
-    const fields = (id ? fieldsOf({ type, data }) : NOTE_FIELDS[type]).map((f, i) => {
+    const fields = (id ? fieldsOf({ type, data }) : typeFields(type)).map((f, i) => {
         const num = NUMBER_FIELDS.has(f);
         const attrs = num ? 'type="number" min="0" step="1" inputmode="numeric"' : DATE_FIELDS.has(f) ? 'type="date"' : 'type="text"';
         return `
@@ -2284,6 +2295,7 @@ function noteActions(note, roles = null) {
         }
     }
     if (note.type === 'item') out.push(btn('note-complete', 'notes.act.used', ' data-result="used"'));
+    if (note.type === 'guest') out.push(note.state === 'active' ? btn('note-complete', 'guest.act.leave', ' data-result="left"') : btn('note-reopen', 'guest.act.back'));
     if (note.type === 'todo') out.push(btn('note-complete', 'notes.act.done', ' data-result="done"'));
     if (note.type === 'promise' && note.state === 'active') {
         out.push(btn('note-complete', 'notes.act.kept', ' data-result="kept"'));
@@ -2336,6 +2348,8 @@ function noteSub(note) {
     if (note.type === 'item') return d.holder ?? '';
     if (note.type === 'promise') return [d.with, d.when].filter(Boolean).join(' · ');
     if (note.type === 'todo') return d.when ?? '';
+    // 客人：前兩個有寫的欄位（例如身分、房間）。
+    if (note.type === 'guest') return fieldsOf(note).filter((f) => f !== keyField('guest') && d[f]).slice(0, 2).map((f) => d[f]).join(' · ');
     return '';
 }
 
@@ -2353,7 +2367,7 @@ function noteCard(note, query = '', today = null, roles = null) {
         <button type="button" class="lp-row-head" data-action="fold" data-key="${esc(key)}" aria-expanded="${open}">
           <span class="lp-sum-chev" aria-hidden="true">${open ? '▾' : '▸'}</span>
           <span class="lp-note-title">${hl(displayTitle(note), query)}</span>
-          ${note.pinned ? `<span class="lp-pin-tag" title="${esc(t('notes.pinned'))}" aria-label="${esc(t('notes.pinned'))}">📌</span>` : ''}${roleTag}${qtyTag}${broken}${dueTag(note, today)}
+          ${note.pinned ? `<span class="lp-pin-tag" title="${esc(t('notes.pinned'))}" aria-label="${esc(t('notes.pinned'))}">📌</span>` : ''}${roleTag}${qtyTag}${broken}${dueTag(note, today)}${note.type === 'guest' && (note.visits ?? 1) > 1 ? `<span class="lp-badge">${esc(t('guest.visits', { n: note.visits }))}</span>` : ''}
           ${!open && sub ? `<span class="lp-row-preview">${hl(sub, query)}</span>` : ''}
         </button>`;
     if (!open) return `<div class="lp-note-card lp-folded${note.state === 'broken' ? ' lp-note-broken' : ''}" data-fold-key="${esc(key)}">${head}</div>`;
@@ -2376,6 +2390,7 @@ function noteCard(note, query = '', today = null, roles = null) {
         ${head}
         ${qty}
         ${lines}
+        ${note.type === 'guest' ? guestHistory(note, query) : ''}
         ${datesLine(note, today)}
         ${noteTrace(note)}
         ${noteActions(note, roles)}
@@ -2442,7 +2457,7 @@ function renderNotesTab(types = NOTE_TYPES) {
             <div class="lp-row lp-sec-head">
               <button type="button" class="lp-sec-toggle" data-action="fold-sec" data-key="${secKey}" aria-expanded="${open}">
                 <span class="lp-sum-chev" aria-hidden="true">${open ? '▾' : '▸'}</span>
-                <span class="lp-scope-title">${esc(t(`kind.${KIND_KEY[type]}`))}</span>
+                <span class="lp-scope-title">${esc(kindLabel(type))}</span>
                 <span class="lp-note">${esc(count)}</span>
               </button>
               ${open && hint ? hint.replace('class="lp-note"', 'class="lp-note lp-sec-hint-text"') : ''}
@@ -2472,6 +2487,93 @@ function renderNotesTab(types = NOTE_TYPES) {
         <label class="lp-label" for="lp-note-sort">${esc(t('notes.sort'))}</label>
         <select id="lp-note-sort" class="text_pole lp-select" data-role="note-sort">${['due', 'newest', 'oldest'].map((k) => `<option value="${k}"${view.notes.sort === k ? ' selected' : ''}>${esc(t(`notes.sort.${k}`))}</option>`).join('')}</select></div>` : '';
     return `${searchBox(view.tab)}${sort}${dated ? titlesBar() : ''}${dated ? overdueBar(pool, today) : ''}${empty}${none}<div class="lp-notes-stack">${sections}</div>`;
+}
+
+// ===== 🏨 客人簿（v0.13.63） =====
+
+/** 客人卡片點開後：這次離開時寫的經過、以前來過的每一次。 */
+function guestHistory(note, query) {
+    const out = [];
+    if (note.state !== 'active' && note.closedDetail) {
+        out.push(`<div class="lp-note-line"><span class="lp-label">${esc(t('guest.lastStay'))}</span> ${hl(note.closedDetail, query)}</div>`);
+    }
+    const stays = note.stays ?? [];
+    if (stays.length) {
+        const rows = stays.map((x, i) => {
+            const where = [x.from, x.to].filter((n) => Number.isInteger(n)).map((n) => `#${n}`).join('–');
+            return `<li>${esc(t('guest.stayN', { n: i + 1 }))}${where ? ` <span class="lp-note">${esc(where)}</span>` : ''}${x.detail ? `：${hl(x.detail, query)}` : ''}</li>`;
+        }).join('');
+        out.push(`<div class="lp-note-line"><span class="lp-label">${esc(t('guest.pastStays'))}</span><ul class="lp-guest-stays">${rows}</ul></div>`);
+    }
+    return out.join('');
+}
+
+/** 最近有動靜的在前面（離開的看哪一層走的）。 */
+function guestOrder(a, b) {
+    const at = (n) => (n.state === 'active' ? (n.visitFloor ?? n.updatedFloor ?? n.createdFloor) : n.closedFloor) ?? -1;
+    return at(b) - at(a);
+}
+
+function renderGuestsTab() {
+    if (!isActive()) return '';
+    const query = view.query.guests ?? '';
+    const all = [...getNotes().notes.values()].filter((n) => n.type === 'guest');
+    const pick = (list) => (query ? list.filter((n) => matches(noteText(n), query)) : list);
+    const here = pick(all.filter((n) => n.state === 'active').sort(guestOrder));
+    const gone = pick(all.filter((n) => n.state !== 'active').sort(guestOrder));
+    const adding = view.notes.adding === 'guest' ? noteForm('guest', {}) : '';
+    const section = (key, title, list, extra = '') => {
+        const secKey = `sec:guest:${key}`;
+        const open = isSectionOpen(secKey) || Boolean(query) || (key === 'here' && Boolean(adding));
+        return `
+          <section class="lp-note-section" data-role="guests-${key}">
+            <div class="lp-row lp-sec-head">
+              <button type="button" class="lp-sec-toggle" data-action="fold-sec" data-key="${secKey}" aria-expanded="${open}">
+                <span class="lp-sum-chev" aria-hidden="true">${open ? '▾' : '▸'}</span>
+                <span class="lp-scope-title">${esc(title)}</span>
+                <span class="lp-note">${esc(t('notes.count', { n: list.length }))}</span>
+              </button>
+              <span class="lp-spacer"></span>${extra}
+            </div>
+            ${key === 'here' ? adding : ''}
+            ${open ? `<div class="lp-card-grid">${list.map((n) => noteCard(n, query)).join('')}</div>` : ''}
+          </section>`;
+    };
+    const add = `<button type="button" class="menu_button lp-btn lp-mini" data-action="note-add" data-type="guest">${esc(t('notes.add'))}</button>`;
+    const noFields = !guestFields().length ? `<div class="lp-callout">${esc(t('guest.noFields'))}</div>` : '';
+    const empty = !all.length && !adding ? `<div class="lp-wip">${esc(t('guest.empty'))}</div>` : '';
+    return `${searchBox('guests')}${noFields}${empty}<div class="lp-notes-stack">${section('here', t('guest.here'), here, add)}${section('gone', t('guest.gone'), gone)}</div>`;
+}
+
+/** 設定 › 記錄項目：🏨 客人簿（只有這個聊天）。 */
+function guestSettings() {
+    if (!hasCharacterChat()) return '';
+    const on = guestOn();
+    const head = `<div class="lp-track-group" data-role="guest-book"><span class="lp-label">${esc(t('guest.set.title'))}</span>
+        <label class="lp-check"><input type="checkbox" data-guest="on"${on ? ' checked' : ''}><span>${esc(t('guest.set.on'))}</span></label></div>
+        <div class="lp-note">${esc(t('guest.set.desc'))}</div>`;
+    if (!on) return head;
+    const book = guestBook() ?? {};
+    const rows = guestFields().map((f, i, list) => `
+        <li class="lp-row lp-guest-field" data-guest-key="${esc(f.k)}">
+          <input type="text" class="text_pole lp-guest-label" data-guest-field="label" data-k="${esc(f.k)}" value="${esc(f.label)}" maxlength="12" aria-label="${esc(t('guest.set.fieldName'))}">
+          <input type="text" class="text_pole lp-grow" data-guest-field="hint" data-k="${esc(f.k)}" value="${esc(f.hint ?? '')}" maxlength="60" placeholder="${esc(t('guest.set.hintPh'))}" aria-label="${esc(t('guest.set.fieldHint'))}">
+          <button type="button" class="menu_button lp-btn lp-mini" data-action="guest-move" data-k="${esc(f.k)}" data-delta="-1"${i === 0 ? ' disabled' : ''} aria-label="${esc(t('guest.set.up'))}">↑</button>
+          <button type="button" class="menu_button lp-btn lp-mini" data-action="guest-move" data-k="${esc(f.k)}" data-delta="1"${i === list.length - 1 ? ' disabled' : ''} aria-label="${esc(t('guest.set.down'))}">↓</button>
+          <button type="button" class="menu_button lp-btn lp-mini lp-danger" data-action="guest-del" data-k="${esc(f.k)}" aria-label="${esc(t('guest.set.del'))}">✕</button>
+        </li>`).join('');
+    return `${head}
+      <label class="lp-field"><span class="lp-label">${esc(t('guest.set.name'))}</span>
+        <input type="text" class="text_pole" data-guest="title" value="${esc(book.title ?? '')}" maxlength="20" placeholder="${esc(t('tab.guests'))}"></label>
+      <label class="lp-check"><input type="checkbox" data-guest="sendActive"${guestSendActive() ? ' checked' : ''}><span>${esc(t('guest.set.sendActive'))}</span></label>
+      <div class="lp-note">${esc(t('guest.set.sendActive.note'))}</div>
+      <div class="lp-label">${esc(t('guest.set.fields'))}</div>
+      <div class="lp-note">${esc(t('guest.set.fields.note'))}</div>
+      <ul class="lp-guest-fields" data-role="guest-fields">${rows}</ul>
+      <div class="lp-row">
+        <button type="button" class="menu_button lp-btn lp-mini" data-action="guest-add-field">${esc(t('guest.set.add'))}</button>
+        <button type="button" class="menu_button lp-btn lp-mini" data-action="guest-template">${esc(t('guest.set.template'))}</button>
+      </div>`;
 }
 
 /** 預定日期過了多少天以上，算「過期很久」。 */
@@ -2858,13 +2960,13 @@ function renderGlobalSearch() {
         .filter((i) => getEntry(i)?.summary && matches(floorText(i), query))
         .map((i) => resultButton({ tab: 'summary', key: floorKey(i), title: `#${i}`, sub: getEntry(i).summary, query }));
     groups.push(resultGroup(t('search.groupFloors'), floors));
-    const tabOf = { character: 'characters', item: 'items', promise: 'notes', todo: 'notes' };
+    const tabOf = { character: 'characters', item: 'items', guest: 'guests', promise: 'notes', todo: 'notes' };
     for (const type of NOTE_TYPES) {
         if (!isTracked(type)) continue;
         const items = notesOfType(type)
             .filter((n) => matches(noteText(n), query))
             .map((n) => resultButton({ tab: tabOf[type], key: `note:${n.id}`, title: displayTitle(n), sub: matchedFields(n, query) || noteSub(n), query }));
-        groups.push(resultGroup(t(`kind.${KIND_KEY[type]}`), items));
+        groups.push(resultGroup(kindLabel(type), items));
     }
     const done = closedNotes()
         .filter((n) => matches(noteText(n), query))
@@ -2876,7 +2978,7 @@ function renderGlobalSearch() {
 
 /** 總搜尋結果的副標：列出哪些欄位符合（標題本身符合的不重複列）。 */
 function matchedFields(note, query) {
-    const titleField = NOTE_FIELDS[note.type][0];
+    const titleField = keyField(note.type);
     return fieldsOf(note)
         .filter((f) => f !== titleField && note.data[f] && terms(query).some((x) => String(note.data[f]).toLowerCase().includes(x)))
         .map((f) => `${fieldLabel(note.type, f)}：${note.data[f]}`)
@@ -3173,7 +3275,8 @@ function renderSettings() {
       <div class="lp-track-group"><span class="lp-label">${esc(t('set.track.scene'))}</span>${['time', 'location', 'cast'].map(trackItem).join('')}</div>
       <div class="lp-track-group"><span class="lp-label">${esc(t('set.track.notes'))}</span>${['character', 'item', 'promise', 'todo'].map(trackItem).join('')}</div>
       ${isTracked('character') ? `<div class="lp-track-group" data-role="char-fields"><span class="lp-label">${esc(t('set.track.charFields'))}</span>${CHARACTER_FIELDS.filter((f) => f !== 'name').map((f) => checkbox(`track.fields.${f}`, fieldLabel('character', f))).join('')}</div>
-      <div class="lp-note">${esc(t('set.track.charFields.note'))}</div>` : ''}`;
+      <div class="lp-note">${esc(t('set.track.charFields.note'))}</div>` : ''}
+      ${guestSettings()}`;
 
     const c = s.calendar;
     const calendar = `
@@ -4731,6 +4834,25 @@ function onClick(e) {
             deleteNoteManual(btn.dataset.id);
             render();
             return;
+        case 'guest-move':
+            moveGuestField(btn.dataset.k, Number(btn.dataset.delta));
+            invalidateNotes();
+            render();
+            return;
+        case 'guest-del':
+            removeGuestField(btn.dataset.k);
+            invalidateNotes();
+            render();
+            return;
+        case 'guest-add-field':
+            addGuestField();
+            render();
+            panel.querySelector('[data-role="guest-fields"] li:last-child input')?.focus();
+            return;
+        case 'guest-template':
+            applyGuestTemplate();
+            render();
+            return;
         case 'note-qty':
             changeQuantity(btn.dataset.id, Number(btn.dataset.delta));
             render();
@@ -4787,6 +4909,20 @@ function onSummaryAction(index, act) {
 
 function onChange(e) {
     const el = e.target;
+    // 🏨 客人簿的設定（存在這個聊天裡）。
+    if (el.dataset?.guest) {
+        const key = el.dataset.guest;
+        setGuestBook({ [key]: el.type === 'checkbox' ? el.checked : el.value });
+        invalidateNotes();
+        render();
+        return;
+    }
+    if (el.dataset?.guestField) {
+        updateGuestField(el.dataset.k, { [el.dataset.guestField]: el.value });
+        invalidateNotes();
+        render();
+        return;
+    }
     if (el.dataset?.scope) {
         if (!el.checked) return;
         if (el.dataset.scope === 'char') changeCharacterScope(el.dataset.kind, el.value);
@@ -5059,8 +5195,8 @@ async function fillPreview() {
     const sel = p.selection;
     for (const [type, info] of Object.entries(p.parts.notes)) {
         const label = sel?.filtered
-            ? t('preview.notesOf', { kind: t(`kind.${KIND_KEY[type]}`), n: info.count, total: info.total })
-            : t('preview.notes', { kind: t(`kind.${KIND_KEY[type]}`), n: info.count });
+            ? t('preview.notesOf', { kind: kindLabel(type), n: info.count, total: info.total })
+            : t('preview.notes', { kind: kindLabel(type), n: info.count });
         rows.push(row(label, `${n(p.tokens[type])} tokens`));
     }
     rows.push(row(t('preview.total'), `${n(p.tokens.total)} tokens`, ' lp-preview-total'));

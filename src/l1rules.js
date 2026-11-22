@@ -60,7 +60,7 @@ const TEXT = {
         events: 'events：這一層和行事曆有關的事（陣列，沒有就是空陣列）：',
         evPlan: 'plan：約好或安排在某一天要做的事。date 是那一天（YYYY-MM-DD），title 簡短寫要做什麼。',
         evPeriod: 'period：{user} 的生理期。只有劇情明確提到才記（來了、開始、結束了），不要自己推測。開始用 state: "start"，結束用 state: "end"。',
-        evIntimacy: 'intimacy：{char} 和 {user} 親熱（發生性行為），count 是這一層發生幾次。同一場分好幾層寫時，接著寫的那幾層照樣回報、count 寫 1（手帳會把連續的幾層合成一次）。',
+        evIntimacy: 'intimacy：{char} 和 {user} 親熱（發生性行為），每一層照實回報 state：還在親熱、男方還沒高潮寫 ongoing（不算次數）；男方高潮了寫 done，count 是這一層男方高潮幾次；沒高潮就結束了（被打斷、停下來）寫 stopped。一天可以有好幾場。',
         evAnniversary: 'anniversary：紀念日或生日（每年重複），date 寫 MM-DD，title 寫是什麼日子（例如「小雨的生日」）。',
         keepsakes: 'keepsakes：真正值得珍藏、以後兩人可能會一起回想的時刻（第一次做某件事、告白、和好、很甜或很重要的對話、特別的約定或禮物）。大部分樓層沒有，寧缺勿濫，沒有就是空陣列。title 不超過 15 字；content 用一兩句寫清楚發生了什麼、說了什麼關鍵的話。',
         keepsakesTheater: '「小劇場」是番外，不是正劇：不要寫進 summary 和 ops；但裡面有意義的時刻可以收進 keepsakes，加上 "from": "theater"。',
@@ -121,7 +121,7 @@ const TEXT = {
         events: 'events：这一层和行事历有关的事（数组，没有就是空数组）：',
         evPlan: 'plan：约好或安排在某一天要做的事。date 是那一天（YYYY-MM-DD），title 简短写要做什么。',
         evPeriod: 'period：{user} 的生理期。只有剧情明确提到才记（来了、开始、结束了），不要自己推测。开始用 state: "start"，结束用 state: "end"。',
-        evIntimacy: 'intimacy：{char} 和 {user} 亲热（发生性行为），count 是这一层发生几次。同一场分好几层写时，接着写的那几层照样回报、count 写 1（手帐会把连续的几层合成一次）。',
+        evIntimacy: 'intimacy：{char} 和 {user} 亲热（发生性行为），每一层照实回报 state：还在亲热、男方还没高潮写 ongoing（不算次数）；男方高潮了写 done，count 是这一层男方高潮几次；没高潮就结束了（被打断、停下来）写 stopped。一天可以有好几场。',
         evAnniversary: 'anniversary：纪念日或生日（每年重复），date 写 MM-DD，title 写是什么日子（例如「小雨的生日」）。',
         keepsakes: 'keepsakes：真正值得珍藏、以后两人可能会一起回想的时刻（第一次做某件事、告白、和好、很甜或很重要的对话、特别的约定或礼物）。大部分楼层没有，宁缺毋滥，没有就是空数组。title 不超过 15 字；content 用一两句写清楚发生了什么、说了什么关键的话。',
         keepsakesTheater: '「小剧场」是番外，不是正剧：不要写进 summary 和 ops；但里面有意义的时刻可以收进 keepsakes，加上 "from": "theater"。',
@@ -182,7 +182,7 @@ const TEXT = {
         events: 'events: calendar-related things in this floor (array; empty if none):',
         evPlan: 'plan: something arranged for a particular day. date is that day (YYYY-MM-DD); title says briefly what.',
         evPeriod: 'period: {user}\'s menstrual period. Record it only when the story clearly mentions it (it started, it ended); never guess. Use state: "start" when it begins and state: "end" when it ends.',
-        evIntimacy: 'intimacy: {char} and {user} being intimate (having sex); count is how many times in this floor. When one scene spans several floors, keep reporting it on each with count 1 (consecutive floors are merged into one).',
+        evIntimacy: 'intimacy: {char} and {user} being intimate (having sex). Report state on every floor: still going and the man has not climaxed yet → ongoing (not counted); the man climaxed → done, with count = how many times he climaxed in this floor; it ended without that (interrupted, stopped) → stopped. There can be several scenes a day.',
         evAnniversary: 'anniversary: an anniversary or birthday (repeats every year); date as MM-DD, title says what day it is (e.g. "Xiaoyu\'s birthday").',
         keepsakes: 'keepsakes: moments truly worth treasuring that the two might look back on later (a first time, a confession, making up, a very sweet or important conversation, a special promise or gift). Most floors have none; less is more; leave it as an empty array if none. title at most 8 words; content in one or two sentences says what happened and the key words said.',
         keepsakesTheater: 'The "side scene" is an extra, not the main story: keep it out of summary and ops, but meaningful moments from it may go into keepsakes with "from": "theater".',
@@ -275,7 +275,7 @@ export function buildL1Parts({ length, char, user, chapter = false, previousDate
     if (isTracked('cast')) lines.push('  "characters": ["…"],');
     if (cal) lines.push('  "date": "YYYY-MM-DD",');
     if (evTypes.length) {
-        const ex = { plan: '{ "type": "plan", "date": "YYYY-MM-DD", "title": "…" }', period: '{ "type": "period", "state": "start" }', intimacy: '{ "type": "intimacy", "count": 1 }', anniversary: '{ "type": "anniversary", "date": "MM-DD", "title": "…" }' };
+        const ex = { plan: '{ "type": "plan", "date": "YYYY-MM-DD", "title": "…" }', period: '{ "type": "period", "state": "start" }', intimacy: '{ "type": "intimacy", "state": "ongoing|done|stopped", "count": 1 }', anniversary: '{ "type": "anniversary", "date": "MM-DD", "title": "…" }' };
         lines.push(`  "events": [${evTypes.map((x) => ex[x]).join(', ')}],`);
     }
     if (keep) lines.push('  "keepsakes": [{ "title": "…", "content": "…" }],');

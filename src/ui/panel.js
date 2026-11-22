@@ -975,6 +975,8 @@ function renderCalendarTab() {
         if (info.period) marks.push(`<span class="lp-cal-mark${info.period === 'predicted' ? ' lp-cal-pred' : ''}" aria-hidden="true">🩸</span>`);
         if (info.fertile) marks.push('<span class="lp-cal-mark lp-cal-pred" aria-hidden="true">🌸</span>');
         if (info.intimacy) marks.push(`<span class="lp-cal-mark" aria-hidden="true">💕${info.intimacy > 1 ? info.intimacy : ''}</span>`);
+        else if (info.intimacyOngoing) marks.push(`<span class="lp-cal-mark" aria-hidden="true">💕…</span>`);
+        else if (info.intimacyStopped) marks.push(`<span class="lp-cal-mark" aria-hidden="true">🤍</span>`);
         if (info.plans.length) marks.push('<span class="lp-cal-mark" aria-hidden="true">📌</span>');
         if (info.anniversaries.length) marks.push('<span class="lp-cal-mark" aria-hidden="true">🎂</span>');
         // 這天預定要做的約定／待辦（進行中的）。

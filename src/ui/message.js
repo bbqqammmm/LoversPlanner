@@ -203,7 +203,10 @@ export function eventLabel(ev) {
     switch (ev.type) {
         case 'plan': return `📌 ${ev.date ? `${ev.date.slice(5)} ` : ''}${ev.title}`;
         case 'period': return `🩸 ${t(ev.state === 'end' ? 'cal.periodEnd' : 'cal.periodStart')}`;
-        case 'intimacy': return `💕 ${t('cal.intimacyN', { n: ev.count ?? 1 })}`;
+        case 'intimacy':
+            if (ev.state === 'ongoing') return `💕 ${t('cal.intimacyOngoing')}`;
+            if (ev.state === 'stopped') return `🤍 ${t('cal.intimacyStopped')}`;
+            return `💕 ${t('cal.intimacyN', { n: ev.count ?? 1 })}`;
         case 'anniversary': return `🎂 ${ev.date} ${ev.title}`;
         default: return '';
     }

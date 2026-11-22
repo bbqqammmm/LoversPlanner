@@ -51,9 +51,58 @@ await page.evaluate(async (key) => (await import('/src/calendar.js')).removeEven
 d2 = await day('2025-03-02');
 check('removing a merged scene removes all its floors', d2.items.length === 1 && d2.items[0].floors.join() === '10' && d2.n === 1, JSON.stringify(d2.items));
 
-// 提示詞說明連續的幾層會合成一次
-const rules = await page.evaluate(async () => (await import('/src/l1rules.js')).buildL1Parts({ length: 80, char: '沈言', user: '小雨' }).rules);
-check('prompt explains merging', rules.includes('合成一次'));
+
+// ===== 新的記法（v0.13.66）：親熱中 → 完成（男方高潮）／沒完成；一天好幾場 =====
+const st = (date, state, count) => ({ status: 'ok', summary: '…', date, events: [{ type: 'intimacy', state, ...(count ? { count } : {}) }] });
+const NEW = [
+  ai(0, st('2025-04-01', 'ongoing')), user(1), ai(2, st('', 'ongoing')), user(3), ai(4, st('', 'done', 1)), user(5), // 一場，完成 1 次
+  ai(6, st('', 'ongoing')), user(7), ai(8, st('', 'stopped')), user(9),                                               // 被打斷：不算次數
+  ai(10, st('', 'done', 2)), user(11),                                                                                // 一層裡兩次
+  ai(12, st('', 'ongoing')),                                                                                          // 最新一層還在進行
+];
+const p2 = await browser.newPage();
+p2.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
+await p2.addInitScript((chat) => { window.__chat = chat; }, NEW);
+await p2.goto(URL);
+await p2.waitForFunction(() => document.getElementById('lp_wand_entry'));
+await p2.evaluate(async () => {
+  const s = (await import('/src/settings.js')).getSettings();
+  s.calendar.enabled = true;
+  s.calendar.track = { ...s.calendar.track, intimacy: true };
+});
+const info = await p2.evaluate(async () => {
+  const c = await import('/src/calendar.js');
+  const cal = c.buildCalendar();
+  const d = c.dayInfo(cal, '2025-04-01');
+  return {
+    n: d.intimacy, ongoing: d.intimacyOngoing, stopped: d.intimacyStopped, calOngoing: cal.ongoing,
+    items: cal.items.filter((x) => x.type === 'intimacy').map((x) => `${x.state}:${x.count}:${x.floors.join('+')}`),
+    inject: c.calendarInjection(), carry: c.carryItems('雨天').filter((x) => x.type === 'intimacy').map((x) => `${x.state}:${x.count}`),
+  };
+});
+check('scenes: done after ongoing, stopped, done x2, still ongoing', info.items.join() === 'done:1:0+2+4,stopped:0:6+8,done:2:10,ongoing:0:12', info.items.join());
+check('day counts only finished times', info.n === 3, String(info.n));
+check('day knows a scene was stopped and one is going on', info.stopped === 1 && info.ongoing === true);
+check('ongoing scene told to the character', info.calOngoing?.floor === 12 && info.inject.includes('現在正在親熱') && info.inject.includes('今天已經親熱過 3 次'), info.inject);
+check('carry keeps finished and stopped, not ongoing', info.carry.join() === 'done:1,stopped:0,done:2', info.carry.join());
+// 親熱中、下一層卻沒再提到 → 當成沒完成
+await p2.evaluate(() => { window.__chat.push({ name: '小雨', is_user: true, mes: 'U13', extra: {} }, { name: '沈言', is_user: false, mes: 'AI14', send_date: 'd14', extra: { lovers_planner: { status: 'ok', summary: '…', date: '', events: [] } }, swipe_id: 0, swipes: ['AI14'], swipe_info: [{ extra: {} }] }); });
+const after = await p2.evaluate(async () => {
+  const c = await import('/src/calendar.js');
+  const cal = c.buildCalendar();
+  return { last: cal.items.filter((x) => x.type === 'intimacy').at(-1).state, ongoing: cal.ongoing, inject: c.calendarInjection() };
+});
+check('ongoing then silence → stopped', after.last === 'stopped' && after.ongoing === null && !after.inject.includes('現在正在親熱'), JSON.stringify(after));
+// 摘要區塊的文字
+const labels = await p2.evaluate(async () => {
+  const m = await import('/src/ui/message.js');
+  return ['ongoing', 'stopped', 'done'].map((state) => m.eventLabel({ type: 'intimacy', state, count: 2 }));
+});
+check('labels', labels.join('|') === '💕 親熱中|🤍 親熱過（沒完成）|💕 親熱 2 次', labels.join('|'));
+const rules2 = await p2.evaluate(async () => (await import('/src/l1rules.js')).buildL1Parts({ length: 80, char: '沈言', user: '小雨' }));
+check('prompt asks for state', rules2.rules.includes('ongoing') && rules2.rules.includes('stopped') && rules2.format.includes('"state": "ongoing|done|stopped"'));
+const cleaned = await p2.evaluate(async () => (await import('/src/calendar.js')).cleanEvents([{ type: 'intimacy', state: 'ongoing', count: 3 }, { type: 'intimacy', state: 'done' }, { type: 'intimacy', count: 2 }]));
+check('cleanEvents keeps state; old style still works', JSON.stringify(cleaned) === JSON.stringify([{ type: 'intimacy', state: 'ongoing' }, { type: 'intimacy', state: 'done', count: 1 }, { type: 'intimacy', count: 2 }]), JSON.stringify(cleaned));
 
 await browser.close();
 console.log(results.join('\n'));

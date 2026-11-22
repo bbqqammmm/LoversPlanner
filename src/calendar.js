@@ -116,8 +116,14 @@ export function cleanEvents(raw) {
             const state = String(ev.state ?? 'start').toLowerCase() === 'end' ? 'end' : 'start';
             out.push({ type, state });
         } else if (type === 'intimacy') {
-            const count = Math.min(20, Math.max(1, Number.parseInt(ev.count, 10) || 1));
-            out.push({ type, count });
+            // v0.13.66（使用者要求）：ongoing＝親熱中（不算次數）；done＝完成，count 是這一層男方高潮幾次；
+            // stopped＝沒高潮就結束（留一筆、不算次數）。沒有 state 的是舊的寫法（count＝這一層幾次）。
+            const state = String(ev.state ?? '').toLowerCase();
+            if (state === 'ongoing' || state === 'stopped') out.push({ type, state });
+            else {
+                const count = Math.min(20, Math.max(1, Number.parseInt(ev.count, 10) || 1));
+                out.push(state === 'done' ? { type, state, count } : { type, count });
+            }
         } else if (type === 'anniversary') {
             const date = normMonthDay(ev.date);
             if (title && date) out.push({ type, date, title });
@@ -180,12 +186,12 @@ export function removeEvent(item) {
  * origin 是最早記下它的「聊天#key」，一路帶下去也認得出同一筆。
  */
 export function carryItems(chatId) {
-    return buildCalendar().items.filter((x) => ['period', 'intimacy', 'anniversary'].includes(x.type)).map((x) => ({
+    return buildCalendar().items.filter((x) => ['period', 'intimacy', 'anniversary'].includes(x.type) && x.state !== 'ongoing').map((x) => ({
         type: x.type,
         date: x.date,
         ...(x.title ? { title: x.title } : {}),
         ...(x.state ? { state: x.state } : {}),
-        ...(x.count ? { count: x.count } : {}),
+        ...(Number.isFinite(x.count) && (x.count || x.type === 'intimacy') ? { count: x.count } : {}),
         origin: x.origin ?? `${chatId}#${x.key ?? x.id}`,
     }));
 }
@@ -267,6 +273,8 @@ export function buildCalendar() {
     // 親熱：同一場常常分好幾層寫，每層模型都回報一次（使用者回報：八層寫一場記成八次）。
     // 連續幾層都有親熱、又是同一天，就當成同一場：只算一次，次數取這幾層裡最大的。
     let run = null;
+    // 新的記法裡還沒結束的那一場（親熱中）。
+    let open = null;
     for (const i of aiIndices()) {
         const e = getEntry(i);
         if (e?.status !== 'ok') continue;
@@ -281,6 +289,21 @@ export function buildCalendar() {
             if (removed.has(key)) return;
             const date = ev.type === 'plan' ? (normDate(ev.date) || cur) : ev.type === 'anniversary' ? ev.date : cur;
             if (!date) return;
+            if (ev.type === 'intimacy' && ev.state) {
+                // 新的記法：一場從「親熱中」開始，到「完成」（男方高潮）或「沒完成」結束；一天可以好幾場。
+                had = true;
+                if (open && ev.state === 'ongoing') {
+                    open.floors.push(i);
+                    open.key = `${open.key} ${key}`;
+                    return;
+                }
+                const item = open ?? { type: 'intimacy', date, source: 'floor', floor: i, key, floors: [] };
+                if (open) { item.floors.push(i); item.key = `${item.key} ${key}`; } else { item.floors.push(i); items.push(item); }
+                item.state = ev.state;
+                item.count = ev.state === 'done' ? (Number(ev.count) || 1) : 0;
+                open = ev.state === 'ongoing' ? item : null;
+                return;
+            }
             if (ev.type === 'intimacy') {
                 had = true;
                 if (run && run.date === date) {
@@ -295,8 +318,14 @@ export function buildCalendar() {
             }
             items.push({ ...ev, date, source: 'floor', floor: i, key });
         });
-        if (!had) run = null;
+        if (!had) {
+            run = null;
+            // 親熱中，下一層卻沒再提到：當成結束了、沒完成。
+            if (open) { open.state = 'stopped'; open.count = 0; open = null; }
+        }
     }
+    // 最新一層還在親熱中：送給角色時說一聲。
+    const ongoing = open ? { date: open.date, floor: open.floors.at(-1) } : null;
     for (const ev of rec?.manual ?? []) if (ev.type !== 'plan' && calTracked(ev.type)) items.push({ ...ev, source: 'manual' });
     // 從其他聊天帶來的（v0.13.33）：舊聊天整理、帶到新聊天。
     for (const ev of rec?.carried ?? []) if (ev.type !== 'plan' && calTracked(ev.type)) items.push({ ...ev, source: 'carried' });
@@ -315,7 +344,7 @@ export function buildCalendar() {
         if (nextStart && last >= nextStart) last = addDays(nextStart, -1);
         return { start, end: last, open: true };
     });
-    const cal = { today, items, periods, removedCount: removed.size, prediction: null };
+    const cal = { today, items, periods, removedCount: removed.size, prediction: null, ongoing };
     if (s.predict && calTracked('period')) cal.prediction = predictPeriod(periods, Boolean(s.ovulation));
     return cal;
 }
@@ -373,7 +402,10 @@ export function dayInfo(cal, date) {
         items: on,
         plans: on.filter((x) => x.type === 'plan'),
         anniversaries: on.filter((x) => x.type === 'anniversary'),
-        intimacy: on.filter((x) => x.type === 'intimacy').reduce((n, x) => n + (Number(x.count) || 1), 0),
+        // 沒完成、親熱中的 count 是 0，不算次數。
+        intimacy: on.filter((x) => x.type === 'intimacy').reduce((n, x) => n + (x.count === 0 ? 0 : (Number(x.count) || 1)), 0),
+        intimacyOngoing: on.some((x) => x.type === 'intimacy' && x.state === 'ongoing'),
+        intimacyStopped: on.filter((x) => x.type === 'intimacy' && x.state === 'stopped').length,
         period: null,
         periodDay: 0,
         periodOpen: false,
@@ -473,6 +505,8 @@ export function calendarInjection() {
     }
     const today = dayInfo(cal, cal.today);
     if (today.intimacy) lines.push(t('cal.inject.intimacy', { n: today.intimacy }));
+    // 最新一層還在親熱中（v0.13.66）：角色接著寫才不會斷掉。
+    if (cal.ongoing) lines.push(t('cal.inject.intimacyOngoing'));
     const list = upcoming(cal).filter((x) => x.kind !== 'period');
     if (list.length) {
         const parts = list.map((x) => {

@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.66',
+        new: {
+            'zh-TW': ['💕 親熱改成看「完成」才算一次：開始了先記「親熱中」，男方高潮了才算一次（一層裡兩次就算兩次），沒高潮就結束的留一筆「親熱過（沒完成）」不算次數。一天可以好幾場。還在進行中時，會跟角色說「現在正在親熱」，接著寫比較不會斷。更新之前記的照舊算法不動。'],
+            'zh-CN': ['💕 亲热改成看「完成」才算一次：开始了先记「亲热中」，男方高潮了才算一次（一层里两次就算两次），没高潮就结束的留一笔「亲热过（没完成）」不算次数。一天可以好几场。还在进行中时，会跟角色说「现在正在亲热」，接着写比较不会断。更新之前记的照旧算法不动。'],
+            en: ['💕 Intimacy now counts when it is finished: a scene starts as "being intimate", counts once each time the man climaxes (twice in one floor counts twice), and one that ends without it stays as "intimate (not finished)" without counting. Several scenes a day are fine. While one is still going, the character is told so it can carry on. Records from before the update keep the old counting.'],
+        },
+    },
+    {
         v: '0.13.65',
         fix: {
             'zh-TW': ['💕 行事曆的親熱次數：同一場分好幾層寫，以前每一層都算一次（八層記成八次）。現在連續幾層、同一天的算成同一場；中間隔了一層、或換了一天才算新的一場。以前記的也會自動重算，點開那一天會看到「第 a–b 樓（N 層算一場）」。'],

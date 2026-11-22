@@ -167,7 +167,8 @@ export function removeEvent(item) {
     const rec = record(true);
     if (item.source === 'manual') rec.manual = (rec.manual ?? []).filter((x) => x.id !== item.id);
     else if (item.source === 'carried') rec.carried = (rec.carried ?? []).filter((x) => x.origin !== item.origin);
-    else rec.removed = [...new Set([...(rec.removed ?? []), item.key])];
+    // 合成一場的親熱有好幾個 key（用空白隔開），一起刪。
+    else rec.removed = [...new Set([...(rec.removed ?? []), ...String(item.key ?? '').split(' ').filter(Boolean)])];
     saveMeta();
     return true;
 }
@@ -263,12 +264,16 @@ export function buildCalendar() {
     let cur = '';
     let today = null;
     const chat = getChat();
+    // 親熱：同一場常常分好幾層寫，每層模型都回報一次（使用者回報：八層寫一場記成八次）。
+    // 連續幾層都有親熱、又是同一天，就當成同一場：只算一次，次數取這幾層裡最大的。
+    let run = null;
     for (const i of aiIndices()) {
         const e = getEntry(i);
         if (e?.status !== 'ok') continue;
         const d = normDate(e.date);
         if (d) cur = d;
         if (cur) today = cur;
+        let had = false;
         (e.events ?? []).forEach((ev, k) => {
             // 行程已經轉成約定（planmerge.js），不再顯示。
             if (ev.type === 'plan' || !calTracked(ev.type)) return;
@@ -276,8 +281,21 @@ export function buildCalendar() {
             if (removed.has(key)) return;
             const date = ev.type === 'plan' ? (normDate(ev.date) || cur) : ev.type === 'anniversary' ? ev.date : cur;
             if (!date) return;
+            if (ev.type === 'intimacy') {
+                had = true;
+                if (run && run.date === date) {
+                    run.count = Math.max(Number(run.count) || 1, Number(ev.count) || 1);
+                    run.floors.push(i);
+                    run.key = `${run.key} ${key}`;
+                    return;
+                }
+                run = { ...ev, date, source: 'floor', floor: i, key, floors: [i] };
+                items.push(run);
+                return;
+            }
             items.push({ ...ev, date, source: 'floor', floor: i, key });
         });
+        if (!had) run = null;
     }
     for (const ev of rec?.manual ?? []) if (ev.type !== 'plan' && calTracked(ev.type)) items.push({ ...ev, source: 'manual' });
     // 從其他聊天帶來的（v0.13.33）：舊聊天整理、帶到新聊天。

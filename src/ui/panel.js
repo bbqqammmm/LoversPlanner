@@ -1161,8 +1161,9 @@ function calendarDay(cal) {
     if (!d) return `<div class="lp-note">${esc(t('cal.pickDay'))}</div>`;
     const info = dayInfo(cal, d);
     const rows = info.items.map((x) => {
+        const many = x.floors?.length > 1;
         const src = x.source === 'floor'
-            ? `<button type="button" class="lp-link" data-action="note-jump" data-index="${x.floor}">${esc(t('cal.fromFloor', { n: x.floor }))}</button>`
+            ? `<button type="button" class="lp-link" data-action="note-jump" data-index="${x.floor}">${esc(many ? t('cal.fromFloors', { from: x.floor, to: x.floors.at(-1), n: x.floors.length }) : t('cal.fromFloor', { n: x.floor }))}</button>`
             : `<span class="lp-note">${esc(t('cal.manual'))}</span>`;
         const ref = x.source === 'manual' ? `data-id="${esc(x.id)}"` : `data-key="${esc(x.key)}"`;
         return `<li class="lp-cal-item"><span>${esc(eventLabel(x))}</span> ${src}

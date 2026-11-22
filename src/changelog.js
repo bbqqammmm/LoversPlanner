@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.65',
+        fix: {
+            'zh-TW': ['💕 行事曆的親熱次數：同一場分好幾層寫，以前每一層都算一次（八層記成八次）。現在連續幾層、同一天的算成同一場；中間隔了一層、或換了一天才算新的一場。以前記的也會自動重算，點開那一天會看到「第 a–b 樓（N 層算一場）」。'],
+            'zh-CN': ['💕 行事历的亲热次数：同一场分好几层写，以前每一层都算一次（八层记成八次）。现在连续几层、同一天的算成同一场；中间隔了一层、或换了一天才算新的一场。以前记的也会自动重算，点开那一天会看到「第 a–b 楼（N 层算一场）」。'],
+            en: ['💕 Intimacy count in the calendar: one scene written over several floors used to count once per floor (eight floors, eight times). Consecutive floors on the same day now count as one scene; a floor in between without it, or a new day, starts a new one. Earlier records are recounted automatically, and the day shows "floors a–b (N floors, one scene)".'],
+        },
+    },
+    {
         v: '0.13.64',
         new: {
             'zh-TW': ['🏨 客人簿可以匯出／匯入欄位：改好的欄位按「📤 匯出欄位」複製成一段文字，貼給朋友；朋友按「📥 匯入欄位」貼上就有一樣的欄位（只有欄位，不帶客人資料，她原本的欄位也不會動）。'],

@@ -888,6 +888,8 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
 
 - 讀回覆內容時連線斷了（v0.13.62，使用者貼錯誤報告：TauriTavern・iOS，l1 用其他組 deepseek-flash，`TypeError — Load failed`、ms=28016，同一秒記了兩筆）：fetchJson 只包了 `fetch()`，`res.text()` 在 try 外面。WebKit 在回應頭已經到了、內容傳到一半斷線時（切 App、鎖螢幕、網路不穩），`text()` 丟 `TypeError: Load failed`，沒變成 ApiError：llm.js 不重試，功能那一層的 noteError 又當成程式錯誤再記一筆（所以有一筆沒有 maxTokens／ms）。改成：讀內容的錯誤變成 ApiError('dropped')（不是 'network'，所以不改走酒館轉發，那條路是給 CORS 用的）；逾時的計時器也算到讀完內容為止；llm.js 遇到 dropped 先等 App 回到前景（document.hidden，iOS 在背景送出去的請求多半又被斷）、隔 2 秒再試 1 次，還是不行才改用備援那組。錯誤報告環境的瀏覽器在 iOS WKWebView 顯示 WebView（UA 沒有 Safari/，以前是「?」）。測試 tests/dropped.test.mjs。
 
+- 親熱次數一場算成好幾次（v0.13.65，使用者回報：八層寫一場記成八次）：模型每一層摘要都照實回報 intimacy，buildCalendar 一層一筆加起來。改成連續幾層（中間沒有一層沒親熱）、同一天的合成一場：count 取這幾層最大的，`floors` 記哪幾層、`key` 是這幾層的 key 用空白隔開（刪掉時 removeEvent 整場一起刪）；失敗、跳過的樓層不打斷。不改存的資料，以前的自動重算。提示詞也說明接著寫的幾層 count 寫 1。測試 tests/intimacy.test.mjs。
+
 ## 📝 決策紀錄
 
 > 規格有改動時寫進來，說明改了什麼、為什麼改。
@@ -1060,3 +1062,4 @@ L0 原文 → L1 單層摘要 → L2（每 10 個 L1）→ L3（每 10 份 L2）
 - 2026-11-13（v0.13.62，使用者回報）：回覆傳到一半連線斷了要再試一次（見已知問題）。測試 tests/dropped.test.mjs。
 - 2026-11-21（v0.13.63，使用者要求）：🏨 客人簿（見 3.5）。使用者選一人一條、只記這個聊天。測試 tests/guests.test.mjs。
 - 2026-11-21（v0.13.64，使用者要求）：客人簿匯出／匯入欄位（見 3.5）。使用者選「欄位就足夠」、匯入是補上不是整份換掉。測試 tests/guests.test.mjs 第 11 段。
+- 2026-11-22（v0.13.65，使用者回報）：親熱次數連續幾層合成一場（見已知問題）。測試 tests/intimacy.test.mjs。

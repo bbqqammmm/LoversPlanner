@@ -25,6 +25,7 @@ node tests/calendar.test.mjs /tmp/shots
 node tests/levels.test.mjs /tmp/shots
 node tests/memories.test.mjs /tmp/shots
 node tests/guests.test.mjs /tmp/shots
+node tests/intimacy.test.mjs
 node tests/theme.test.mjs /tmp/shots
 ```
 

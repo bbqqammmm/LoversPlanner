@@ -4,7 +4,7 @@
 import { currentLocale } from './i18n.js';
 import { charFields, getSettings, isTracked, trackedNoteTypes } from './settings.js';
 import { NOTE_FIELDS } from './notes.js';
-import { ACTIVE_CAL_TYPES, calendarOn, calTracked, normDate, startDate as storyStart } from './calendar.js';
+import { ACTIVE_CAL_TYPES, calendarOn, calTracked, normDate, startDate as storyStart, tinyDay } from './calendar.js';
 import { isGregorian, promptDate, promptInfo } from './calendars.js';
 import { memoriesOn } from './memories.js';
 import { guestFields, guestTitle } from './guests.js';
@@ -46,6 +46,7 @@ const TEXT = {
         guest: 'guest（{title}）：上門的客人，一人一條（一起來的也各記一條）。data 的 key 用下面的欄位名稱，只寫有提到的：',
         guestName: '名字：一個主要的名字',
         guestMore: '客人走了用 complete，detail 寫這次來做了什麼、付清了沒（50～100 字）。以前走了的客人又來了，照樣用 add 同一個名字（會接回同一條）。客人記在 guest 就好，不用再記成 character，除非他和 {char}、{user} 有長期的關係。',
+        guestDate: '欄位裡的日期（入住、退房…）照上面的曆法寫，例如「{eg} 傍晚」，不要寫西曆。',
         noteTitle: 'promise 和 todo 都要有 title：15 字內、看得出是什麼事的短標題（例如「看電影＋宵夜」，不要寫「晚上的約定」）；content：具體寫要做什麼，有提到的話連時間、地點、怎麼做、誰負責都寫進去，照原文的關鍵細節，100 字內（✗「約好晚上要做事」 ✓「今晚回家後一起看電影，{char}負責煮宵夜」）。原文沒說清楚做什麼的照原文寫，不要自己補；之後說清楚了再用 update 補上 content 和 title。對話最後說好的事最容易漏，請特別看最後幾段。',
         promiseCheck: '每一層都對照清單裡進行中的 promise 和 todo：這一層真的做到了才 complete（promise 用 kept，todo 用 done），加上 detail 用 50～100 字寫怎麼做到的；只是提起、準備中、還沒做到的不要 complete；明確取消、做不到、被違背才 complete 加 broken（detail 寫怎麼被打破的）；改期就用 update 改 when。',
         both: '同一件事不要同時記成 promise 和 todo。',
@@ -107,6 +108,7 @@ const TEXT = {
         guest: 'guest（{title}）：上门的客人，一人一条（一起来的也各记一条）。data 的 key 用下面的字段名称，只写有提到的：',
         guestName: '名字：一个主要的名字',
         guestMore: '客人走了用 complete，detail 写这次来做了什么、付清了没（50～100 字）。以前走了的客人又来了，照样用 add 同一个名字（会接回同一条）。客人记在 guest 就好，不用再记成 character，除非他和 {char}、{user} 有长期的关系。',
+        guestDate: '栏位里的日期（入住、退房…）照上面的历法写，例如「{eg} 傍晚」，不要写公历。',
         noteTitle: 'promise 和 todo 都要有 title：15 字内、看得出是什么事的短标题（例如「看电影＋宵夜」，不要写「晚上的约定」）；content：具体写要做什么，有提到的话连时间、地点、怎么做、谁负责都写进去，照原文的关键细节，100 字内（✗「约好晚上要做事」 ✓「今晚回家后一起看电影，{char}负责煮宵夜」）。原文没说清楚做什么的照原文写，不要自己补；之后说清楚了再用 update 补上 content 和 title。对话最后说好的事最容易漏，请特别看最后几段。',
         promiseCheck: '每一层都对照清单里进行中的 promise 和 todo：这一层真的做到了才 complete（promise 用 kept，todo 用 done），加上 detail 用 50～100 字写怎么做到的；只是提起、准备中、还没做到的不要 complete；明确取消、做不到、被违背才 complete 加 broken（detail 写怎么被打破的）；改期就用 update 改 when。',
         both: '同一件事不要同时记成 promise 和 todo。',
@@ -168,6 +170,7 @@ const TEXT = {
         guest: 'guest ({title}): a customer or visitor, one entry per person (people arriving together each get their own). In data, use the field names below as keys and only fill what was mentioned:',
         guestName: 'name: one main name',
         guestMore: 'When a guest leaves, use complete with a detail of what they did this visit and whether they paid up (50–100 words). If a guest who left before comes back, use add with the same name (it reopens the same entry). Guests only go in guest, not also in character, unless they have a lasting relationship with {char} or {user}.',
+        guestDate: 'Write dates in these fields (check-in, check-out…) in the calendar above, e.g. "{eg}, evening", not in the Gregorian calendar.',
         noteTitle: 'Every promise and todo needs a title: a short label of at most 8 words that says what it is (e.g. "Movie + late-night snack", never "Tonight\'s plan"); content says concretely what will be done, including time, place, how, and who does what if mentioned, keeping the key details from the text, at most 50 words (✗ "agreed to do something tonight" ✓ "watch a movie together after getting home tonight; {char} makes a late-night snack"). If the text doesn\'t say what, write what it says and don\'t fill in; once the story makes it clear, update content and title. Plans made at the end of the conversation are the easiest to miss: read the last paragraphs carefully.',
         promiseCheck: 'Every floor, check the active promises and todos in the list: complete one only if it was actually done in this floor (kept for a promise, done for a todo), with detail of 50–100 words on how; if it was only mentioned, being prepared, or not done yet, don\'t complete it; use complete with broken only if it was clearly cancelled, impossible, or betrayed (detail says how); if it was rescheduled, update when.',
         both: 'Never record the same thing as both a promise and a todo.',
@@ -247,7 +250,9 @@ export function buildL1Parts({ length, char, user, chapter = false, previousDate
                 // 客人：欄位是使用者自己定的，用欄位名稱當 key（guests.js 會換回內部的 key）。
                 const name = T.guestName;
                 const fields = [`     · ${name}`, ...guestFields().map((f) => `     · ${f.label}${f.hint ? `：${f.hint}` : ''}`)];
-                sub.push([fill(T.guest, { ...vars, title: guestTitle() }), ...fields, `     ${fill(T.guestMore, vars)}`].join('\n'));
+                // 換了曆法（v0.13.70）：入住、退房這類欄位也照故事的曆法寫，例子用這個曆法的第一天
+                const when = isGregorian() ? [] : [`     ${fill(T.guestDate, { eg: tinyDay(storyStart() || '2001-01-01') })}`];
+                sub.push([fill(T.guest, { ...vars, title: guestTitle() }), ...fields, `     ${fill(T.guestMore, vars)}`, ...when].join('\n'));
                 continue;
             }
             if (type !== 'character') {

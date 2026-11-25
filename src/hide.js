@@ -22,6 +22,7 @@ import { recordSend } from './sent.js';
 import { cleanForSummary } from './filter.js';
 import { diaryPlan } from './diarysend.js';
 import { prefsText } from './prefs.js';
+import { clearInlinePrompt, prepareInline } from './inline.js';
 
 /** 保留原文的 AI 樓層數（規格：最新 2 個）。 */
 export const KEEP_AI = 2;
@@ -373,8 +374,11 @@ export async function interceptor(coreChat, contextSize, abort, type) {
     try {
         if (!isActive()) {
             clearInjection();
+            clearInlinePrompt();
             return;
         }
+        // 主模型順手寫：說明放在最後面（深度 0）
+        prepareInline(type);
         if (!(await prepareSummaries(type))) {
             setStats({ reason: 'cancelled' });
             abort(true);

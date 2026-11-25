@@ -50,6 +50,7 @@ export function hintFor(index, state) {
             const latest = index === lastAiIndex();
             const mode = getSettings().summary.mode;
             if (latest && mode === 'before') return t('sum.hint.latest');
+            if (mode === 'inline') return t('sum.hint.inline');
             // 「正文結束後」模式下，最新一層還沒摘要通常是因為還在生成中。
             if (latest && mode === 'after' && getChat().length - 1 === index) return t('sum.hint.waitReply');
             return t('sum.hint.manual');

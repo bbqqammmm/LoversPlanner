@@ -22,6 +22,7 @@ export const DEFAULTS = Object.freeze({
     catchup: { askExtras: true, extraWords: '番外, 小劇場, 小剧场, IF線, IF线, IF世界線, IF世界线, 平行世界, 特別篇, 特别篇' },
     summary: {
         // 'after' 每回正文結束後自動 | 'manual' 手動 | 'before' 開始下回前自動（使用者送出下一句時摘要上一層）
+        // | 'inline' 主模型順手寫（正文最後附一段紀錄，不另外呼叫；inline.js）
         mode: 'before',
         includeUser: true,
         ratioMin: 3,
@@ -242,7 +243,7 @@ export function initSettings() {
     s.settingsVersion = DEFAULTS.settingsVersion;
     // 舊版的 'auto' 就是現在的 'before'。
     if (s.summary.mode === 'auto') s.summary.mode = 'before';
-    if (!['after', 'manual', 'before'].includes(s.summary.mode)) s.summary.mode = DEFAULTS.summary.mode;
+    if (!['after', 'manual', 'before', 'inline'].includes(s.summary.mode)) s.summary.mode = DEFAULTS.summary.mode;
     c.extensionSettings[MODULE] = s;
     return s;
 }

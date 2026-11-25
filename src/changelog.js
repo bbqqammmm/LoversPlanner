@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.67',
+        new: {
+            'zh-TW': ['✍️ 新的摘要模式「主模型順手寫」（設定 › 摘要 › 預設模式）：讓聊天的模型寫完正文後，順手在最後附上這一層的紀錄，戀人手帳收下後會從正文拿掉。不用另外呼叫模型，最省錢也最快。回覆會長一點；模型沒寫或寫壞時會跳通知，按「📝 另外摘要」就照原本的方式補上。章、卷的壓縮和日記照舊另外呼叫。'],
+            'zh-CN': ['✍️ 新的摘要模式「主模型顺手写」（设置 › 摘要 › 默认模式）：让聊天的模型写完正文后，顺手在最后附上这一层的记录，恋人手账收下后会从正文拿掉。不用另外调用模型，最省钱也最快。回复会长一点；模型没写或写坏时会弹通知，按「📝 另外摘要」就照原本的方式补上。章、卷的压缩和日记照旧另外调用。'],
+            en: ['✍️ New summary mode "Written by the main model" (Settings › Summary › Default mode): the chat model appends this turn\'s record after its reply, and Lover\'s Planner takes it and removes it from the text. No extra model call, so it is the cheapest and fastest. Replies get a little longer; if the model forgets or writes it wrong, a notice lets you press "📝 Summarize separately" to fill it in the usual way. Chapter/volume compression and diaries still use separate calls.'],
+        },
+    },
+    {
         v: '0.13.66',
         new: {
             'zh-TW': ['💕 親熱改成看「完成」才算一次：開始了先記「親熱中」，男方高潮了才算一次（一層裡兩次就算兩次），沒高潮就結束的留一筆「親熱過（沒完成）」不算次數。一天可以好幾場。還在進行中時，會跟角色說「現在正在親熱」，接著寫比較不會斷。更新之前記的照舊算法不動。'],

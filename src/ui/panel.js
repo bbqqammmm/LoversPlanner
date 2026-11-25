@@ -3256,8 +3256,9 @@ function renderSettings() {
     const summary = `
       <div class="lp-row">
         <label class="lp-label" for="lp-mode">${esc(t('set.summary.mode'))}</label>
-        ${select('summary.mode', 'lp-mode', ['after', 'manual', 'before'].map((m) => [m, t(`set.summary.mode.${m}`)]))}
+        ${select('summary.mode', 'lp-mode', ['after', 'manual', 'before', 'inline'].map((m) => [m, t(`set.summary.mode.${m}`)]))}
       </div>
+      ${s.summary.mode === 'inline' ? `<div class="lp-note">${esc(t('set.summary.mode.inlineHint'))}</div>` : ''}
       ${checkbox('summary.includeUser', t('set.summary.includeUser'), true)}
       ${s.summary.includeUser ? '' : `<div class="lp-callout lp-warn">${esc(t('set.summary.includeUser.warn'))}</div>`}
       <div class="lp-row">${inline('set.summary.ratio', { min: numberInput('summary.ratioMin', 'min %'), max: numberInput('summary.ratioMax', 'max %') })}</div>

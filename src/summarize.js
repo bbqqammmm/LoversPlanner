@@ -1,9 +1,10 @@
 // L1 單層摘要：排隊、組提示詞、呼叫模型、解析結果、寫回訊息。
 //
-// 三種模式（設定 › 摘要）：
+// 四種模式（設定 › 摘要）：
 //   'after'  每回正文結束後自動：AI 一回覆完就摘要這一層（重新生成／swipe 會再摘一次）。
 //   'before' 開始下回前自動：使用者送出下一句時，才摘要上一個 AI 樓層（那時才算定案，比較省）。
 //   'manual' 手動：只在按「立即摘要」時。
+//   'inline' 主模型順手寫（v0.13.67）：正文最後附一段紀錄，不另外呼叫（inline.js）。
 // 走主 API 時，等酒館這一輪生成結束才開始，避免和正常生成搶同一條連線。
 
 import { ctx, hasCharacterChat, isGroupChat, LOG_PREFIX, toast, toastActions } from './util.js';
@@ -272,7 +273,7 @@ function lengthUnits(content, tokens, targetTokens) {
 }
 
 /** 往前找最近一個有時間、地點或日期的已摘要樓層，讓模型延續。 */
-function previousSceneText(index) {
+export function previousSceneText(index) {
     const useTime = isTracked('time');
     const useLocation = isTracked('location');
     const useDate = calendarOn();
@@ -308,7 +309,7 @@ export function previousDate(index) {
 }
 
 /** 記事清單（連標題）；沒勾任何記事類型就是空的。 */
-function notesSection(notesBefore) {
+export function notesSection(notesBefore) {
     if (!trackedNoteTypes().length) return '';
     return `${t('prompt.notesLabel')}\n${formatNotesForPrompt(notesBefore)}`;
 }
@@ -444,6 +445,50 @@ function failToast(index, message) {
     }], { type: 'error' });
 }
 
+/**
+ * 模型回的單層摘要寫回這一層（另外呼叫的摘要、主模型順手寫的都走這裡）。
+ * notesBefore：這一層之前的記事（整理記事變化用）；by：誰寫的（顯示在摘要區塊）。
+ */
+export function applyL1Result(index, parsed, { notesBefore, hash, by }) {
+    // 對照這一層之前的記事整理變化：配上 id、去掉重複新增和找不到的。
+    const prev = getEntry(index);
+    let ops = normalizeModelOps(parsed.ops, notesBefore, prev?.ops, { types: trackedNoteTypes() });
+    // 粗略補建時，整段的記事變化記在這一段的最後一層；改成逐層細摘時保留下來，不然會不見。
+    // 這些變化標著 block，重做幾次都會留著。
+    const blockOps = Array.isArray(prev?.ops) ? prev.ops.filter((op) => op.block) : [];
+    if (blockOps.length) ops = [...blockOps, ...ops.filter((op) => !blockOps.some((o) => o.id === op.id && o.op === 'add'))];
+    // 沒勾的欄位模型不會回報；沿用舊值，重新勾起來時資料還在。
+    const keep = (key, field) => (isTracked(key) ? parsed[field] : (prev?.[field] ?? parsed[field]));
+    // 摘要途中原文被改的話，hash 對不上，會自動顯示成「過期」。
+    setEntry(index, withHistory({
+        v: 2, status: 'ok', time: keep('time', 'time'), location: keep('location', 'location'),
+        characters: keep('cast', 'characters'), summary: parsed.summary, ops, hash, at: Date.now(), by,
+        // 行事曆：沒開的話沿用舊的，重新打開時資料還在。
+        ...(calendarOn()
+            ? { date: normDate(parsed.date) || previousDate(index), events: cleanEvents(parsed.events) }
+            : { date: prev?.date ?? '', events: prev?.events ?? [] }),
+        // 回憶錄：模型挑的值得珍藏的時刻（沒開的話沿用舊的）。
+        keepsakes: memoriesOn() && getSettings().memories?.auto ? cleanKeepsakes(parsed.keepsakes) : (prev?.keepsakes ?? []),
+        // 回覆被截斷、是救回來的：摘要或記事可能不完整，畫面上會提醒。
+        ...(parsed.repaired ? { repaired: true } : {}),
+    }, prev));
+    // 你的偏好（v0.13.36）：OOC 裡的長期要求（沒打開「自動記下」時不會加）。
+    const added = addPrefsFromModel(parsed.prefs, 'ooc');
+    if (added.length) toast(t('prefs.added', { text: added.map((p) => p.text).join('；') }), 'info');
+    notify(index);
+}
+
+/** 這一層摘要失敗：保留舊內容（手動寫時可以從它改起），失敗的樓層不套用記事變化。 */
+export function markL1Fail(index, message, hash) {
+    const previous = getEntry(index);
+    setEntry(index, withHistory({
+        v: 2, status: 'fail', error: message, hash, at: Date.now(),
+        time: previous?.time ?? '', location: previous?.location ?? '',
+        characters: previous?.characters ?? [], summary: previous?.summary ?? '',
+    }, previous));
+    notify(index);
+}
+
 async function summarizeFloor(index) {
     const chatId = chatKey();
     const msg = getChat()[index];
@@ -456,43 +501,13 @@ async function summarizeFloor(index) {
         const raw = await generateText(built.prompt, { maxTokens: built.maxTokens, purpose: 'l1' });
         const parsed = parseL1(raw);
         if (!stillHere()) return;
-        // 對照這一層之前的記事整理變化：配上 id、去掉重複新增和找不到的。
-        const prev = getEntry(index);
-        let ops = normalizeModelOps(parsed.ops, built.notesBefore, prev?.ops, { types: trackedNoteTypes() });
-        // 粗略補建時，整段的記事變化記在這一段的最後一層；改成逐層細摘時保留下來，不然會不見。
-        // 這些變化標著 block，重做幾次都會留著。
-        const blockOps = Array.isArray(prev?.ops) ? prev.ops.filter((op) => op.block) : [];
-        if (blockOps.length) ops = [...blockOps, ...ops.filter((op) => !blockOps.some((o) => o.id === op.id && o.op === 'add'))];
-        // 沒勾的欄位模型不會回報；沿用舊值，重新勾起來時資料還在。
-        const keep = (key, field) => (isTracked(key) ? parsed[field] : (prev?.[field] ?? parsed[field]));
-        // 摘要途中原文被改的話，hash 對不上，會自動顯示成「過期」。
-        setEntry(index, withHistory({
-            v: 2, status: 'ok', time: keep('time', 'time'), location: keep('location', 'location'),
-            characters: keep('cast', 'characters'), summary: parsed.summary, ops, hash, at: Date.now(), by: modelLabel(),
-            // 行事曆：沒開的話沿用舊的，重新打開時資料還在。
-            ...(calendarOn()
-                ? { date: normDate(parsed.date) || previousDate(index), events: cleanEvents(parsed.events) }
-                : { date: prev?.date ?? '', events: prev?.events ?? [] }),
-            // 回憶錄：模型挑的值得珍藏的時刻（沒開的話沿用舊的）。
-            keepsakes: memoriesOn() && getSettings().memories?.auto ? cleanKeepsakes(parsed.keepsakes) : (prev?.keepsakes ?? []),
-            // 回覆被截斷、是救回來的：摘要或記事可能不完整，畫面上會提醒。
-            ...(parsed.repaired ? { repaired: true } : {}),
-        }, prev));
-        // 你的偏好（v0.13.36）：OOC 裡的長期要求（沒打開「自動記下」時不會加）。
-        const added = addPrefsFromModel(parsed.prefs, 'ooc');
-        if (added.length) toast(t('prefs.added', { text: added.map((p) => p.text).join('；') }), 'info');
+        applyL1Result(index, parsed, { notesBefore: built.notesBefore, hash, by: modelLabel() });
     } catch (e) {
         noteError('l1', e, { model: modelLabel() });
         console.warn(LOG_PREFIX, `第 ${index} 層摘要失敗`, e);
         if (!stillHere()) return;
         const message = errorText(e);
-        const previous = getEntry(index);
-        setEntry(index, withHistory({
-            v: 2, status: 'fail', error: message, hash, at: Date.now(),
-            // 保留舊內容，讓使用者手動寫時可以從它改起。失敗的樓層不套用記事變化。
-            time: previous?.time ?? '', location: previous?.location ?? '',
-            characters: previous?.characters ?? [], summary: previous?.summary ?? '',
-        }, previous));
+        markL1Fail(index, message, hash);
         failToast(index, message);
     }
     saveChatSoon();

@@ -381,6 +381,27 @@ const DICT = {
         'set.summary.mode.after': '每回正文結束後自動摘要（重新生成或 swipe 時會再摘一次）',
         'set.summary.mode.manual': '手動：只在按「立即摘要」時',
         'set.summary.mode.before': '開始下回前自動摘要（你送出下一句時摘要上一層，比較省）',
+        'set.summary.mode.inline': '主模型順手寫：正文最後附一段紀錄，不另外呼叫模型（最省）',
+        'set.summary.mode.inlineHint': '「主模型順手寫」會在提示詞最後加一段說明，請主模型寫完正文後附上這一層的紀錄；戀人手帳收下後會從正文拿掉。回覆會長一點；主模型沒寫或寫壞時會跳通知，讓你按「另外摘要」。章、卷的壓縮和日記照舊另外呼叫。',
+        'sum.hint.inline': '主模型這次沒附紀錄。可以按「立即摘要」另外摘要。',
+        'inline.by': '主模型・順手寫',
+        'inline.notWritten': '主模型沒有附上紀錄',
+        'inline.missing': '第 {n} 層：{error}。要另外摘要這一層嗎？',
+        'inline.summarizeNow': '📝 另外摘要',
+        'inline.repaired': '第 {n} 層的紀錄好像被截斷了，可能不完整。',
+        'inline.instruction': `【戀人手帳・紀錄】
+寫完正文之後，另起一行，在回覆的最後附上這一段的紀錄。這是給程式讀的，讀者看不到：正文裡不要提到它，也不要因為它改變正文的寫法；只寫一次，放在最後。
+紀錄用繁體中文、第三人稱：
+{rules}
+
+{previous}
+
+{notes}
+
+照這個格式，用 HTML 註解包起來，裡面只放 JSON：
+<!--{tag}
+{format}
+-->`,
         'set.summary.includeUser': '摘要時包含使用者發言（一問一答一起摘）',
         'set.summary.includeUser.warn': '關掉後，你的發言被隱藏時不會留下任何內容，只剩 AI 回覆的摘要。',
         'set.summary.ratio': '長度：正文的 {min} % ～ {max} %',
@@ -1764,6 +1785,27 @@ const DICT = {
         'set.summary.mode.after': '每回正文结束后自动摘要（重新生成或 swipe 时会再摘一次）',
         'set.summary.mode.manual': '手动：只在点「立即摘要」时',
         'set.summary.mode.before': '开始下回前自动摘要（你发送下一句时摘要上一层，比较省）',
+        'set.summary.mode.inline': '主模型顺手写：正文最后附一段记录，不另外调用模型（最省）',
+        'set.summary.mode.inlineHint': '「主模型顺手写」会在提示词最后加一段说明，请主模型写完正文后附上这一层的记录；恋人手账收下后会从正文拿掉。回复会长一点；主模型没写或写坏时会弹通知，让你按「另外摘要」。章、卷的压缩和日记照旧另外调用。',
+        'sum.hint.inline': '主模型这次没附记录。可以按「立即摘要」另外摘要。',
+        'inline.by': '主模型・顺手写',
+        'inline.notWritten': '主模型没有附上记录',
+        'inline.missing': '第 {n} 层：{error}。要另外摘要这一层吗？',
+        'inline.summarizeNow': '📝 另外摘要',
+        'inline.repaired': '第 {n} 层的记录好像被截断了，可能不完整。',
+        'inline.instruction': `【恋人手账・记录】
+写完正文之后，另起一行，在回复的最后附上这一段的记录。这是给程序读的，读者看不到：正文里不要提到它，也不要因为它改变正文的写法；只写一次，放在最后。
+记录用简体中文、第三人称：
+{rules}
+
+{previous}
+
+{notes}
+
+照这个格式，用 HTML 注释包起来，里面只放 JSON：
+<!--{tag}
+{format}
+-->`,
         'set.summary.includeUser': '摘要时包含用户发言（一问一答一起摘）',
         'set.summary.includeUser.warn': '关掉后，你的发言被隐藏时不会留下任何内容，只剩 AI 回复的摘要。',
         'set.summary.ratio': '长度：正文的 {min} % ～ {max} %',
@@ -3147,6 +3189,27 @@ const DICT = {
         'set.summary.mode.after': 'Automatically after each reply (regenerating or swiping summarizes again)',
         'set.summary.mode.manual': 'Manual: only when you press "Summarize now"',
         'set.summary.mode.before': 'Automatically before the next turn (when you send your next message; cheaper)',
+        'set.summary.mode.inline': 'Written by the main model: it appends a record after the reply, no extra call (cheapest)',
+        'set.summary.mode.inlineHint': '"Written by the main model" adds an instruction at the end of the prompt asking the main model to append this turn\'s record after its reply; Lover\'s Planner takes it and removes it from the text. Replies get a little longer; if the model forgets or writes it wrong, a notice lets you press "Summarize separately". Chapter/volume compression and diaries still use separate calls.',
+        'sum.hint.inline': 'The main model did not append a record this time. Press "Summarize now" to summarize separately.',
+        'inline.by': 'Main model · inline',
+        'inline.notWritten': 'The main model did not append a record',
+        'inline.missing': 'Floor {n}: {error}. Summarize this floor separately?',
+        'inline.summarizeNow': '📝 Summarize separately',
+        'inline.repaired': 'The record for floor {n} seems cut off and may be incomplete.',
+        'inline.instruction': `[Lover's Planner · record]
+After the story text, start a new line and append a record of this part at the very end of your reply. It is read by a program and never shown to the reader: do not mention it in the story or let it change how you write; write it once, at the end.
+Write the record in English, third person:
+{rules}
+
+{previous}
+
+{notes}
+
+Use exactly this format, wrapped in an HTML comment, with only JSON inside:
+<!--{tag}
+{format}
+-->`,
         'set.summary.includeUser': 'Include your own message (summarize each exchange together)',
         'set.summary.includeUser.warn': 'With this off, nothing is kept from your messages once they are hidden — only the AI replies are summarized.',
         'set.summary.ratio': 'Length: {min} % – {max} % of the original',

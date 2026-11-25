@@ -110,6 +110,25 @@ function floorDate(index) {
     return '';
 }
 
+const atFloor = (floor) => (floor !== null && floor !== undefined ? floorDate(floor) : '');
+
+/**
+ * 客人每一次來住的日子（v0.13.70）：[{ from, to, current, visit }]，日期是裡面的寫法（不知道就是空字串）。
+ * 不另外請模型回報：新增（或又來了）那一層的日期就是入住，記他離開那一層的日期就是退房。
+ * 手動新增的看新增時的「今天」（made），手動記離開的看那時的日期（closedDate）。
+ */
+export function guestStays(note) {
+    if (note?.type !== 'guest') return [];
+    const out = (note.stays ?? []).map((s, i) => ({
+        from: atFloor(s.from), to: normDate(s.date) || atFloor(s.to), current: false, visit: i + 1,
+    }));
+    const first = !(note.stays ?? []).length;
+    const from = (first && normDate(note.made)) || atFloor(first ? note.createdFloor : note.visitFloor);
+    const active = note.state === 'active';
+    out.push({ from, to: active ? '' : closedDateOf(note), current: active, visit: out.length + 1 });
+    return out;
+}
+
 /** 約定／待辦完成（或被打破）的故事日期：手動完成時記下的，或完成那一層的日期。 */
 export function closedDateOf(note) {
     if (!note || note.state === 'active') return '';

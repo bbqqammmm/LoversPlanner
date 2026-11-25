@@ -44,7 +44,7 @@ import { hl, isExpanded, isSectionOpen, matches, setExpanded, setSectionOpen, te
 import {
     cancelQueue, enqueue, enqueueCompress, floorState, isActive, onSummaryChange, pendingCount, restoreVersion, sideFloor, skipFloor, unsideFloor, unskipFloor, unsummarizedIndices,
 } from '../summarize.js';
-import { closedDateOf, noteDates, storyToday } from '../notedates.js';
+import { closedDateOf, guestStays, noteDates, storyToday } from '../notedates.js';
 import { fillTitles, onTitleProgress, TITLE_BATCH, titleProgress } from '../titles.js';
 import { buildBackup, downloadBackup, importBackup, parseBackup, wipeChat } from '../backup.js';
 import { backupAlarm, backupNow, backupStatus, dismissAlarm, listBackups, markIntentional, onBackupChange, restoreBackup } from '../autobackup.js';
@@ -970,6 +970,7 @@ function renderCalendarTab() {
         if (!dueByDate.has(n.due)) dueByDate.set(n.due, []);
         dueByDate.get(n.due).push(n);
     }
+    const guestDays = guestsByDate();
     // 2023-01-01 是星期日；沒有星期的曆法不畫這一列
     const head = calendarHasWeeks() ? Array.from({ length: 7 }, (_, k) => weekdayName(`2023-01-0${k + 1}`, 'narrow')) : [];
     const cells = [];
@@ -988,8 +989,13 @@ function renderCalendarTab() {
         const due = dueByDate.get(d) ?? [];
         if (due.some((n) => n.type === 'promise')) marks.push('<span class="lp-cal-mark" aria-hidden="true">🤝</span>');
         if (due.some((n) => n.type === 'todo')) marks.push('<span class="lp-cal-mark" aria-hidden="true">📝</span>');
+        // 🏨 這天有客人入住或退房（v0.13.70）
+        const g = guestDays.get(d);
+        if (g) marks.push('<span class="lp-cal-mark" aria-hidden="true">🏨</span>');
         const cls = ['lp-cal-cell', d === cal.today ? 'lp-cal-today' : '', d === view.cal.selected ? 'lp-on' : '', info.period === 'actual' ? 'lp-cal-period' : ''].filter(Boolean).join(' ');
-        const label = [dayLabel(d), ...info.items.map(eventLabel), ...due.map(displayTitle), info.period === 'actual' ? t('cal.status.during', { day: info.periodDay }) : '',
+        const label = [dayLabel(d), ...info.items.map(eventLabel), ...due.map(displayTitle),
+            g?.in.length ? t('cal.guest.in', { names: g.in.map((x) => x.name).join('、') }) : '',
+            g?.out.length ? t('cal.guest.out', { names: g.out.map((x) => x.name).join('、') }) : '', info.period === 'actual' ? t('cal.status.during', { day: info.periodDay }) : '',
             info.period === 'predicted' ? t('cal.predicted') : '', info.fertile ? t('cal.fertile') : ''].filter(Boolean).join('，');
         cells.push(`<button type="button" class="${cls}" data-action="cal-day" data-date="${d}" aria-label="${esc(label)}" aria-pressed="${d === view.cal.selected}">
             <span class="lp-cal-num">${esc(cellText(d))}</span><span class="lp-cal-marks">${marks.join('')}</span></button>`);
@@ -1129,7 +1135,36 @@ function dayNotes(d) {
         }).join('');
         return `<div class="lp-label">${esc(t(key))}</div><ul class="lp-recall-list" data-role="${key === 'cal.notes.due' ? 'cal-day-due' : 'cal-day-made'}">${rows}</ul>`;
     };
-    return group('cal.notes.due', list.filter((x) => x.due === d)) + group('cal.notes.made', list.filter((x) => x.made === d));
+    return group('cal.notes.due', list.filter((x) => x.due === d)) + group('cal.notes.made', list.filter((x) => x.made === d)) + dayGuests(d);
+}
+
+/** 客人入住、退房的日子（客人簿開著才有）：Map(date → { in: [{ id, name }], out: [...] })。 */
+function guestsByDate() {
+    const out = new Map();
+    if (!guestOn()) return out;
+    const put = (date, key, note) => {
+        if (!date) return;
+        if (!out.has(date)) out.set(date, { in: [], out: [] });
+        const list = out.get(date)[key];
+        if (!list.some((x) => x.id === note.id)) list.push({ id: note.id, name: displayTitle(note) });
+    };
+    for (const n of getNotes().notes.values()) {
+        if (n.type !== 'guest') continue;
+        for (const s of guestStays(n)) {
+            put(s.from, 'in', n);
+            put(s.to, 'out', n);
+        }
+    }
+    return out;
+}
+
+/** 選了某一天：這天入住、退房的客人。點了打開客人簿那一條。 */
+function dayGuests(d) {
+    const g = guestsByDate().get(d);
+    if (!g) return '';
+    const group = (key, icon, items) => (items.length ? `<div class="lp-label">${esc(t(key))}</div><ul class="lp-recall-list" data-role="cal-day-${key.split('.').pop()}">${items.map((x) =>
+        `<li class="lp-cal-item"><button type="button" class="lp-link" data-action="cal-guest" data-id="${esc(x.id)}">${icon} ${esc(x.name)}</button></li>`).join('')}</ul>` : '');
+    return group('guest.day.in', '🏨', g.in) + group('guest.day.out', '🚪', g.out);
 }
 
 /** 換了曆法：之前摘要的樓層日期不算，提示可以重做（v0.13.69）。 */
@@ -2536,15 +2571,37 @@ function renderNotesTab(types = NOTE_TYPES) {
 // ===== 🏨 客人簿（v0.13.63） =====
 
 /** 客人卡片點開後：這次離開時寫的經過、以前來過的每一次。 */
+/** 一次住的日子：「寒雪月3日 → 寒雪月5日・2 晚」「寒雪月3日 入住・住了 2 晚」（v0.13.70）。 */
+function stayText(s, today) {
+    if (!calendarOn()) return '';
+    if (s.from && s.to) {
+        const n = daysBetween(s.from, s.to);
+        if (n > 0) return t('guest.stay.range', { from: shortDay(s.from), to: shortDay(s.to), n });
+        if (n === 0) return t('guest.stay.sameDay', { from: shortDay(s.from) });
+    }
+    if (s.from && s.current && today && today >= s.from) {
+        const n = daysBetween(s.from, today);
+        return n > 0 ? t('guest.stay.now', { from: shortDay(s.from), n }) : t('guest.stay.today', { from: shortDay(s.from) });
+    }
+    if (s.from) return t('guest.stay.from', { from: shortDay(s.from) });
+    if (s.to) return t('guest.stay.to', { to: shortDay(s.to) });
+    return '';
+}
+
 function guestHistory(note, query) {
     const out = [];
+    const dates = guestStays(note);
+    const today = storyToday();
+    const last = stayText(dates[dates.length - 1] ?? {}, today);
+    if (last) out.push(`<div class="lp-note-line" data-role="guest-stay"><span class="lp-label">${esc(t(note.state === 'active' ? 'guest.stay.this' : 'guest.stay.last'))}</span> 🏨 ${esc(last)}</div>`);
     if (note.state !== 'active' && note.closedDetail) {
         out.push(`<div class="lp-note-line"><span class="lp-label">${esc(t('guest.lastStay'))}</span> ${hl(note.closedDetail, query)}</div>`);
     }
     const stays = note.stays ?? [];
     if (stays.length) {
         const rows = stays.map((x, i) => {
-            const where = [x.from, x.to].filter((n) => Number.isInteger(n)).map((n) => `#${n}`).join('–');
+            const when = stayText(dates[i] ?? {}, today);
+            const where = when || [x.from, x.to].filter((n) => Number.isInteger(n)).map((n) => `#${n}`).join('–');
             return `<li>${esc(t('guest.stayN', { n: i + 1 }))}${where ? ` <span class="lp-note">${esc(where)}</span>` : ''}${x.detail ? `：${hl(x.detail, query)}` : ''}</li>`;
         }).join('');
         out.push(`<div class="lp-note-line"><span class="lp-label">${esc(t('guest.pastStays'))}</span><ul class="lp-guest-stays">${rows}</ul></div>`);
@@ -3956,6 +4013,18 @@ function onClick(e) {
             view.notes.filter = btn.dataset.filter;
             render();
             return;
+        case 'cal-guest': {
+            const id = btn.dataset.id;
+            const note = getNotes().notes.get(id);
+            if (!note) return;
+            view.tab = 'guests';
+            view.query.guests = '';
+            setSectionOpen(`sec:guest:${note.state === 'active' ? 'here' : 'gone'}`, true);
+            setExpanded(`note:${id}`, true);
+            view.focusKey = `note:${id}`;
+            render();
+            return;
+        }
         case 'cal-note': {
             // 行事曆某一天的約定／待辦：打開下面那一條；已完成的到「已完成」分頁。
             const id = btn.dataset.id;

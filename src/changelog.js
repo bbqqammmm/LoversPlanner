@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.70',
+        new: {
+            'zh-TW': ['🏨 客人簿接上行事曆：客人哪天入住、哪天退房，照那一層故事裡的日期自動記下（不用模型另外回報），月曆上標 🏨，點那天看得到誰入住、誰退房；客人簿顯示「寒雪月3日 → 寒雪月5日・2 晚」「住了幾晚」。換了曆法的話，入住、退房這些欄位模型也會照故事的曆法寫。'],
+            'zh-CN': ['🏨 客人簿接上行事历：客人哪天入住、哪天退房，照那一层故事里的日期自动记下（不用模型另外回报），月历上标 🏨，点那天看得到谁入住、谁退房；客人簿显示「寒雪月3日 → 寒雪月5日・2 晚」「住了几晚」。换了历法的话，入住、退房这些字段模型也会照故事的历法写。'],
+            en: ['🏨 The guest book is linked to the calendar: check-in and check-out days are taken from the story date of those floors (no extra work for the model), marked 🏨 on the calendar, and listed when you tap the day; guest cards show the dates and how many nights they stayed. With a story calendar, the model also writes check-in/check-out fields in that calendar.'],
+        },
+    },
+    {
         v: '0.13.69',
         fix: {
             'zh-TW': ['📅 換了曆法之後不再出現西曆：摘要上的日期照故事的寫法顯示；換曆法之前摘要的那幾層（記的是西曆日期）先不算，行事曆不會再跳到很奇怪的年份，上方會提示「🔁 重做這幾層」，按了就照新曆法重記；模型寫成西曆日期的也不收。'],

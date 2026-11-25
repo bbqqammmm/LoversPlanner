@@ -34,6 +34,11 @@ const p = await page.evaluate(() => window.__extPrompts.lovers_planner_inline);
 check('instruction at depth 0', p && p.depth === 0 && p.position === 1 && p.role === 0, JSON.stringify(p && { d: p.depth, pos: p.position }));
 check('instruction has format', p?.value.includes('<!--lovers_planner') && p.value.includes('"summary"') && p.value.includes('-->'), p?.value.slice(0, 80));
 check('instruction mentions previous floor', p?.value.includes('上一'));
+// v0.13.71：等狀態欄、選項這些模組都寫完才寫紀錄，紀錄後面不再有東西
+check('instruction: after all modules', p?.value.includes('全部寫完') && p.value.includes('狀態欄') && p.value.includes('紀錄後面不要再寫任何東西'), p?.value.slice(0, 160));
+// 模型還是把紀錄寫在模組前面：拆掉紀錄，後面的模組留著
+const mid = await page.evaluate(async () => (await import('/src/inline.js')).extractInline('正文。\n\n<!--lovers_planner {"summary":"x"} -->\n\n【狀態欄】心情：好'));
+check('record before modules: modules kept', mid?.inner === '{"summary":"x"}' && mid.rest === '正文。\n\n【狀態欄】心情：好', JSON.stringify(mid));
 // 背景的安靜生成不加
 await page.evaluate(() => window.__runInterceptor('quiet'));
 check('quiet: no instruction', !(await page.evaluate(() => window.__extPrompts.lovers_planner_inline?.value)));

@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.71',
+        fix: {
+            'zh-TW': ['📝 主模型順手寫：改成等整則回覆都寫完（正文、狀態欄、選項、小劇場這些卡或預設要的部分）才在最後附上紀錄，不會再把後面的模組擠掉；紀錄也只記正文的劇情。'],
+            'zh-CN': ['📝 主模型顺手写：改成等整则回复都写完（正文、状态栏、选项、小剧场这些卡或预设要的部分）才在最后附上记录，不会再把后面的模块挤掉；记录也只记正文的剧情。'],
+            en: ['📝 Inline record by the main model: it is now written only after the whole reply is done (story plus any status panels, options or side scenes the card or preset asks for), so those parts are no longer pushed out; the record covers only the story.'],
+        },
+    },
+    {
         v: '0.13.70',
         new: {
             'zh-TW': ['🏨 客人簿接上行事曆：客人哪天入住、哪天退房，照那一層故事裡的日期自動記下（不用模型另外回報），月曆上標 🏨，點那天看得到誰入住、誰退房；客人簿顯示「寒雪月3日 → 寒雪月5日・2 晚」「住了幾晚」。換了曆法的話，入住、退房這些欄位模型也會照故事的曆法寫。'],

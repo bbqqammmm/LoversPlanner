@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.68',
+        new: {
+            'zh-TW': ['📅 行事曆可以換曆法了（設定 › 行事曆 › 曆法，跟著角色卡）：中式照真的農曆（正月到臘月、初一到三十、大小月和閏月，可以填年號）、中式每月固定 30 天、自訂（自己填月份名稱和每月幾天，例如「晨露月、烈陽月、落葉月、寒雪月，每月 30 天」）、只記第幾天。模型會照這個曆法記日期，月曆、紀念日、約定的日子、送給角色的「今天是…」都照故事的寫法顯示。'],
+            'zh-CN': ['📅 行事历可以换历法了（设置 › 行事历 › 历法，跟着角色卡）：中式照真的农历（正月到腊月、初一到三十、大小月和闰月，可以填年号）、中式每月固定 30 天、自定义（自己填月份名称和每月几天，例如「晨露月、烈阳月、落叶月、寒雪月，每月 30 天」）、只记第几天。模型会照这个历法记日期，月历、纪念日、约定的日子、送给角色的「今天是…」都照故事的写法显示。'],
+            en: ['📅 The calendar can use other calendars (Settings › Calendar › Calendar, per character): the real Chinese lunar calendar (with an era name, short/long and leap months), Chinese-style months of 30 days, a custom calendar (your own month names and days per month, e.g. four months of 30 days), or a simple day count. The model records dates in that calendar, and the calendar, anniversaries, promise dates and the "today is…" line for the character all use the story\'s own way of writing dates.'],
+        },
+    },
+    {
         v: '0.13.67',
         new: {
             'zh-TW': ['✍️ 新的摘要模式「主模型順手寫」（設定 › 摘要 › 預設模式）：讓聊天的模型寫完正文後，順手在最後附上這一層的紀錄，戀人手帳收下後會從正文拿掉。不用另外呼叫模型，最省錢也最快。回覆會長一點；模型沒寫或寫壞時會跳通知，按「📝 另外摘要」就照原本的方式補上。章、卷的壓縮和日記照舊另外呼叫。'],

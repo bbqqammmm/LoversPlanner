@@ -18,7 +18,8 @@ import { formatNotesForPrompt, invalidateNotes, normalizeModelOps, replay } from
 import { buildL1Parts } from './l1rules.js';
 import { parseJsonLenient } from './json.js';
 import { cleanForSummary, extractRef, extractTheater } from './filter.js';
-import { calendarOn, cleanEvents, normDate } from './calendar.js';
+import { calendarOn, cleanEvents, normDate, readDate, setDateHint } from './calendar.js';
+import { promptDate } from './calendars.js';
 import { cleanKeepsakes, memoriesOn } from './memories.js';
 import { addPrefsFromModel } from './prefs.js';
 import {
@@ -290,7 +291,7 @@ export function previousSceneText(index) {
             const parts = [];
             if (useTime) parts.push(t('prompt.previousTime', { time: time || '—' }));
             if (useLocation) parts.push(t('prompt.previousLocation', { location: location || '—' }));
-            if (useDate && date) parts.push(t('prompt.previousDate', { date }));
+            if (useDate && date) parts.push(t('prompt.previousDate', { date: promptDate(date) }));
             return `${t('prompt.previousLabel')}${parts.join('｜')}`;
         }
     }
@@ -450,6 +451,8 @@ function failToast(index, message) {
  * notesBefore：這一層之前的記事（整理記事變化用）；by：誰寫的（顯示在摘要區塊）。
  */
 export function applyL1Result(index, parsed, { notesBefore, hash, by }) {
+    // 沒寫年的日期（故事曆法）用上一個日期的那一年
+    setDateHint(previousDate(index));
     // 對照這一層之前的記事整理變化：配上 id、去掉重複新增和找不到的。
     const prev = getEntry(index);
     let ops = normalizeModelOps(parsed.ops, notesBefore, prev?.ops, { types: trackedNoteTypes() });
@@ -465,7 +468,7 @@ export function applyL1Result(index, parsed, { notesBefore, hash, by }) {
         characters: keep('cast', 'characters'), summary: parsed.summary, ops, hash, at: Date.now(), by,
         // 行事曆：沒開的話沿用舊的，重新打開時資料還在。
         ...(calendarOn()
-            ? { date: normDate(parsed.date) || previousDate(index), events: cleanEvents(parsed.events) }
+            ? { date: readDate(parsed.date, previousDate(index)) || previousDate(index), events: cleanEvents(parsed.events) }
             : { date: prev?.date ?? '', events: prev?.events ?? [] }),
         // 回憶錄：模型挑的值得珍藏的時刻（沒開的話沿用舊的）。
         keepsakes: memoriesOn() && getSettings().memories?.auto ? cleanKeepsakes(parsed.keepsakes) : (prev?.keepsakes ?? []),
@@ -602,7 +605,7 @@ export function writeSummary(index, fields) {
     const ops = prev?.status === 'ok' && Array.isArray(prev.ops) ? prev.ops : [];
     const events = prev?.status === 'ok' && Array.isArray(prev.events) ? prev.events : [];
     const keepsakes = prev?.status === 'ok' && Array.isArray(prev.keepsakes) ? prev.keepsakes : [];
-    const date = fields?.date !== undefined ? normDate(fields.date) : (prev?.date ?? '');
+    const date = fields?.date !== undefined ? readDate(fields.date, previousDate(index)) : (prev?.date ?? '');
     setEntry(index, withHistory({
         v: 2, status: 'ok', ...cleanScene(fields), summary, ops, events, date, keepsakes,
         hash: floorSource(index).hash, at: Date.now(), manual: true, by: 'manual',

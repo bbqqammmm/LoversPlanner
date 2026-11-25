@@ -24,7 +24,7 @@ import {
 import { refreshDigestMeta, saveChapter, setCoarseRedo, structure } from './compress.js';
 import { estimateTokens } from './hide.js';
 import { cleanForSummary, extractRef, extractTheater, scanTags, sideStoryVerdict, storyBesideTheater, tagMode } from './filter.js';
-import { calendarOn, cleanEvents, normDate } from './calendar.js';
+import { calendarOn, cleanEvents, normDate, readDate } from './calendar.js';
 import { cleanKeepsakes, memoriesOn } from './memories.js';
 
 /** 每次呼叫除了原文之外，提示詞本身（規則、記事清單）大約多少 token。 */
@@ -424,7 +424,7 @@ export async function runCoarse(indices, existing = null) {
                 v: 2, status: 'ok', coarse: true, time, location, characters: parsed.characters,
                 summary: '', ops: i === last ? ops : [], hash: floorSource(i).hash, at,
                 // 行事曆：這一段的日期和事件記在最後一層（前面幾層延續上一個日期）。
-                ...(calendarOn() && i === last ? { date: normDate(parsed.date), events: cleanEvents(parsed.events) } : {}),
+                ...(calendarOn() && i === last ? { date: readDate(parsed.date), events: cleanEvents(parsed.events) } : {}),
                 ...(memoriesOn() && getSettings().memories?.auto && i === last ? { keepsakes: cleanKeepsakes(parsed.keepsakes) } : {}),
             });
         }

@@ -9,7 +9,7 @@ import { ctx, MODULE } from './util.js';
 import { t } from './i18n.js';
 import { CHARACTER_FIELDS, isTracked } from './settings.js';
 import { getChat, getEntry, isAiMessage, saveChatSoon } from './chat.js';
-import { normDate } from './calendar.js';
+import { normDate, readDate } from './calendar.js';
 import { noteDates, storyToday } from './notedates.js';
 import { GUEST_TITLE, guestData, guestFieldKeys, guestLabel } from './guests.js';
 
@@ -104,7 +104,7 @@ function cleanData(type, data) {
     for (const f of [...(NOTE_FIELDS[type] ?? []), ...(LEGACY_FIELDS[type] ?? [])]) {
         const v = data[f];
         if (v === undefined || v === null) continue;
-        const s = DATE_FIELDS.has(f) ? normDate(v) : String(v).trim().slice(0, f === 'title' ? MAX_TITLE + 5 : MAX_FIELD);
+        const s = DATE_FIELDS.has(f) ? readDate(v) : String(v).trim().slice(0, f === 'title' ? MAX_TITLE + 5 : MAX_FIELD);
         if (s) out[f] = s;
     }
     return out;
@@ -534,7 +534,7 @@ export function updateNoteManual(id, data) {
     const next = {};
     for (const f of fieldsOf(note)) {
         const raw = String(data?.[f] ?? '').trim();
-        const v = DATE_FIELDS.has(f) ? normDate(raw) : raw.slice(0, MAX_FIELD);
+        const v = DATE_FIELDS.has(f) ? readDate(raw, storyToday() ?? '') : raw.slice(0, MAX_FIELD);
         if (v !== (note.data[f] ?? '')) next[f] = v;
     }
     if (next[TITLE_FIELD[note.type]] === '') return false; // 標題不能清空

@@ -13,6 +13,10 @@ import { ctx, MODULE } from './util.js';
 import { getSettings } from './settings.js';
 import { currentLocale, t } from './i18n.js';
 import { aiIndices, getChat, getEntry } from './chat.js';
+import {
+    calStyle, cellLabel, fullLabel, hasWeeks, isGregorian, monthDayLabel, monthDayText, monthDays, monthKeyOf, monthTitleOf,
+    nextYearly, parseMonthDay, parseStoryDate, shiftMonthKey,
+} from './calendars.js';
 
 export const CAL_TYPES = ['plan', 'period', 'intimacy', 'anniversary'];
 
@@ -41,14 +45,92 @@ export function normDate(value) {
     return d.toISOString().slice(0, 10);
 }
 
-/** 整理成 MM-DD（紀念日）；也接受完整日期。 */
+/** 整理成 MM-DD（紀念日）；也接受完整日期。月、日照這張卡的曆法（v0.13.68）。 */
 export function normMonthDay(value) {
-    const s = String(value ?? '').trim().replace(/[/.月]/g, '-').replace(/日$/, '');
-    const full = normDate(s);
-    if (full) return full.slice(5);
-    const m = s.match(/^(\d{1,2})-(\d{1,2})$/);
-    if (!m || +m[1] < 1 || +m[1] > 12 || +m[2] < 1 || +m[2] > 31) return '';
-    return `${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+    return parseMonthDay(value);
+}
+
+// ===== 曆法（v0.13.68，calendars.js）：讀日期、顯示 =====
+// 裡面一律存 YYYY-MM-DD（數日子用）；西曆以外的，模型、使用者給的是故事曆法的日期，顯示也照故事曆法。
+
+let dateHint = '';
+/** 讀「沒寫年」的日期時拿來補年份的日期（摘要那一層的上一個日期）。 */
+export function setDateHint(iso) {
+    dateHint = normDate(iso);
+}
+
+/**
+ * 模型、使用者給的日期 → 裡面的日期。已經是裡面的寫法（補零的 YYYY-MM-DD；西曆以外要 2001 年以後）就照收，
+ * 不然照這張卡的曆法讀。
+ */
+export function readDate(value, prev = '') {
+    const text = String(value ?? '').trim();
+    if (!text) return '';
+    if (isGregorian()) return normDate(text);
+    const m = text.match(/^(\d{4})-\d{2}-\d{2}$/);
+    if (m && Number(m[1]) >= 2001 && normDate(text)) return text;
+    return parseStoryDate(text, prev || dateHint);
+}
+
+/** 完整的日期給人看：西曆「2026-03-05（週四）」；其他「天啟三年三月初五」。 */
+export function dayLabel(iso, style = 'short') {
+    if (!iso) return '';
+    const own = fullLabel(iso);
+    if (own !== null) return own;
+    return currentLocale().startsWith('zh') ? `${iso}（${weekdayName(iso, style)}）` : `${iso} (${weekdayName(iso, style)})`;
+}
+
+/** 短的日期（沒有年）：西曆「03-05 週四」；其他「三月初五」「晨露月12日」。 */
+export function shortDay(iso) {
+    if (!iso) return '';
+    return monthDayLabel(iso) ?? `${iso.slice(5)} ${weekdayName(iso)}`;
+}
+
+/** 最短（沒有星期）：西曆「03-05」；其他同上。 */
+export function tinyDay(iso) {
+    if (!iso) return '';
+    return monthDayLabel(iso) ?? iso.slice(5);
+}
+
+/** 紀念日的「MM-DD」給人看：西曆「3/5」；其他「三月初五」。 */
+export function annivText(md) {
+    return monthDayText(md) ?? `${Number(String(md).slice(0, 2))}/${Number(String(md).slice(3))}`;
+}
+
+/** 沒有星期的完整日期：西曆照原本（YYYY-MM-DD）；其他「天啟三年三月初五」。 */
+export function plainDay(iso) {
+    if (!iso) return '';
+    return fullLabel(iso) ?? iso;
+}
+
+/**
+ * 日期輸入框：西曆是 type=date；其他曆法是文字框（顯示故事的寫法，讀的時候用 readDate）。
+ * attrs：其他屬性（class、data-…）。
+ */
+export function dateInput(attrs, iso) {
+    if (isGregorian()) return `<input type="date" ${attrs} value="${iso ?? ''}">`;
+    const v = iso ? (fullLabel(iso) ?? iso) : '';
+    return `<input type="text" ${attrs} value="${String(v).replace(/"/g, '&quot;')}" placeholder="${t('cal.storyDatePh').replace(/"/g, '&quot;')}">`;
+}
+
+/** 月曆格子裡的字。 */
+export function cellText(iso) {
+    return cellLabel(iso) || String(Number(iso.slice(8)));
+}
+
+/** 這一天在月曆的哪一頁。 */
+export function monthKey(iso) {
+    return monthKeyOf(iso);
+}
+
+/** 月曆有沒有星期那一列。 */
+export function calendarHasWeeks() {
+    return hasWeeks();
+}
+
+/** 設定的「故事開始日」（照曆法讀）。 */
+export function startDate() {
+    return readDate(getSettings().calendar?.start ?? '');
 }
 
 function toDate(s) {
@@ -67,26 +149,24 @@ export function daysBetween(a, b) {
 }
 
 export function weekdayName(s, style = 'short') {
+    if (!hasWeeks()) return '';
     return toDate(s).toLocaleDateString(currentLocale(), { weekday: style, timeZone: 'UTC' });
 }
 
-export function monthTitle(ym) {
-    return toDate(`${ym}-01`).toLocaleDateString(currentLocale(), { year: 'numeric', month: 'long', timeZone: 'UTC' });
+/** 月曆一頁的標題。key：西曆是 YYYY-MM，其他曆法是那一頁第一天（monthKey）。 */
+export function monthTitle(key) {
+    const own = monthTitleOf(key);
+    if (own !== null) return own;
+    return toDate(`${key}-01`).toLocaleDateString(currentLocale(), { year: 'numeric', month: 'long', timeZone: 'UTC' });
 }
 
-/** 這個月（YYYY-MM）的格子：前面補上個月的空格，每週從星期日開始。 */
-export function monthGrid(ym) {
-    const first = `${ym}-01`;
-    const pad = toDate(first).getUTCDay();
-    const days = [];
-    for (let d = first; d.startsWith(ym); d = addDays(d, 1)) days.push(d);
-    return { pad, days };
+/** 一頁的格子：前面補幾個空格（西曆照星期，從星期日開始；其他曆法不補）、這頁的日子。 */
+export function monthGrid(key) {
+    return monthDays(key);
 }
 
-export function shiftMonth(ym, n) {
-    const [y, m] = ym.split('-').map(Number);
-    const total = y * 12 + (m - 1) + n;
-    return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`;
+export function shiftMonth(key, n) {
+    return shiftMonthKey(key, n);
 }
 
 // ===== 設定 =====
@@ -98,6 +178,8 @@ export function calendarOn() {
 
 export function calTracked(type) {
     const c = getSettings().calendar;
+    // 只記第幾天：沒有「每年」，紀念日用不了
+    if (type === 'anniversary' && calStyle().type === 'days') return false;
     return Boolean(c?.enabled && c.track?.[type]);
 }
 
@@ -111,7 +193,7 @@ export function cleanEvents(raw) {
         if (!ACTIVE_CAL_TYPES.includes(type) || !calTracked(type)) continue;
         const title = String(ev.title ?? ev.content ?? '').trim().slice(0, 60);
         if (type === 'plan') {
-            if (title) out.push({ type, date: normDate(ev.date), title });
+            if (title) out.push({ type, date: readDate(ev.date), title });
         } else if (type === 'period') {
             const state = String(ev.state ?? 'start').toLowerCase() === 'end' ? 'end' : 'start';
             out.push({ type, state });
@@ -161,7 +243,7 @@ export function onCalendarChange(fn) {
 
 export function addManualEvent(ev) {
     const [clean] = cleanEvents([ev]);
-    const date = normDate(ev.date);
+    const date = readDate(ev.date);
     if (!clean || (!date && clean.type !== 'anniversary')) return false;
     const rec = record(true);
     rec.manual = [...(rec.manual ?? []), { ...clean, ...(clean.type === 'anniversary' ? {} : { date }), id: `ev_${Math.random().toString(36).slice(2, 8)}` }];
@@ -329,7 +411,7 @@ export function buildCalendar() {
     for (const ev of rec?.manual ?? []) if (ev.type !== 'plan' && calTracked(ev.type)) items.push({ ...ev, source: 'manual' });
     // 從其他聊天帶來的（v0.13.33）：舊聊天整理、帶到新聊天。
     for (const ev of rec?.carried ?? []) if (ev.type !== 'plan' && calTracked(ev.type)) items.push({ ...ev, source: 'carried' });
-    if (!today) today = normDate(s.start) || null;
+    if (!today) today = startDate() || null;
 
     // 生理期（v0.13.1 使用者要求：不是每個人都有固定週期，不設週期、不預測）：
     // 只記劇情裡提到的開始和結束。每次開始配上之後（下次開始之前）的第一個結束；
@@ -428,7 +510,9 @@ export function dayInfo(cal, date) {
 }
 
 /** 紀念日下一次是哪天（從 from 那天開始算，含當天）。 */
-function nextAnniversary(md, from) {
+export function nextAnniversary(md, from) {
+    const own = nextYearly(md, from);
+    if (own !== null) return own || addDays(from, 400);
     let date = `${from.slice(0, 4)}-${md}`;
     if (!normDate(date)) date = `${from.slice(0, 4)}-02-28`; // 2 月 29 日遇到平年
     if (date < from) date = `${Number(from.slice(0, 4)) + 1}-${md}`;
@@ -492,14 +576,14 @@ export function calendarInjection() {
     const cal = buildCalendar();
     if (!cal.today) return '';
     const user = ctx()?.name1 ?? '';
-    const lines = [t('cal.inject.today', { date: cal.today, weekday: weekdayName(cal.today, 'long') })];
+    const lines = [t('cal.inject.today', { date: dayLabel(cal.today, 'long') })];
     const p = periodStatus(cal);
     // 生理期中告訴角色第幾天；開了推算才說「可能快來了」「晚了」「排卵期」「很久沒來」（語氣都是不確定的）。
     if (p?.kind === 'during') lines.push(t('cal.inject.during', { user, day: p.day }));
     else if (p?.kind === 'last') {
         const pred = cal.prediction;
         if (p.late) lines.push(t('cal.inject.late', { user, n: p.late, days: p.days }));
-        else if (p.soon) lines.push(t('cal.inject.soon', { user, from: pred.earliest.slice(5), to: pred.latest.slice(5) }));
+        else if (p.soon) lines.push(t('cal.inject.soon', { user, from: tinyDay(pred.earliest), to: tinyDay(pred.latest) }));
         else if (p.long) lines.push(t('cal.inject.long', { user, days: p.days }));
         if (p.fertile) lines.push(t('cal.inject.fertile', { user }));
     }
@@ -513,7 +597,7 @@ export function calendarInjection() {
             const when = x.in === 0 ? t('cal.today') : t('cal.inDays', { n: x.in });
             const label = x.kind === 'anniversary' ? t('cal.anniversaryOf', { title: x.title })
                 : x.kind === 'promise' || x.kind === 'todo' ? t(`cal.${x.kind}Of`, { title: x.title }) : x.title;
-            return `${x.date.slice(5)}（${when}）${label}`;
+            return `${tinyDay(x.date)}（${when}）${label}`;
         });
         lines.push(t('cal.inject.upcoming', { list: parts.join('；') }));
     }

@@ -7,7 +7,7 @@ import { getChat, getEntry, isAiMessage, lastAiIndex } from '../chat.js';
 import { enqueue, floorState, floorVersions, isActive, onSummaryChange, restoreVersion, sideFloor, skipFloor, unsideFloor, unskipFloor, writeSummary } from '../summarize.js';
 import { describeOp, getNotes, onNotesChange, opType, setFloorOpUndone } from '../notes.js';
 import { computeHidden } from '../hide.js';
-import { calendarOn, calTracked } from '../calendar.js';
+import { calendarOn, calTracked, dateInput } from '../calendar.js';
 import { addMemory, memoriesOn } from '../memories.js';
 import { floorOf, onSentChange, receiptOf } from '../sent.js';
 
@@ -235,7 +235,7 @@ function editorHtml(entry) {
     // 沒勾選的欄位不顯示；儲存時沿用原本的值。
     const time = isTracked('time') ? `<label class="lp-field"><span class="lp-label">${esc(t('meta.time'))}</span><input type="text" class="text_pole" data-field="time" value="${v(entry?.time)}"></label>` : '';
     const location = isTracked('location') ? `<label class="lp-field"><span class="lp-label">${esc(t('meta.location'))}</span><input type="text" class="text_pole" data-field="location" value="${v(entry?.location)}"></label>` : '';
-    const date = calendarOn() ? `<label class="lp-field"><span class="lp-label">${esc(t('meta.date'))}</span><input type="date" class="text_pole" data-field="date" value="${v(entry?.date)}"></label>` : '';
+    const date = calendarOn() ? `<label class="lp-field"><span class="lp-label">${esc(t('meta.date'))}</span>${dateInput('class="text_pole" data-field="date"', entry?.date ?? '')}</label>` : '';
     const cast = isTracked('cast') ? `<label class="lp-field"><span class="lp-label">${esc(t('meta.characters'))}</span><input type="text" class="text_pole" data-field="characters" value="${v((entry?.characters ?? []).join('、'))}" placeholder="${esc(t('meta.charactersHint'))}"></label>` : '';
     return `
       ${time || location ? `<div class="lp-editor-grid">${time}${location}</div>` : ''}

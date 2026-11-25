@@ -4,7 +4,8 @@
 import { currentLocale } from './i18n.js';
 import { charFields, getSettings, isTracked, trackedNoteTypes } from './settings.js';
 import { NOTE_FIELDS } from './notes.js';
-import { ACTIVE_CAL_TYPES, calendarOn, calTracked, normDate } from './calendar.js';
+import { ACTIVE_CAL_TYPES, calendarOn, calTracked, normDate, startDate as storyStart } from './calendar.js';
+import { isGregorian, promptDate, promptInfo } from './calendars.js';
 import { memoriesOn } from './memories.js';
 import { guestFields, guestTitle } from './guests.js';
 
@@ -196,7 +197,15 @@ const TEXT = {
 
 /** 故事開始日：設定裡填的，沒填就用今天（現實的日期）。 */
 function startDate() {
+    if (!isGregorian()) return promptDate(storyStart() || '2001-01-01');
     return normDate(getSettings().calendar?.start) || new Date().toISOString().slice(0, 10);
+}
+
+/** 故事的曆法（v0.13.68）：說明放在日期那條前面，YYYY-MM-DD／MM-DD 換成這個曆法的寫法。 */
+function withCalendar(text) {
+    if (isGregorian()) return text;
+    const info = promptInfo();
+    return String(text).split('YYYY-MM-DD').join(info.fmt).split('MM-DD').join(info.md || info.fmt);
 }
 
 function fill(text, vars) {
@@ -223,7 +232,8 @@ export function buildL1Parts({ length, char, user, chapter = false, previousDate
     const cal = calendarOn();
     if (cal) {
         const start = normDate(previousDate) ? '' : fill(T.dateStart, { start: startDate() });
-        rules.push(fill(chapter ? T.dateChapter : T.date, { start }).trim());
+        const dateRule = fill(chapter ? T.dateChapter : T.date, { start }).trim();
+        rules.push(isGregorian() ? dateRule : `${promptInfo().desc}\n${dateRule}`);
     }
     const summarySub = [];
     if (isTracked('time') || isTracked('location')) summarySub.push(T.noScene);
@@ -299,7 +309,7 @@ export function buildL1Parts({ length, char, user, chapter = false, previousDate
         lines.push('  "summary": "…"');
     }
     lines.push('}');
-    return { rules: numbered, format: lines.join('\n') };
+    return { rules: withCalendar(numbered), format: withCalendar(lines.join('\n')) };
 }
 
 /**
@@ -319,5 +329,5 @@ function sideParts(T, vars) {
         lines.push('  "ops": [', ex.join(',\n'), '  ]');
     }
     lines.push('}');
-    return { rules: rules.map((r, i) => `${i + 1}. ${r}`).join('\n'), format: lines.join('\n') };
+    return { rules: withCalendar(rules.map((r, i) => `${i + 1}. ${r}`).join('\n')), format: withCalendar(lines.join('\n')) };
 }

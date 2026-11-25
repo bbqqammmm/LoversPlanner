@@ -7,6 +7,7 @@
 
 import { aiIndices, getEntry } from './chat.js';
 import { addDays, normDate } from './calendar.js';
+import { isGregorian, parseStoryDate } from './calendars.js';
 
 const DAY = { 今: 0, 明: 1 };
 const WEEKDAY = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 0, 天: 0, 七: 0 };
@@ -39,12 +40,18 @@ function parseNum(s) {
 export function guessDate(text, made) {
     const s = String(text ?? '');
     if (!s) return '';
+    // 故事自己的曆法（v0.13.68）：「三月初五」「寒雪月12日」；沒有星期、也不是西曆的月日
+    const story = !isGregorian();
+    if (story) {
+        const own = normDate(made) ? parseStoryDate(s, made) : '';
+        if (own) return own;
+    }
     // 寫明的日期：2026-10-21、2026/10/21、2026年10月21日
-    const full = s.match(/(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/);
+    const full = story ? null : s.match(/(\d{4})\s*[-/.年]\s*(\d{1,2})\s*[-/.月]\s*(\d{1,2})/);
     if (full) return normDate(`${full[1]}-${full[2]}-${full[3]}`);
     if (!normDate(made)) return '';
     // 10月21日／10月21號／10/21：年份用 made 的；已經過了就算明年。
-    const md = s.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*[日號号]?/) ?? s.match(/(?<![\d/])(\d{1,2})\/(\d{1,2})(?![\d/])/);
+    const md = story ? null : s.match(/(\d{1,2})\s*月\s*(\d{1,2})\s*[日號号]?/) ?? s.match(/(?<![\d/])(\d{1,2})\/(\d{1,2})(?![\d/])/);
     if (md) {
         const year = Number(made.slice(0, 4));
         let d = normDate(`${year}-${md[1]}-${md[2]}`);
@@ -57,14 +64,14 @@ export function guessDate(text, made) {
     const after = s.match(/(\d+|[一兩两二三四五六七八九十]{1,2})\s*天[後后]/);
     if (after && parseNum(after[1]) !== null) return addDays(made, parseNum(after[1]));
     const wk = s.match(/(下|這|这|本)?\s*(?:個|个)?\s*(?:週|周|星期|禮拜|礼拜)\s*([一二三四五六日天七])/);
-    if (wk) return nextWeekday(made, WEEKDAY[wk[2]], wk[1] === '下');
+    if (wk && !story) return nextWeekday(made, WEEKDAY[wk[2]], wk[1] === '下');
     if (rel) return addDays(made, DAY[rel[1]]);
     const lower = s.toLowerCase();
     if (/\bday after tomorrow\b/.test(lower)) return addDays(made, 2);
     if (/\btomorrow\b/.test(lower)) return addDays(made, 1);
     if (/\b(today|tonight)\b/.test(lower)) return made;
     const en = lower.match(/\b(next|this)?\s*(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\b/);
-    if (en) return nextWeekday(made, EN_WEEKDAY.indexOf(en[2]), en[1] === 'next');
+    if (en && !story) return nextWeekday(made, EN_WEEKDAY.indexOf(en[2]), en[1] === 'next');
     return '';
 }
 

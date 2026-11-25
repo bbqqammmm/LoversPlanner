@@ -56,7 +56,9 @@ import { actionsFor, byLine, eventLabel, hintFor, revealFloor, runAction, sceneH
 import {
     addCarriedEvents, addManualEvent, buildCalendar, ACTIVE_CAL_TYPES, calendarOn, carryAsked, markCarryAsked, calTracked, dayInfo, daysBetween, monthGrid, monthTitle, onCalendarChange,
     periodStatus, removeEvent, restoreRemoved, shiftMonth, upcoming, weekdayName,
+    annivText, calendarHasWeeks, cellText, dateInput, dayLabel, monthKey, nextAnniversary, plainDay, shortDay, tinyDay,
 } from '../calendar.js';
+import { calStyle, maxDayOf, monthOptions, setCalStyle, STYLES as CAL_STYLES } from '../calendars.js';
 import {
     addNoteManual, changeQuantity, closedNotes, completeNoteManual, deleteNoteManual, getNotes, invalidateNotes, NOTE_FIELDS, NOTE_TYPES,
     DATE_FIELDS, displayTitle, fieldLabel, fieldsOf, keyField, leadRoles, noteTitle, notesWithoutTitle, NUMBER_FIELDS, setRoleManual,
@@ -906,7 +908,7 @@ function memoryCard(m, pinned) {
     const key = `mem:${m.key}`;
     const open = isExpanded(key);
     // 故事裡的哪時候：日期（星期）＋時間；日期是從附近樓層推來的標「約」。
-    const day = m.date ? `${m.dateGuessed ? t('mem.about') : ''}${m.date}（${weekdayName(m.date)}）` : '';
+    const day = m.date ? `${m.dateGuessed ? t('mem.about') : ''}${dayLabel(m.date)}` : '';
     const when = [day, m.time].filter(Boolean).join('・');
     const tags = `${m.theater ? `<span class="lp-badge">${esc(t('mem.theater'))}</span>` : ''}${pinned ? `<span class="lp-badge lp-st-ok">${esc(t('mem.nextOn'))}</span>` : ''}`;
     const head = `
@@ -957,7 +959,9 @@ function renderMemoriesTab() {
 function renderCalendarTab() {
     if (!isActive()) return '';
     const cal = buildCalendar();
-    const month = view.cal.month ?? (cal.today ?? new Date().toISOString().slice(0, 10)).slice(0, 7);
+    // 曆法（v0.13.68）：一頁的 key 西曆是 YYYY-MM，其他是那頁第一天；換了曆法時舊的 key 也認得
+    const saved = view.cal.month;
+    const month = monthKey(saved ? (/^\d{4}-\d{2}$/.test(saved) ? `${saved}-01` : saved) : (cal.today ?? new Date().toISOString().slice(0, 10)));
     view.cal.month = month;
     const { pad, days } = monthGrid(month);
     const dueByDate = new Map();
@@ -966,7 +970,8 @@ function renderCalendarTab() {
         if (!dueByDate.has(n.due)) dueByDate.set(n.due, []);
         dueByDate.get(n.due).push(n);
     }
-    const head = Array.from({ length: 7 }, (_, k) => weekdayName(`2023-01-0${k + 1}`, 'narrow')); // 2023-01-01 是星期日
+    // 2023-01-01 是星期日；沒有星期的曆法不畫這一列
+    const head = calendarHasWeeks() ? Array.from({ length: 7 }, (_, k) => weekdayName(`2023-01-0${k + 1}`, 'narrow')) : [];
     const cells = [];
     for (let k = 0; k < pad; k++) cells.push('<span class="lp-cal-cell lp-cal-empty" aria-hidden="true"></span>');
     for (const d of days) {
@@ -984,10 +989,10 @@ function renderCalendarTab() {
         if (due.some((n) => n.type === 'promise')) marks.push('<span class="lp-cal-mark" aria-hidden="true">🤝</span>');
         if (due.some((n) => n.type === 'todo')) marks.push('<span class="lp-cal-mark" aria-hidden="true">📝</span>');
         const cls = ['lp-cal-cell', d === cal.today ? 'lp-cal-today' : '', d === view.cal.selected ? 'lp-on' : '', info.period === 'actual' ? 'lp-cal-period' : ''].filter(Boolean).join(' ');
-        const label = [d, ...info.items.map(eventLabel), ...due.map(displayTitle), info.period === 'actual' ? t('cal.status.during', { day: info.periodDay }) : '',
+        const label = [dayLabel(d), ...info.items.map(eventLabel), ...due.map(displayTitle), info.period === 'actual' ? t('cal.status.during', { day: info.periodDay }) : '',
             info.period === 'predicted' ? t('cal.predicted') : '', info.fertile ? t('cal.fertile') : ''].filter(Boolean).join('，');
         cells.push(`<button type="button" class="${cls}" data-action="cal-day" data-date="${d}" aria-label="${esc(label)}" aria-pressed="${d === view.cal.selected}">
-            <span class="lp-cal-num">${Number(d.slice(8))}</span><span class="lp-cal-marks">${marks.join('')}</span></button>`);
+            <span class="lp-cal-num">${esc(cellText(d))}</span><span class="lp-cal-marks">${marks.join('')}</span></button>`);
     }
     const nav = `
       <div class="lp-row lp-cal-nav">
@@ -1003,7 +1008,7 @@ function renderCalendarTab() {
     const toggle = `<div class="lp-row"><button type="button" class="lp-sec-toggle" data-action="fold-sec" data-key="sec:calendar" aria-expanded="${open}">
         <span class="lp-sum-chev" aria-hidden="true">${open ? '▾' : '▸'}</span>
         <span class="lp-scope-title">${esc(t('tab.calendar'))}</span>
-        ${!open && cal.today ? `<span class="lp-note">${esc(t('cal.todayIs', { date: cal.today, weekday: weekdayName(cal.today, 'long') }))}</span>` : ''}
+        ${!open && cal.today ? `<span class="lp-note">${esc(t('cal.todayIs', { date: dayLabel(cal.today, 'long') }))}</span>` : ''}
       </button></div>`;
     return `<div class="lp-calendar" data-role="calendar">${toggle}${open ? `${calendarCarry(cal)}${calendarStatus(cal)}${nav}${grid}${calendarDay(cal)}${annivList(cal)}` : ''}</div>`;
 }
@@ -1064,8 +1069,7 @@ function annivGroups(cal) {
         groups.get(key).items.push(x);
     }
     return [...groups.values()].map((g) => {
-        let next = `${base.slice(0, 4)}-${g.date}`;
-        if (next < base) next = `${Number(base.slice(0, 4)) + 1}-${g.date}`;
+        const next = nextAnniversary(g.date, base);
         return { ...g, key: `${g.date}|${g.title}`, left: daysBetween(base, next) };
     }).sort((a, b) => a.left - b.left || a.title.localeCompare(b.title));
 }
@@ -1080,7 +1084,7 @@ function annivList(cal) {
         const from = g.items.some((x) => x.source === 'floor') ? t('anniv.fromStory') : g.items.some((x) => x.source === 'carried') ? t('anniv.carried') : t('anniv.manual');
         const left = g.left === 0 ? t('anniv.today') : t('anniv.left', { n: g.left });
         return `<li class="lp-anniv-item${g.key === view.anniv.editing ? ' lp-on' : ''}" data-anniv="${esc(g.key)}">
-          <span>🎂 <b>${esc(g.title || t('cal.type.anniversary'))}</b>・${Number(g.date.slice(0, 2))}/${Number(g.date.slice(3))}・${esc(left)}</span>
+          <span>🎂 <b>${esc(g.title || t('cal.type.anniversary'))}</b>・${esc(annivText(g.date))}・${esc(left)}</span>
           <span class="lp-note">${esc(from)}${g.items.length > 1 ? esc(t('anniv.times', { n: g.items.length })) : ''}</span>
           <span class="lp-spacer"></span>
           <button type="button" class="menu_button lp-btn lp-mini" data-action="anniv-edit" data-key="${esc(g.key)}">${esc(t('anniv.edit'))}</button>
@@ -1094,8 +1098,9 @@ function annivList(cal) {
         <div class="lp-scope-title">${esc(t('anniv.title'))}</div>
         ${rows ? `<ul class="lp-anniv-list">${rows}</ul>` : `<div class="lp-note">${esc(t('anniv.none'))}</div>`}
         <div class="lp-row lp-anniv-form">
-          <input type="number" class="text_pole lp-num" data-role="anniv-month" min="1" max="12" value="${m}" aria-label="${esc(t('anniv.month'))}"><span>${esc(t('anniv.month'))}</span>
-          <input type="number" class="text_pole lp-num" data-role="anniv-day" min="1" max="31" value="${d}" aria-label="${esc(t('anniv.day'))}"><span>${esc(t('anniv.day'))}</span>
+          ${monthOptions() ? `<select class="text_pole lp-select" data-role="anniv-month" aria-label="${esc(t('anniv.month'))}">${monthOptions().map(([v, label]) => `<option value="${v}"${v === m ? ' selected' : ''}>${esc(label)}</option>`).join('')}</select>`
+                : `<input type="number" class="text_pole lp-num" data-role="anniv-month" min="1" max="12" value="${m}" aria-label="${esc(t('anniv.month'))}"><span>${esc(t('anniv.month'))}</span>`}
+          <input type="number" class="text_pole lp-num" data-role="anniv-day" min="1" max="${monthOptions() ? maxDayOf(1) : 31}" value="${d}" aria-label="${esc(t('anniv.day'))}"><span>${esc(t('anniv.day'))}</span>
           <input type="text" class="text_pole lp-grow" data-role="anniv-title" value="${esc(editing?.title ?? '')}" placeholder="${esc(t('anniv.titlePh'))}" aria-label="${esc(t('cal.add.title'))}">
           <button type="button" class="menu_button lp-btn lp-primary" data-action="anniv-save">${esc(t(editing ? 'anniv.save' : 'anniv.add'))}</button>
           ${editing ? `<button type="button" class="menu_button lp-btn" data-action="anniv-cancel">${esc(t('anniv.cancel'))}</button>` : ''}
@@ -1130,15 +1135,15 @@ function dayNotes(d) {
 /** 上方的狀態：今天、生理期、接下來的事。 */
 function calendarStatus(cal) {
     if (!cal.today) return `<div class="lp-callout" data-role="cal-status">${esc(t('cal.noToday'))}</div>`;
-    const lines = [`<div><b>${esc(t('cal.todayIs', { date: cal.today, weekday: weekdayName(cal.today, 'long') }))}</b></div>`];
+    const lines = [`<div><b>${esc(t('cal.todayIs', { date: dayLabel(cal.today, 'long') }))}</b></div>`];
     const p = periodStatus(cal);
     if (p?.kind === 'during') lines.push(`<div>🩸 ${esc(t('cal.status.during', { day: p.day }))}${p.open ? ` <span class="lp-note">${esc(t('cal.status.open'))}</span>` : ''}</div>`);
-    else if (p?.kind === 'last') lines.push(`<div class="lp-note">🩸 ${esc(t('cal.status.last', { date: p.date, days: p.days }))}</div>`);
+    else if (p?.kind === 'last') lines.push(`<div class="lp-note">🩸 ${esc(t('cal.status.last', { date: plainDay(p.date), days: p.days }))}</div>`);
     // 推算（選項）：下次大約的範圍、晚了、很久沒來、排卵期。
     const pred = cal.prediction;
     if (pred && p?.kind !== 'during') {
-        lines.push(`<div data-role="cal-predict">🩸 ${esc(t('cal.status.predict', { from: pred.earliest, to: pred.latest, n: pred.cycles, min: pred.min, max: pred.max, median: pred.median }))}</div>`);
-        if (pred.fertile) lines.push(`<div class="lp-note">🌸 ${esc(t('cal.status.fertile', { from: pred.fertile.from, to: pred.fertile.to }))}</div>`);
+        lines.push(`<div data-role="cal-predict">🩸 ${esc(t('cal.status.predict', { from: plainDay(pred.earliest), to: plainDay(pred.latest), n: pred.cycles, min: pred.min, max: pred.max, median: pred.median }))}</div>`);
+        if (pred.fertile) lines.push(`<div class="lp-note">🌸 ${esc(t('cal.status.fertile', { from: plainDay(pred.fertile.from), to: plainDay(pred.fertile.to) }))}</div>`);
         else if (pred.ovulationSkipped) lines.push(`<div class="lp-note">🌸 ${esc(t('cal.status.fertileSkipped', { spread: pred.spread }))}</div>`);
     } else if (getSettings().calendar?.predict && calTracked('period') && p?.kind !== 'during') {
         lines.push(`<div class="lp-note" data-role="cal-predict">🩸 ${esc(t('cal.status.predictNeed'))}</div>`);
@@ -1150,7 +1155,7 @@ function calendarStatus(cal) {
         const items = list.map((x) => {
             const when = x.in === 0 ? t('cal.today') : t('cal.inDays', { n: x.in });
             const what = `${{ anniversary: '🎂', promise: '🤝', todo: '📝' }[x.kind] ?? '📌'} ${x.title}`;
-            return `<li>${esc(`${x.date.slice(5)}（${when}）${what}`)}</li>`;
+            return `<li>${esc(`${tinyDay(x.date)}（${when}）${what}`)}</li>`;
         }).join('');
         lines.push(`<div class="lp-label">${esc(t('cal.upcoming'))}</div><ul class="lp-recall-list">${items}</ul>`);
     }
@@ -1184,7 +1189,7 @@ function calendarDay(cal) {
     const typeSel = `<select class="text_pole lp-select" data-role="cal-type" aria-label="${esc(t('cal.add.type'))}">${types.map((x) => `<option value="${x}"${x === type ? ' selected' : ''}>${esc(x === 'promise' || x === 'todo' ? typeLabel(x) : t(`cal.type.${x}`))}</option>`).join('')}</select>`;
     return `
       <div class="lp-card lp-cal-day" data-role="cal-day">
-        <div class="lp-scope-title">${esc(`${d}（${weekdayName(d, 'long')}）`)}</div>
+        <div class="lp-scope-title">${esc(dayLabel(d, 'long'))}</div>
         ${rows.length ? `<ul class="lp-recall-list">${rows.join('')}</ul>` : ''}
         ${dayNotes(d) || (rows.length ? '' : `<div class="lp-note">${esc(t('cal.empty'))}</div>`)}
         ${types.length ? `<div class="lp-row">${typeSel}${fields}<button type="button" class="menu_button lp-btn lp-primary" data-action="cal-add">${esc(t('cal.add'))}</button></div>` : ''}
@@ -1412,7 +1417,7 @@ function oldResultHtml(r) {
     const big = r.days.filter((d) => d.parts > 1).length;
     const otherChat = new Set(conflictDays(r.days.filter((d) => d.date && d.ai).map((d) => d.date), view.old.only));
     const dayRows = r.days.map((d) => {
-        const label = d.date ? `${d.date}（${weekdayName(d.date, 'short')}）` : t('old.noDate');
+        const label = d.date ? dayLabel(d.date) : t('old.noDate');
         const parts = [t('old.dayFloors', { n: d.ai }), d.ai ? t('old.dayDone', { ok: d.summarized, todo: d.ai - d.summarized }) : '', d.side ? t('old.daySide', { n: d.side }) : '',
             d.empty ? t('old.dayEmpty', { n: d.empty }) : '', t('old.dayRaw', { n: d.rawChars.toLocaleString() }), d.diary ? t('old.dayDiary', { n: d.diary.toLocaleString() }) : '', d.parts > 1 ? t('old.dayParts', { n: d.parts }) : ''].filter(Boolean);
         // 這天是哪幾層（v0.13.48）：讀好幾個聊天時寫聊天名稱。
@@ -1633,7 +1638,7 @@ function diarySection() {
         const open = v.open.has(d.date);
         const head = `<button type="button" class="lp-row-head" data-action="diary-toggle" data-date="${esc(d.date)}" aria-expanded="${open}">
             <span class="lp-sum-chev" aria-hidden="true">${open ? '▾' : '▸'}</span>
-            <b>${esc(d.date ? `${d.date}（${weekdayName(d.date, 'short')}）` : t('old.noDate'))}</b>
+            <b>${esc(d.date ? dayLabel(d.date) : t('old.noDate'))}</b>
             <span class="lp-note">${esc(DIARY_STATE_ICON[d.state])} ${esc(t('diary.chars', { n: d.chars.toLocaleString() }))}${d.use === 'compressed' ? ` ・${esc(t('diary.usingCompressed'))}` : ''}${d.parts.length > 1 ? ` ・${esc(t('old.dayParts', { n: d.parts.length }))}` : ''}</span>
             ${open ? '' : `<span class="lp-row-preview">${esc((d.use === 'compressed' ? d.compressed.summary : d.original).slice(0, 60))}</span>`}
           </button>`;
@@ -2259,13 +2264,39 @@ function noteTrace(note) {
     return `<div class="lp-note-trace">${parts.join(' · ')}</div>`;
 }
 
+/** 📅 曆法（v0.13.68，跟著角色卡）：西曆、中式（照真的農曆／每月 30 天）、自訂、只記第幾天。 */
+function calStyleSettings() {
+    const st = calStyle();
+    const opt = (v) => `<option value="${v}"${st.type === v ? ' selected' : ''}>${esc(t(`set.cal.style.${v}`))}</option>`;
+    const era = st.type === 'lunar' || st.type === 'fixed30' ? `
+        <label class="lp-field"><span class="lp-label">${esc(t('set.cal.era'))}</span>
+          <input type="text" class="text_pole" data-cal-style="era" value="${esc(st.era)}" placeholder="${esc(t('set.cal.era.ph'))}"></label>` : '';
+    const custom = st.type === 'custom' ? `
+        <label class="lp-field"><span class="lp-label">${esc(t('set.cal.months'))}</span>
+          <textarea class="text_pole lp-sum-editor" data-cal-style="months" rows="2" placeholder="${esc(t('set.cal.months.ph'))}">${esc(st.months.join('、'))}</textarea></label>
+        <div class="lp-row">
+          <label class="lp-field"><span class="lp-label">${esc(t('set.cal.monthDays'))}</span>
+            <input type="number" class="text_pole lp-num" data-cal-style="monthDays" min="1" max="99" value="${st.monthDays}"></label>
+          <label class="lp-field lp-grow"><span class="lp-label">${esc(t('set.cal.yearLabel'))}</span>
+            <input type="text" class="text_pole" data-cal-style="yearLabel" value="${esc(st.yearLabel)}" placeholder="${esc(t('set.cal.yearLabel.ph'))}"></label>
+        </div>` : '';
+    return `
+      <label class="lp-field"><span class="lp-label">${esc(t('set.cal.style'))}</span>
+        <select class="text_pole lp-select" data-cal-style="type">${CAL_STYLES.map(opt).join('')}</select></label>
+      ${era}${custom}
+      <div class="lp-note">${esc(t(`set.cal.style.${st.type}.note`))}</div>`;
+}
+
 function noteForm(type, data, { id = null } = {}) {
     const fields = (id ? fieldsOf({ type, data }) : typeFields(type)).map((f, i) => {
         const num = NUMBER_FIELDS.has(f);
-        const attrs = num ? 'type="number" min="0" step="1" inputmode="numeric"' : DATE_FIELDS.has(f) ? 'type="date"' : 'type="text"';
+        const attrs = num ? 'type="number" min="0" step="1" inputmode="numeric"' : 'type="text"';
+        // 日期欄位照曆法（v0.13.68）：西曆是日期選擇器，其他是文字框
+        const input = DATE_FIELDS.has(f) ? dateInput(`class="text_pole" data-note-field="${f}"${i === 0 ? ' data-autofocus' : ''}`, data?.[f] ?? '')
+            : `<input ${attrs} class="text_pole" data-note-field="${f}" value="${esc(data?.[f] ?? '')}"${i === 0 ? ' data-autofocus' : ''}>`;
         return `
       <label class="lp-field"><span class="lp-label">${esc(fieldLabel(type, f))}</span>
-        <input ${attrs} class="text_pole" data-note-field="${f}" value="${esc(data?.[f] ?? '')}"${i === 0 ? ' data-autofocus' : ''}></label>`;
+        ${input}</label>`;
     }).join('');
     return `
       <div class="lp-note-card lp-note-form" data-note-form="${id ?? ''}" data-type="${type}">
@@ -2318,7 +2349,7 @@ function noteText(note) {
 /** 「10-21 週二・明天」：預定日期，和故事裡的今天差幾天。 */
 function dueText(due, today) {
     if (!due) return '';
-    const md = `${due.slice(5)} ${weekdayName(due)}`;
+    const md = shortDay(due);
     if (!today) return md;
     const n = daysBetween(today, due);
     const rel = n === 0 ? t('notes.rel.today') : n === 1 ? t('notes.rel.tomorrow') : n > 0 ? t('notes.rel.in', { n }) : t('notes.rel.ago', { n: -n });
@@ -2338,10 +2369,10 @@ function dueTag(note, today) {
 function datesLine(note, today) {
     const { made, due, guessed, from } = noteDates(note);
     const parts = [];
-    if (made) parts.push(`<span class="lp-label">${esc(t(`notes.made.${note.type}`))}</span> ${esc(`${made}（${weekdayName(made)}）`)}`);
+    if (made) parts.push(`<span class="lp-label">${esc(t(`notes.made.${note.type}`))}</span> ${esc(dayLabel(made))}`);
     if (due) {
         const how = guessed ? ` <span class="lp-note">${esc(from === 'when' ? t('notes.guessed.when', { text: note.data.when }) : t('notes.guessed.content'))}</span>` : '';
-        parts.push(`<span class="lp-label">${esc(fieldLabel(note.type, 'due'))}</span> ${esc(`${due}（${weekdayName(due)}）`)}${today ? ` <span class="lp-note">${esc(dueText(due, today).split('・')[1] ?? '')}</span>` : ''}${how}`);
+        parts.push(`<span class="lp-label">${esc(fieldLabel(note.type, 'due'))}</span> ${esc(dayLabel(due))}${today ? ` <span class="lp-note">${esc(dueText(due, today).split('・')[1] ?? '')}</span>` : ''}${how}`);
     }
     return parts.length ? `<div class="lp-note-line lp-note-dates">${parts.join('<span class="lp-dot"> · </span>')}</div>` : '';
 }
@@ -2866,7 +2897,7 @@ function closedText(note, today) {
     const d = closedDateOf(note);
     if (!d) return '';
     const n = today ? daysBetween(d, today) : null;
-    return n === null || n < 0 ? `${d.slice(5)} ${weekdayName(d)}` : `${d.slice(5)} ${weekdayName(d)}・${n === 0 ? t('notes.rel.today') : t('notes.rel.ago', { n })}`;
+    return n === null || n < 0 ? shortDay(d) : `${shortDay(d)}・${n === 0 ? t('notes.rel.today') : t('notes.rel.ago', { n })}`;
 }
 
 function renderDoneTab() {
@@ -2896,8 +2927,8 @@ function renderDoneTab() {
         const { made } = noteDates(note);
         const closed = closedDateOf(note);
         const dates = [
-            made ? `<span class="lp-label">${esc(t(`notes.made.${note.type}`))}</span> ${esc(`${made}（${weekdayName(made)}）`)}` : '',
-            closed ? `<span class="lp-label">${esc(t('done.closedOn'))}</span> ${esc(`${closed}（${weekdayName(closed)}）`)}` : '',
+            made ? `<span class="lp-label">${esc(t(`notes.made.${note.type}`))}</span> ${esc(dayLabel(made))}` : '',
+            closed ? `<span class="lp-label">${esc(t('done.closedOn'))}</span> ${esc(dayLabel(closed))}` : '',
             closed && today && daysBetween(closed, today) > 0 ? `<span class="lp-note">${esc(t('notes.rel.ago', { n: daysBetween(closed, today) }))}</span>` : '',
         ].filter(Boolean);
         if (dates.length) lines.push(`<div class="lp-note-line lp-note-dates">${dates.join('<span class="lp-dot"> · </span>')}</div>`);
@@ -3309,9 +3340,10 @@ function renderSettings() {
       ${checkbox('calendar.enabled', t('set.cal.enabled'), true)}
       <div class="lp-note">${esc(t('set.cal.desc'))}</div>
       ${c.enabled ? `
+        ${calStyleSettings()}
         <div class="lp-track-group"><span class="lp-label">${esc(t('set.cal.track'))}</span>${ACTIVE_CAL_TYPES.map((x) => checkbox(`calendar.track.${x}`, t(`cal.type.${x}`), true)).join('')}</div>
         <label class="lp-field" for="lp-cal-start"><span class="lp-label">${esc(t('set.cal.start'))}</span>
-          <input id="lp-cal-start" type="date" class="text_pole" data-path="calendar.start" value="${esc(c.start ?? '')}"></label>
+          <input id="lp-cal-start" type="${calStyle().type === 'gregorian' ? 'date' : 'text'}" class="text_pole" data-path="calendar.start" value="${esc(c.start ?? '')}"${calStyle().type === 'gregorian' ? '' : ` placeholder="${esc(t('cal.storyDatePh'))}"`}></label>
         <div class="lp-note">${esc(t('set.cal.start.note'))}</div>
         ${c.track.period ? `<div class="lp-note">${esc(t('set.cal.period.note'))}</div>
         ${checkbox('calendar.predict', t('set.cal.predict'), true)}
@@ -4500,7 +4532,7 @@ function onClick(e) {
             const month = Number(box?.querySelector('[data-role="anniv-month"]')?.value);
             const day = Number(box?.querySelector('[data-role="anniv-day"]')?.value);
             const title = String(box?.querySelector('[data-role="anniv-title"]')?.value ?? '').trim();
-            const valid = Number.isInteger(month) && Number.isInteger(day) && month >= 1 && month <= 12 && day >= 1 && day <= new Date(2024, month, 0).getDate();
+            const valid = Number.isInteger(month) && Number.isInteger(day) && month >= 1 && month <= (monthOptions()?.length ?? 12) && day >= 1 && day <= maxDayOf(month);
             if (!valid || !title) {
                 const msg = box?.querySelector('[data-role="anniv-msg"]');
                 if (msg) msg.textContent = t(valid ? 'anniv.needTitle' : 'anniv.bad');
@@ -4966,6 +4998,13 @@ function onSummaryAction(index, act) {
 
 function onChange(e) {
     const el = e.target;
+    // 📅 曆法（跟著角色卡）
+    if (el.dataset?.calStyle) {
+        const k = el.dataset.calStyle;
+        setCalStyle({ [k]: k === 'monthDays' ? Number(el.value) || 30 : el.value });
+        render();
+        return;
+    }
     // 🏨 客人簿的設定（存在這個聊天裡）。
     if (el.dataset?.guest) {
         const key = el.dataset.guest;

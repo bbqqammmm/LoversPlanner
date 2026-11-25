@@ -402,8 +402,8 @@ const DICT = {
         'inline.summarizeNow': '📝 另外摘要',
         'inline.repaired': '第 {n} 層的紀錄好像被截斷了，可能不完整。',
         'inline.instruction': `【戀人手帳・紀錄】
-寫完正文之後，另起一行，在回覆的最後附上這一段的紀錄。這是給程式讀的，讀者看不到：正文裡不要提到它，也不要因為它改變正文的寫法；只寫一次，放在最後。
-紀錄用繁體中文、第三人稱：
+等這一則回覆全部寫完——正文，還有角色卡或預設要你輸出的其他部分（狀態欄、選項、小劇場之類）都照平常寫完——再另起一行，在整則回覆的最後附上這一段的紀錄；紀錄後面不要再寫任何東西。這是給程式讀的，讀者看不到：正文和其他部分都不要提到它，也不要因為它改變原本的寫法、少寫任何部分；只寫一次。
+紀錄只記正文的劇情，狀態欄、選項那些不用記。用繁體中文、第三人稱：
 {rules}
 
 {previous}
@@ -1840,8 +1840,8 @@ const DICT = {
         'inline.summarizeNow': '📝 另外摘要',
         'inline.repaired': '第 {n} 层的记录好像被截断了，可能不完整。',
         'inline.instruction': `【恋人手账・记录】
-写完正文之后，另起一行，在回复的最后附上这一段的记录。这是给程序读的，读者看不到：正文里不要提到它，也不要因为它改变正文的写法；只写一次，放在最后。
-记录用简体中文、第三人称：
+等这一则回复全部写完——正文，还有角色卡或预设要你输出的其他部分（状态栏、选项、小剧场之类）都照平常写完——再另起一行，在整则回复的最后附上这一段的记录；记录后面不要再写任何东西。这是给程序读的，读者看不到：正文和其他部分都不要提到它，也不要因为它改变原本的写法、少写任何部分；只写一次。
+记录只记正文的剧情，状态栏、选项那些不用记。用简体中文、第三人称：
 {rules}
 
 {previous}
@@ -3278,8 +3278,8 @@ const DICT = {
         'inline.summarizeNow': '📝 Summarize separately',
         'inline.repaired': 'The record for floor {n} seems cut off and may be incomplete.',
         'inline.instruction': `[Lover's Planner · record]
-After the story text, start a new line and append a record of this part at the very end of your reply. It is read by a program and never shown to the reader: do not mention it in the story or let it change how you write; write it once, at the end.
-Write the record in English, third person:
+Finish your whole reply first — the story and anything else the character card or preset asks you to output (status panels, options, side scenes and so on), written as usual — then start a new line and append a record of this part at the very end; write nothing after the record. It is read by a program and never shown to the reader: do not mention it anywhere, and do not let it change how you write or make you skip any part; write it once.
+The record covers only the story, not status panels or options. Write it in English, third person:
 {rules}
 
 {previous}

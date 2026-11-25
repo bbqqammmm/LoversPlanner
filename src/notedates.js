@@ -6,7 +6,7 @@
 //      推算的標成 guessed，畫面上會註明。「明年秋天」這種沒有確切哪一天的就不算。
 
 import { aiIndices, getEntry } from './chat.js';
-import { addDays, normDate } from './calendar.js';
+import { addDays, entryDate, isOldCalendar, normDate } from './calendar.js';
 import { isGregorian, parseStoryDate } from './calendars.js';
 
 const DAY = { 今: 0, 明: 1 };
@@ -79,7 +79,7 @@ export function guessDate(text, made) {
 export function storyToday() {
     const list = aiIndices();
     for (let k = list.length - 1; k >= 0; k--) {
-        const d = normDate(getEntry(list[k])?.date);
+        const d = entryDate(getEntry(list[k]));
         if (d) return d;
     }
     return null;
@@ -88,8 +88,11 @@ export function storyToday() {
 /** 一條約定／待辦的日期：{ made, due, guessed, from: 'when'|'content'|null }（沒有就是空字串）。 */
 export function noteDates(note) {
     if (!note || (note.type !== 'promise' && note.type !== 'todo')) return { made: '', due: '', guessed: false, from: null };
-    const made = normDate(note.made) || (note.createdFloor !== null && note.createdFloor !== undefined ? normDate(getEntry(note.createdFloor)?.date) : '');
-    const given = normDate(note.data?.due);
+    const made = normDate(note.made) || (note.createdFloor !== null && note.createdFloor !== undefined ? entryDate(getEntry(note.createdFloor)) : '');
+    // 換曆法之前那幾層記的 due 是舊曆法的日期（v0.13.69）：不算
+    const src = note.updatedFloor ?? note.createdFloor;
+    const oldDue = src !== null && src !== undefined && isOldCalendar({ ...getEntry(src), date: note.data?.due || getEntry(src)?.date });
+    const given = oldDue ? '' : normDate(note.data?.due);
     if (given) return { made, due: given, guessed: false, from: null };
     const byWhen = guessDate(note.data?.when, made);
     if (byWhen) return { made, due: byWhen, guessed: true, from: 'when' };
@@ -101,7 +104,7 @@ export function noteDates(note) {
 function floorDate(index) {
     const list = aiIndices().filter((i) => i <= index);
     for (let k = list.length - 1; k >= 0; k--) {
-        const d = normDate(getEntry(list[k])?.date);
+        const d = entryDate(getEntry(list[k]));
         if (d) return d;
     }
     return '';

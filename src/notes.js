@@ -88,7 +88,8 @@ export function displayTitle(note) {
 const MAX_TITLE = 15;
 const MAX_DETAIL = 200;
 
-function cleanData(type, data) {
+/** input：模型或使用者剛給的（日期照曆法讀）；不然是存起來的資料（日期已經是裡面的寫法）。 */
+function cleanData(type, data, { input = false } = {}) {
     const out = {};
     if (!data || typeof data !== 'object') return out;
     // 客人：模型用欄位名稱當 key，換成內部的 key；關掉的欄位手動改還是可以（舊資料）。
@@ -104,7 +105,7 @@ function cleanData(type, data) {
     for (const f of [...(NOTE_FIELDS[type] ?? []), ...(LEGACY_FIELDS[type] ?? [])]) {
         const v = data[f];
         if (v === undefined || v === null) continue;
-        const s = DATE_FIELDS.has(f) ? readDate(v) : String(v).trim().slice(0, f === 'title' ? MAX_TITLE + 5 : MAX_FIELD);
+        const s = DATE_FIELDS.has(f) ? (input ? readDate(v) : normDate(v)) : String(v).trim().slice(0, f === 'title' ? MAX_TITLE + 5 : MAX_FIELD);
         if (s) out[f] = s;
     }
     return out;
@@ -311,7 +312,7 @@ export function normalizeModelOps(rawOps, stateBefore, previousOps = [], { types
             const type = String(raw.type ?? '').toLowerCase();
             // 沒勾選要記錄的類型不收。
             if (!types.includes(type)) continue;
-            const data = cleanData(type, raw.data ?? raw);
+            const data = cleanData(type, raw.data ?? raw, { input: true });
             // 以前離開的客人又來了：打開同一條（來訪次數 +1），再更新這次的欄位。
             const back = type === 'guest' ? findGuestLeft(state, data[GUEST_TITLE]) : null;
             if (back) {
@@ -343,7 +344,7 @@ export function normalizeModelOps(rawOps, stateBefore, previousOps = [], { types
             }
             if (!note || !types.includes(note.type)) continue;
             if (kind === 'update') {
-                const data = cleanData(note.type, raw.data ?? {});
+                const data = cleanData(note.type, raw.data ?? {}, { input: true });
                 // 模型常把名字一起寫進來只是為了指明是哪一條，沒改名就拿掉。
                 if (sameKey(data[TITLE_FIELD[note.type]], noteTitle(note))) delete data[TITLE_FIELD[note.type]];
                 op = { op: 'update', id: note.id, data };
@@ -521,7 +522,7 @@ function pushManual(op) {
 }
 
 export function addNoteManual(type, data) {
-    const clean = cleanData(type, data);
+    const clean = cleanData(type, data, { input: true });
     if (!NOTE_TYPES.includes(type) || !clean[TITLE_FIELD[type]]) return false;
     const made = type === 'promise' || type === 'todo' ? storyToday() : null;
     return pushManual({ op: 'add', id: newNoteId(type), type, data: clean, ...(made ? { made } : {}) });

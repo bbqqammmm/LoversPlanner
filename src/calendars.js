@@ -61,7 +61,12 @@ export function setCalStyle(patch) {
     const s = getSettings();
     s.characters ??= {};
     const rec = s.characters[key] ??= {};
-    rec.calendarStyle = { ...calStyle(), ...patch };
+    const cur = calStyle();
+    // 換了哪一種曆法（或月份、天數變了）：記下時間。之前摘要的樓層，日期是舊曆法的，不算（calendar.entryDate）
+    const changed = (patch.type && patch.type !== cur.type)
+        || (patch.months !== undefined && String(patch.months) !== cur.months.join('、'))
+        || (patch.monthDays !== undefined && Number(patch.monthDays) !== cur.monthDays);
+    rec.calendarStyle = { ...cur, ...patch, ...(changed ? { since: Date.now() } : {}) };
     saveSettings();
     return true;
 }

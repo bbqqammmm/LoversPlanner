@@ -14,6 +14,7 @@ import { getSettings } from './settings.js';
 import { t } from './i18n.js';
 import { aiIndices, chatKey, getChat, getEntry, hashText, isUserMessage } from './chat.js';
 import { aliasesOf } from './recall.js';
+import { entryDate, plainDay } from './calendar.js';
 
 const MAX_TITLE = 30;
 const MAX_CONTENT = 200;
@@ -82,7 +83,7 @@ function storyWhen() {
     const pos = new Map(idx.map((i, k) => [i, k]));
     const dates = idx.map((i) => {
         const e = getEntry(i);
-        return e?.status === 'ok' ? String(e.date ?? '') : '';
+        return e?.status === 'ok' ? entryDate(e) : '';
     });
     const times = idx.map((i) => {
         const e = getEntry(i);
@@ -174,7 +175,7 @@ export function addMemory({ title = '', content = '', floor = null, theater = fa
         title: String(title).trim().slice(0, MAX_TITLE) || text.slice(0, 12),
         content: text,
         ...(m?.send_date ? { sendDate: m.send_date } : {}),
-        ...(floor !== null && getEntry(floor)?.date ? { date: getEntry(floor).date } : {}),
+        ...(floor !== null && entryDate(getEntry(floor)) ? { date: entryDate(getEntry(floor)) } : {}),
         ...(theater ? { theater: true } : {}),
         at: Date.now(),
     };
@@ -298,7 +299,7 @@ export function markSurfaced(list) {
 export function remindersText(list) {
     if (!list.length) return '';
     const lines = list.map((m) => {
-        const when = [m.date, m.time].filter(Boolean).join(' ');
+        const when = [plainDay(m.date), m.time].filter(Boolean).join(' ');
         return `- ${when ? `${when}｜` : ''}${m.title}：${m.content}`;
     });
     return `${t('mem.inject.intro')}\n${lines.join('\n')}`;

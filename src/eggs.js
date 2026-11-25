@@ -10,7 +10,7 @@ import { t } from './i18n.js';
 import { aiIndices, getEntry } from './chat.js';
 import { storyToday } from './notedates.js';
 import { listMemories, memoriesOn, surfaceNext } from './memories.js';
-import { buildCalendar, calendarOn, dayInfo, normDate, onCalendarChange } from './calendar.js';
+import { buildCalendar, calendarOn, dayInfo, entryDate, normDate, onCalendarChange } from './calendar.js';
 
 export const MILESTONES = [100, 500, 1000, 2000, 3000, 5000, 10000];
 
@@ -46,7 +46,7 @@ export function onThisDay() {
     if (yearly) return { date: yearly.d, years: Number(today.slice(0, 4)) - Number(yearly.d.slice(0, 4)), title: yearly.title, text: yearly.content, memKey: yearly.key };
     for (const i of aiIndices()) {
         const e = getEntry(i);
-        const d = normDate(e?.date);
+        const d = entryDate(e);
         if (e?.status === 'ok' && e.summary && d && d < today && d.slice(5) === md) {
             return { date: d, years: Number(today.slice(0, 4)) - Number(d.slice(0, 4)), title: '', text: e.summary };
         }
@@ -118,7 +118,7 @@ export function takeMilestone() {
 /** 故事從哪一天開始（第一個有日期的 AI 樓層）。 */
 export function storyStart() {
     for (const i of aiIndices()) {
-        const d = normDate(getEntry(i)?.date);
+        const d = entryDate(getEntry(i));
         if (d) return d;
     }
     return '';

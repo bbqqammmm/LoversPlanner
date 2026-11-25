@@ -18,7 +18,7 @@ import { formatNotesForPrompt, invalidateNotes, normalizeModelOps, replay } from
 import { buildL1Parts } from './l1rules.js';
 import { parseJsonLenient } from './json.js';
 import { cleanForSummary, extractRef, extractTheater } from './filter.js';
-import { calendarOn, cleanEvents, normDate, readDate, setDateHint } from './calendar.js';
+import { calendarOn, cleanEvents, entryDate, normDate, readDate, setDateHint } from './calendar.js';
 import { promptDate } from './calendars.js';
 import { cleanKeepsakes, memoriesOn } from './memories.js';
 import { addPrefsFromModel } from './prefs.js';
@@ -286,7 +286,7 @@ export function previousSceneText(index) {
         const e = getEntry(i);
         const time = useTime ? e?.time : '';
         const location = useLocation ? e?.location : '';
-        const date = useDate ? normDate(e?.date) : '';
+        const date = useDate ? entryDate(e) : '';
         if (e?.status === 'ok' && (time || location || date)) {
             const parts = [];
             if (useTime) parts.push(t('prompt.previousTime', { time: time || '—' }));
@@ -303,7 +303,7 @@ export function previousDate(index) {
     const chat = getChat();
     for (let i = index - 1; i >= 0; i--) {
         if (!isAiMessage(chat[i])) continue;
-        const d = normDate(getEntry(i)?.date);
+        const d = entryDate(getEntry(i));
         if (d) return d;
     }
     return '';

@@ -20,7 +20,7 @@ import { errorText } from './errors.js';
 import { floorStatus, getChat, getEntry, isAiMessage } from './chat.js';
 import { sceneLine } from './lines.js';
 import { enqueueCompress, floorState, isActive, previousDate, setAfterSummaryHook, setCompressHandler } from './summarize.js';
-import { normDate } from './calendar.js';
+import { entryDate, normDate, plainDay } from './calendar.js';
 import { computeHidden } from './hide.js';
 import { noteError } from './errlog.js';
 
@@ -248,13 +248,13 @@ function rangeOf(items) {
     const last = withTime[withTime.length - 1];
     const startDate = items.find((x) => x.from)?.from ?? '';
     const endDate = [...items].reverse().find((x) => x.to)?.to ?? '';
-    if (!first) return startDate && endDate && startDate !== endDate ? `${startDate} → ${endDate}` : (startDate || endDate);
+    if (!first) return startDate && endDate && startDate !== endDate ? `${plainDay(startDate)} → ${plainDay(endDate)}` : plainDay(startDate || endDate);
     const a = firstPart(first.time);
     const b = lastPart(last.time);
     const aDate = first.from || startDate;
     const bDate = last.to || endDate;
-    const start = !hasDate(a) && aDate ? `${aDate} ${a}` : a;
-    const end = !hasDate(b) && bDate && bDate !== aDate ? `${bDate} ${b}` : b;
+    const start = !hasDate(a) && aDate ? `${plainDay(aDate)} ${a}` : a;
+    const end = !hasDate(b) && bDate && bDate !== aDate ? `${plainDay(bDate)} ${b}` : b;
     return start === end ? start : `${start} → ${end}`;
 }
 
@@ -285,7 +285,7 @@ export function placesOf(values, max = 4) {
 
 /** 一層摘要的日期（沒寫就延續前面的樓層）。 */
 function floorDate(index) {
-    return normDate(getEntry(index)?.date) || previousDate(index);
+    return entryDate(getEntry(index)) || previousDate(index);
 }
 
 /** 章的時間、地點、開始和結束的日期（不用呼叫模型）。 */

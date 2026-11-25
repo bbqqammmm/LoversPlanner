@@ -9,6 +9,14 @@ import { VERSION } from './version.js';
 
 export const CHANGES = [
     {
+        v: '0.13.69',
+        fix: {
+            'zh-TW': ['📅 換了曆法之後不再出現西曆：摘要上的日期照故事的寫法顯示；換曆法之前摘要的那幾層（記的是西曆日期）先不算，行事曆不會再跳到很奇怪的年份，上方會提示「🔁 重做這幾層」，按了就照新曆法重記；模型寫成西曆日期的也不收。'],
+            'zh-CN': ['📅 换了历法之后不再出现公历：摘要上的日期照故事的写法显示；换历法之前摘要的那几层（记的是公历日期）先不算，行事历不会再跳到很奇怪的年份，上方会提示「🔁 重做这几层」，按了就照新历法重记；模型写成公历日期的也不收。'],
+            en: ['📅 No more Gregorian dates after switching calendars: dates on summaries use the story\'s format; floors summarized before the switch (with Gregorian dates) are ignored for now so the calendar no longer jumps to strange years, and a "🔁 Redo these floors" button re-records them in the new calendar; Gregorian dates written by the model are not accepted.'],
+        },
+    },
+    {
         v: '0.13.68',
         new: {
             'zh-TW': ['📅 行事曆可以換曆法了（設定 › 行事曆 › 曆法，跟著角色卡）：中式照真的農曆（正月到臘月、初一到三十、大小月和閏月，可以填年號）、中式每月固定 30 天、自訂（自己填月份名稱和每月幾天，例如「晨露月、烈陽月、落葉月、寒雪月，每月 30 天」）、只記第幾天。模型會照這個曆法記日期，月曆、紀念日、約定的日子、送給角色的「今天是…」都照故事的寫法顯示。'],

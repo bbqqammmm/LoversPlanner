@@ -26,7 +26,7 @@ import { getVectors } from './vectors.js';
 import { errorText } from './errors.js';
 import { cleanForSummary } from './filter.js';
 import { diaryPlan } from './diarysend.js';
-import { normDate } from './calendar.js';
+import { entryDate, normDate, tinyDay } from './calendar.js';
 import { hasTtChatApi, searchChats } from './tthost.js';
 import { existingChatIds } from './oldchats.js';
 import { diaryRanges } from './diary.js';
@@ -250,7 +250,7 @@ function explain(c, sims, threshold) {
     const bonus = c.shared * KEYWORD_BONUS + c.words.length * WORD_BONUS + (c.sameDay ? DATE_BONUS : 0);
     const vector = Boolean(sims && c.sim >= threshold);
     const reason = c.words.length ? 'word' : c.sameDay ? 'date' : vector ? 'vector' : 'keyword';
-    const term = reason === 'word' ? c.words.slice(0, 2).join('、') : reason === 'date' ? c.date.slice(5) : '';
+    const term = reason === 'word' ? c.words.slice(0, 2).join('、') : reason === 'date' ? tinyDay(c.date) : '';
     // rank（不叫 total：日記的段落本身就有 total＝那天有幾段）。
     return { rank: (sims ? c.sim : 0) + bonus, reason, term, hit: c.shared > 0 || c.words.length > 0 || c.sameDay || vector };
 }
@@ -400,7 +400,7 @@ export async function selectRelevant({ keepFrom, limit = getChat().length, previ
             const e = getEntry(i);
             if (e?.status !== 'ok' || !e.summary) continue;
             const line = sceneLine(e);
-            candidates.push({ index: i, line, date: normDate(e.date) || '', shared: sharedCount(line, e.location, entities, text), score: 0, reason: null });
+            candidates.push({ index: i, line, date: entryDate(e) || '', shared: sharedCount(line, e.location, entities, text), score: 0, reason: null });
         }
     }
 

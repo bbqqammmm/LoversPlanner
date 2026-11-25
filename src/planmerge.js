@@ -6,7 +6,7 @@
 
 import { ctx, hasCharacterChat, LOG_PREFIX, MODULE } from './util.js';
 import { aiIndices, getChat, getEntry } from './chat.js';
-import { normDate, setDatedNotesProvider } from './calendar.js';
+import { entryDate, normDate, setDatedNotesProvider } from './calendar.js';
 import { addNotesManualBatch, getNotes, noteTitle } from './notes.js';
 import { noteDates } from './notedates.js';
 import { isTracked } from './settings.js';
@@ -39,7 +39,7 @@ function oldPlans() {
     for (const i of aiIndices()) {
         const e = getEntry(i);
         if (e?.status !== 'ok') continue;
-        if (normDate(e.date)) cur = normDate(e.date);
+        if (entryDate(e)) cur = entryDate(e);
         (e.events ?? []).forEach((ev, k) => {
             if (ev?.type !== 'plan' || !ev.title) return;
             const key = `${chat[i]?.send_date ?? `#${i}`}#${k}`;

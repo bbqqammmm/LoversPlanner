@@ -67,9 +67,38 @@ export function readDate(value, prev = '') {
     const text = String(value ?? '').trim();
     if (!text) return '';
     if (isGregorian()) return normDate(text);
-    const m = text.match(/^(\d{4})-\d{2}-\d{2}$/);
-    if (m && Number(m[1]) >= 2001 && normDate(text)) return text;
+    // 換了曆法就只認故事的寫法：模型寫成西曆（YYYY-MM-DD）不收（11/25 米米：別再用公曆）
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return '';
     return parseStoryDate(text, prev || dateHint);
+}
+
+/**
+ * 一層摘要的日期。換了曆法（calendarStyle.since）之前摘要的樓層，日期是舊曆法的，當成沒有日期
+ * （11/25 米米：換成自訂曆法後，換之前用西曆記的那幾層把行事曆帶到「第79年」）。重做就會照新曆法記。
+ */
+export function entryDate(entry) {
+    const d = normDate(entry?.date);
+    if (!d) return '';
+    return isOldCalendar(entry) ? '' : d;
+}
+
+/** 這一層是換曆法之前摘要的（有日期，但不算）。 */
+export function isOldCalendar(entry) {
+    const st = calStyle();
+    if (st.type === 'gregorian' || !entry?.date) return false;
+    // v0.13.68 換的曆法沒記下換的時間：裡面的日期落在 2010 年以後的，是照現實的今天用西曆記的
+    // （西曆以外的曆法，故事的日期在裡面都從 2001 年算起，正常的故事不會跑到那麼後面）
+    if (!st.since) return String(entry.date).slice(0, 4) >= '2010';
+    return Number(entry.at ?? 0) < st.since;
+}
+
+/** 換曆法之前摘要、有日期的樓層（行事曆上方提示重做）。 */
+export function oldCalendarFloors() {
+    if (isGregorian()) return [];
+    return aiIndices().filter((i) => {
+        const e = getEntry(i);
+        return e?.status === 'ok' && !e.coarse && isOldCalendar(e);
+    });
 }
 
 /** 完整的日期給人看：西曆「2026-03-05（週四）」；其他「天啟三年三月初五」。 */
@@ -243,7 +272,7 @@ export function onCalendarChange(fn) {
 
 export function addManualEvent(ev) {
     const [clean] = cleanEvents([ev]);
-    const date = readDate(ev.date);
+    const date = normDate(ev.date) || readDate(ev.date);
     if (!clean || (!date && clean.type !== 'anniversary')) return false;
     const rec = record(true);
     rec.manual = [...(rec.manual ?? []), { ...clean, ...(clean.type === 'anniversary' ? {} : { date }), id: `ev_${Math.random().toString(36).slice(2, 8)}` }];
@@ -360,7 +389,7 @@ export function buildCalendar() {
     for (const i of aiIndices()) {
         const e = getEntry(i);
         if (e?.status !== 'ok') continue;
-        const d = normDate(e.date);
+        const d = entryDate(e);
         if (d) cur = d;
         if (cur) today = cur;
         let had = false;

@@ -6,7 +6,7 @@
 
 import { getSettings } from './settings.js';
 import { getChat, getEntry, isAiMessage } from './chat.js';
-import { addDays, normDate } from './calendar.js';
+import { addDays, entryDate, normDate, plainDay } from './calendar.js';
 import { dayText, diaryOutline, listDiary } from './diary.js';
 
 export function diarySendOn() {
@@ -18,7 +18,7 @@ export function anchorDate(list = listDiary()) {
     const chat = getChat();
     for (let i = chat.length - 1; i >= 0; i--) {
         if (!isAiMessage(chat[i])) continue;
-        const d = normDate(getEntry(i)?.date);
+        const d = entryDate(getEntry(i));
         if (d) return d;
     }
     const dated = list.filter((d) => d.date && d.chars);
@@ -26,7 +26,7 @@ export function anchorDate(list = listDiary()) {
 }
 
 function label(date, part = 0, total = 1) {
-    return `【${date || '—'}${total > 1 ? ` ${part}/${total}` : ''}】`;
+    return `【${plainDay(date) || '—'}${total > 1 ? ` ${part}/${total}` : ''}】`;
 }
 
 /**

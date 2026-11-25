@@ -56,7 +56,7 @@ import { actionsFor, byLine, eventLabel, hintFor, revealFloor, runAction, sceneH
 import {
     addCarriedEvents, addManualEvent, buildCalendar, ACTIVE_CAL_TYPES, calendarOn, carryAsked, markCarryAsked, calTracked, dayInfo, daysBetween, monthGrid, monthTitle, onCalendarChange,
     periodStatus, removeEvent, restoreRemoved, shiftMonth, upcoming, weekdayName,
-    annivText, calendarHasWeeks, cellText, dateInput, dayLabel, monthKey, nextAnniversary, plainDay, shortDay, tinyDay,
+    annivText, calendarHasWeeks, cellText, dateInput, dayLabel, monthKey, nextAnniversary, oldCalendarFloors, plainDay, shortDay, tinyDay,
 } from '../calendar.js';
 import { calStyle, maxDayOf, monthOptions, setCalStyle, STYLES as CAL_STYLES } from '../calendars.js';
 import {
@@ -1132,9 +1132,17 @@ function dayNotes(d) {
     return group('cal.notes.due', list.filter((x) => x.due === d)) + group('cal.notes.made', list.filter((x) => x.made === d));
 }
 
+/** 換了曆法：之前摘要的樓層日期不算，提示可以重做（v0.13.69）。 */
+function calendarOldNotice() {
+    const old = oldCalendarFloors();
+    if (!old.length) return '';
+    return `<div class="lp-callout lp-warn" data-role="cal-old">${esc(t('cal.old', { n: old.length }))}
+        <div class="lp-row"><button type="button" class="menu_button lp-btn lp-primary" data-action="cal-redo-old">${esc(t('cal.old.redo', { n: old.length }))}</button></div></div>`;
+}
+
 /** 上方的狀態：今天、生理期、接下來的事。 */
 function calendarStatus(cal) {
-    if (!cal.today) return `<div class="lp-callout" data-role="cal-status">${esc(t('cal.noToday'))}</div>`;
+    if (!cal.today) return `${calendarOldNotice()}<div class="lp-callout" data-role="cal-status">${esc(t('cal.noToday'))}</div>`;
     const lines = [`<div><b>${esc(t('cal.todayIs', { date: dayLabel(cal.today, 'long') }))}</b></div>`];
     const p = periodStatus(cal);
     if (p?.kind === 'during') lines.push(`<div>🩸 ${esc(t('cal.status.during', { day: p.day }))}${p.open ? ` <span class="lp-note">${esc(t('cal.status.open'))}</span>` : ''}</div>`);
@@ -1159,7 +1167,7 @@ function calendarStatus(cal) {
         }).join('');
         lines.push(`<div class="lp-label">${esc(t('cal.upcoming'))}</div><ul class="lp-recall-list">${items}</ul>`);
     }
-    return `<div class="lp-callout lp-cal-status" data-role="cal-status">${lines.join('')}</div>`;
+    return `${calendarOldNotice()}<div class="lp-callout lp-cal-status" data-role="cal-status">${lines.join('')}</div>`;
 }
 
 /** 選了某一天：當天的事（可以刪），以及新增表單。 */
@@ -4476,6 +4484,14 @@ function onClick(e) {
             view.cal.month = shiftMonth(view.cal.month, Number(btn.dataset.delta));
             render();
             return;
+        case 'cal-redo-old': {
+            // 照樓層順序排隊重做：前一層有了新曆法的日期，下一層才接得上
+            const old = oldCalendarFloors();
+            for (const i of old) enqueue(i);
+            toast(t('cal.old.queued', { n: old.length }), 'info');
+            render();
+            return;
+        }
         case 'cal-today':
             view.cal.month = null;
             view.cal.selected = buildCalendar().today;

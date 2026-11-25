@@ -175,6 +175,52 @@ const set = await page.evaluate(async () => {
 });
 check('settings switch calendar', set.found && set.type === 'lunar' && set.era && set.start === 'text', JSON.stringify(set));
 
+// ===== 4b. 換曆法前摘要的樓層不算；模型寫西曆不收；摘要區塊照故事寫法（v0.13.69，米米 11/25） =====
+const stale = await page.evaluate(async () => {
+    const c = await import('/src/calendars.js');
+    const cal = await import('/src/calendar.js');
+    const chat = await import('/src/chat.js');
+    // 換成自訂曆法（記下換的時間）；第 1 層當成「換之前」用西曆記的
+    c.setCalStyle({ type: 'gregorian' });
+    c.setCalStyle({ type: 'custom', months: '晨露月、烈陽月、落葉月、寒雪月', monthDays: 30 });
+    const since = c.calStyle().since;
+    const e = chat.getEntry(1);
+    chat.setEntry(1, { ...e, date: '2026-11-25', at: since - 1000 });
+    const built = cal.buildCalendar();
+    const msg = await import('/src/ui/message.js');
+    const html1 = msg.sceneHtml(chat.getEntry(1));
+    chat.setEntry(1, { ...e, date: c.partsToIso({ y: 1, m: 4, d: 2 }), at: since + 1000 });
+    const html2 = msg.sceneHtml(chat.getEntry(1));
+    chat.setEntry(1, { ...e, date: '2026-11-25', at: since - 1000 });
+    return {
+        old: cal.oldCalendarFloors(), today: built.today,
+        rejectIso: cal.readDate('2026-11-26'), story: cal.readDate('1-4-3'),
+        html1, html2,
+    };
+});
+check('old-calendar floor ignored', stale.old.join() === '1' && !stale.today, JSON.stringify(stale.old) + ' ' + stale.today);
+check('model gregorian rejected', stale.rejectIso === '' && Boolean(stale.story), JSON.stringify([stale.rejectIso, stale.story]));
+check('summary block shows story date', !stale.html1.includes('2026') && stale.html2.includes('寒雪月2日') && !stale.html2.includes('2001-'), stale.html2.slice(0, 200));
+const legacy = await page.evaluate(async () => {
+    // v0.13.68 就換了曆法（沒有 since）：2010 年以後的日期當成舊的，2001 年起的照算
+    const cal = await import('/src/calendar.js');
+    const s = (await import('/src/settings.js')).getSettings();
+    const st = s.characters['shenyan.png'].calendarStyle;
+    const since = st.since;
+    delete st.since;
+    const r = [cal.isOldCalendar({ date: '2026-11-25', at: 1 }), cal.isOldCalendar({ date: '2001-04-01', at: 1 })];
+    st.since = since;
+    return r;
+});
+check('legacy switch without time', legacy[0] === true && legacy[1] === false, JSON.stringify(legacy));
+await page.click('[data-tab="notes"]');
+await page.waitForTimeout(200);
+check('redo notice shown', (await page.locator('[data-role="cal-old"]').count()) === 1);
+await page.click('[data-action="cal-redo-old"]');
+await page.waitForFunction(async () => (await import('/src/summarize.js')).pendingCount() === 0, null, { timeout: 10000 });
+const redone = await page.evaluate(async () => ({ old: (await import('/src/calendar.js')).oldCalendarFloors().length, calls: window.__prompts.length }));
+check('redo clears notice', redone.old === 0 && redone.calls >= 1, JSON.stringify(redone));
+
 // ===== 5. 換回西曆：跟以前一樣 =====
 const greg = await page.evaluate(async () => {
     (await import('/src/calendars.js')).setCalStyle({ type: 'gregorian' });
